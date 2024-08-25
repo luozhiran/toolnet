@@ -1,0 +1,3 @@
+rootProject.name = "ddlnet"
+include ':app'
+include ':net'
