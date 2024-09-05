@@ -22,38 +22,47 @@ object PrincipalLife {
         if (!callWeakHash.containsKey(activity)) {
             val taskList: MutableList<Call> = mutableListOf()
             callWeakHash[activity] = taskList
-            (activity as? ComponentActivity)?.lifecycle?.addObserver(object :
-                LifecycleEventObserver {
-                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-                    if (event == Lifecycle.Event.ON_DESTROY) {
-                        ThreadTool.runOnExecutor {
-                            synchronized(lockCall) {
-                                callWeakHash[activity]?.iterator()?.apply {
-                                    while (hasNext()) {
-                                        next().cancel()
+            ThreadTool.runOnUIThread{
+                (activity as? ComponentActivity)?.lifecycle?.addObserver(object :
+                    LifecycleEventObserver {
+                    override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                        if (event == Lifecycle.Event.ON_DESTROY) {
+                            ThreadTool.runOnExecutor {
+                                synchronized(lockCall) {
+                                    callWeakHash[activity]?.iterator()?.apply {
+                                        while (hasNext()) {
+                                            next().cancel()
+                                        }
+                                    }
+                                    callWeakHash.remove(activity)
+                                    ThreadTool.runOnUIThread{
+                                        (activity as? ComponentActivity)?.lifecycle?.removeObserver(this)
                                     }
                                 }
-                                callWeakHash.remove(activity)
-                                (activity as? ComponentActivity)?.lifecycle?.removeObserver(this)
                             }
                         }
                     }
-                }
-            })
+                })
+            }
+
         }
-        val taskList = callWeakHash[activity]
-        taskList?.add(call)
+        synchronized(lockCall) {
+            val taskList = callWeakHash[activity]
+            taskList?.add(call)
+        }
     }
 
     fun removeCall(call: Call?) {
         if (call == null) return
-        val iterator = callWeakHash.iterator()
-        var entryValue:MutableList<Call>?=null
-        while (iterator.hasNext()) {
-            entryValue = iterator.next().value
-            entryValue.remove(call)
-            if (entryValue.size == 0) {
-                iterator.remove()
+        synchronized(lockCall) {
+            val iterator = callWeakHash.iterator()
+            var entryValue:MutableList<Call>?=null
+            while (iterator.hasNext()) {
+                entryValue = iterator.next().value
+                entryValue.remove(call)
+                if (entryValue.size == 0) {
+                    iterator.remove()
+                }
             }
         }
     }
