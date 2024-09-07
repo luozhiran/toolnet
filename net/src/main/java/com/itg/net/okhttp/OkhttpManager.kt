@@ -16,6 +16,9 @@ class OkhttpManager(ddNetConfig: NetConfig) {
         ddNetConfig.getInterceptors().let { list ->
             list.forEach { builder.addInterceptor(it) }
         }
+        ddNetConfig.getCache()?.let {
+            builder.cache(it)
+        }
         if (ddNetConfig.useHttpLog()) {
             val logInterceptor = HttpLoggingInterceptor(HttpLogger())
             logInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY)

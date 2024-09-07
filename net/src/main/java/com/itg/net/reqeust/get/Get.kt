@@ -22,7 +22,8 @@ class Get : GetGenerator() {
             getHeader(),
             getUrl(),
             tag,
-            null
+            null,
+            cacheControl
         ) { builder -> builder.get() }
         sendTool.send(callback, call)
     }
@@ -32,7 +33,8 @@ class Get : GetGenerator() {
             getHeader(),
             getUrl(),
             tag,
-            null
+            null,
+            cacheControl
         ) { builder -> builder.get() }
         sendTool.send(handler,what,errorWhat, call)
 
@@ -43,7 +45,8 @@ class Get : GetGenerator() {
             getHeader(),
             getUrl(),
             tag,
-            null
+            null,
+            cacheControl
         ) { builder -> builder.get() }
         sendTool.send(response, call)
     }

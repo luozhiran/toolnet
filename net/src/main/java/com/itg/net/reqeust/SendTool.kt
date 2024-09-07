@@ -22,6 +22,7 @@ class SendTool {
         url: String?,
         tag: String?,
         body: RequestBody?,
+        cacheControl: CacheControl?,
         endCallback:((Request.Builder)->Unit)? = null
     ): Call? {
         val builder = Request.Builder()
@@ -36,6 +37,9 @@ class SendTool {
         }
         if (url.orEmpty().isBlank()) {
             return null
+        }
+        cacheControl?.let {
+            builder.cacheControl(cacheControl)
         }
         url?.let {
             builder.url(it)

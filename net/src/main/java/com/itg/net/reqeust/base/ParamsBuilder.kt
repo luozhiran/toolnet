@@ -6,6 +6,7 @@ import com.itg.net.Net
 import com.itg.net.reqeust.post.json.PostJsonBuilder
 import com.itg.net.tools.StrTools
 import com.itg.net.tools.UrlTools
+import okhttp3.CacheControl
 import okhttp3.Cookie
 import okhttp3.Headers
 import org.json.JSONObject
@@ -37,6 +38,7 @@ abstract class ParamsBuilder : Builder, SentBuilder {
     var tag: String? = null
     var path:String?=null
     var noGlobalParams = false
+    var cacheControl: CacheControl? = null
 
     override fun addHeader(key: String?, value: String?): ParamsBuilder {
         if (key.isNullOrBlank() || value.isNullOrBlank()) return this

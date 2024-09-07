@@ -6,6 +6,8 @@ import android.os.Handler
 import android.text.TextUtils
 import com.orhanobut.logger.AndroidLogAdapter
 import com.orhanobut.logger.Logger
+import okhttp3.Cache
+import okhttp3.CacheControl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.io.File
@@ -26,6 +28,8 @@ class NetConfig {
     private val interceptors: MutableList<Interceptor> = ArrayList()
     private var okHttpClient: OkHttpClient? = null
     private var useHeepLogger = false
+
+    private var okhttpCache:Cache?=null
 
     fun app(application: Application): NetConfig {
         this.application = application
@@ -156,5 +160,13 @@ class NetConfig {
     fun maxDownloadNum(max:Int): NetConfig {
         maxDownloadNum = max
         return this
+    }
+
+    fun useCacheControl(cache: Cache):NetConfig{
+        this.okhttpCache = cache
+        return this
+    }
+    fun getCache():Cache?{
+        return this.okhttpCache;
     }
 }

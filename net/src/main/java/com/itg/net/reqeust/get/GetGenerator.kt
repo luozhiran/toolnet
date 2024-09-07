@@ -6,6 +6,7 @@ import com.itg.net.reqeust.base.ParamsBuilder
 import com.itg.net.reqeust.base.SentBuilder
 import com.itg.net.reqeust.post.content.PostContentGenerator
 import com.itg.net.tools.UrlTools
+import okhttp3.CacheControl
 import okhttp3.Cookie
 
 abstract class GetGenerator: ParamsBuilder(), SentBuilder, GetBuilder {
@@ -76,4 +77,8 @@ abstract class GetGenerator: ParamsBuilder(), SentBuilder, GetBuilder {
         return this
     }
 
+    override fun addCacheControl(cacheControl: CacheControl):GetGenerator {
+        this.cacheControl = cacheControl;
+        return this;
+    }
 }

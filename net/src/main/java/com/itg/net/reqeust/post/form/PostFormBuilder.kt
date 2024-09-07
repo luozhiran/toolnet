@@ -7,6 +7,7 @@ import com.itg.net.reqeust.base.Builder
 import com.itg.net.reqeust.get.GetBuilder
 import com.itg.net.reqeust.base.ParamsBuilder
 import com.itg.net.tools.UrlTools
+import okhttp3.CacheControl
 import okhttp3.Cookie
 import okhttp3.FormBody
 
@@ -22,9 +23,9 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
             builder.add(it.key, it.value.toString())
         }
         if (!this.noGlobalParams) {
-            Net.instance.ddNetConfig.globalParams.forEach{
+            Net.instance.ddNetConfig.globalParams.forEach {
                 if (!TextUtils.isEmpty(it.key)) {
-                    builder.add(it.key,it.value.toString())
+                    builder.add(it.key, it.value.toString())
                 }
             }
         }
@@ -32,16 +33,16 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     }
 
     fun addAppendParams(key: String?, value: String?): PostFormBuilder {
-        UrlTools.appendUrlParamsToStr(urlParams,key,value)
+        UrlTools.appendUrlParamsToStr(urlParams, key, value)
         return this
     }
 
-   internal fun getAppendParams():StringBuilder{
+    internal fun getAppendParams(): StringBuilder {
         return urlParams;
     }
 
     override fun addParam(key: String?, value: String?): PostFormBuilder {
-        UrlTools.appendUrlParamsToStr(params,key,value)
+        UrlTools.appendUrlParamsToStr(params, key, value)
         return this
     }
 
@@ -53,12 +54,12 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
         return this
     }
 
-    internal fun getParams():java.lang.StringBuilder{
+    internal fun getParams(): java.lang.StringBuilder {
         return params
     }
 
     internal fun getUrl(): String {
-        return UrlTools.getSpliceUrl(null,this.url?:"")
+        return UrlTools.getSpliceUrl(null, this.url ?: "")
     }
 
     override fun addHeader(key: String?, value: String?): PostFormBuilder {
@@ -77,7 +78,7 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     }
 
     override fun addCookie(cookie: Cookie?): PostFormBuilder {
-         super.addCookie(cookie)
+        super.addCookie(cookie)
         return this
     }
 
@@ -92,7 +93,7 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     }
 
     override fun path(path: String): PostFormBuilder {
-         super.path(path)
+        super.path(path)
         return this
     }
 
@@ -102,6 +103,11 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
 
     override fun noUseGlobalParams(): PostFormBuilder {
         super.noUseGlobalParams()
+        return this
+    }
+
+    override fun addCacheControl(cacheControl: CacheControl): PostFormBuilder {
+        this.cacheControl = cacheControl
         return this
     }
 }

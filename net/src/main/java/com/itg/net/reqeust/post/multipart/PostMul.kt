@@ -14,12 +14,12 @@ class PostMul : PostMulGenerator() {
     }
 
     override fun send(callback: DdCallback?) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody())
+        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl)
         sendTool.send(callback, call)
     }
 
     override fun send(handler: Handler?, what: Int, errorWhat: Int) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody())
+        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl)
         sendTool.send(handler,what,errorWhat,call)
     }
 

@@ -156,4 +156,9 @@ abstract class PostMulBuilderImpl : ParamsBuilder(), PostBuilder, GetBuilder {
         return UrlTools.getSpliceUrl(totalParamsMap,this.url?:"")
     }
 
+    override fun addCacheControl(cacheControl: CacheControl): PostMulBuilderImpl {
+        this.cacheControl = cacheControl
+        return this
+    }
+
 }

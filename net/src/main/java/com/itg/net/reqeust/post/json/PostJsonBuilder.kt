@@ -10,6 +10,7 @@ import com.itg.net.reqeust.get.GetBuilder
 import com.itg.net.reqeust.post.form.PostFormBuilder
 import com.itg.net.tools.JsonTools
 import com.itg.net.tools.UrlTools
+import okhttp3.CacheControl
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -168,6 +169,10 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     }
 
     override fun autoCancel(activity: Activity?): PostJsonBuilder {
+        return this
+    }
+    override fun addCacheControl(cacheControl: CacheControl): PostJsonBuilder {
+        this.cacheControl = cacheControl
         return this
     }
 }
