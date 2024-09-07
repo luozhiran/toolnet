@@ -1,6 +1,5 @@
-package com.itg.net
+package com.itg.net.tools
 
-import okhttp3.Cache
 import okhttp3.CacheControl
 import java.util.concurrent.TimeUnit
 
