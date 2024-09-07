@@ -3,7 +3,9 @@ package com.itg.net.reqeust.post.file
 import android.app.Activity
 import com.itg.net.Net
 import com.itg.net.reqeust.base.ParamsBuilder
+import com.itg.net.reqeust.post.content.PostContentBuilder
 import com.itg.net.tools.UrlTools
+import okhttp3.CacheControl
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
@@ -108,4 +110,8 @@ abstract class PostFileBuilder : ParamsBuilder() {
 
     override fun autoCancel(activity: Activity?): PostFileBuilder =this
 
+    override fun addCacheControl(cacheControl: CacheControl): PostFileBuilder {
+        this.cacheControl = cacheControl
+        return this
+    }
 }

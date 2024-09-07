@@ -1,6 +1,7 @@
 package com.itg.net.reqeust.base
 
 import android.app.Activity
+import okhttp3.CacheControl
 import okhttp3.Cookie
 
 /**
@@ -16,4 +17,5 @@ interface Builder {
     fun autoCancel(activity: Activity?): Builder
     fun path(path:String):Builder
     fun noUseGlobalParams():Builder
+    fun addCacheControl(cacheControl: CacheControl):Builder;
 }

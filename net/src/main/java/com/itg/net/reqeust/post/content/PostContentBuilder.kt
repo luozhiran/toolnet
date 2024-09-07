@@ -3,7 +3,9 @@ package com.itg.net.reqeust.post.content
 import android.app.Activity
 import com.itg.net.Net
 import com.itg.net.reqeust.base.ParamsBuilder
+import com.itg.net.reqeust.post.json.PostJsonBuilder
 import com.itg.net.tools.UrlTools
+import okhttp3.CacheControl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -71,4 +73,9 @@ abstract class PostContentBuilder : ParamsBuilder() {
     }
 
     override fun autoCancel(activity: Activity?): PostContentBuilder = this
+
+    override fun addCacheControl(cacheControl: CacheControl): PostContentBuilder {
+        this.cacheControl = cacheControl
+        return this
+    }
 }
