@@ -54,6 +54,10 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         return true
     }
 
+    protected fun isTaskCanceled(): Boolean {
+        return taskCancel(task)
+    }
+
     private fun taskCancel(task: Task): Boolean {
         if (task.cancelUrl.isNullOrBlank()) return false
         if (task.url == task.cancelUrl) return true
@@ -159,9 +163,9 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                 failureCallback?.invoke(task, "Downloaded data is incomplete")
             }
         } catch (e: FileNotFoundException) {
-            failureCallback?.invoke(task, e.message ?: e.javaClass.simpleName)
+            failureCallback?.invoke(task, failureMessage(e))
         } catch (e: IOException) {
-            failureCallback?.invoke(task, e.message ?: e.javaClass.simpleName)
+            failureCallback?.invoke(task, failureMessage(e))
         }
     }
 
@@ -171,6 +175,10 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         val localSize = if (task.append && file.exists()) file.length() else 0L
         task.contentLength = localSize + (body?.contentLength() ?: 0)
         try {
+            if (taskCancel(task)) {
+                failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
+                return
+            }
             if (checkFileDir(file)) {
                 if (body == null) {
                     failureCallback?.invoke(task, ERROR_EMPTY_RESPONSE_BODY)
@@ -182,6 +190,14 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
             }
         } finally {
             response.close()
+        }
+    }
+
+    private fun failureMessage(exception: IOException): String {
+        return if (taskCancel(task)) {
+            ERROR_DOWNLOAD_CANCELED
+        } else {
+            exception.message ?: exception.javaClass.simpleName
         }
     }
 

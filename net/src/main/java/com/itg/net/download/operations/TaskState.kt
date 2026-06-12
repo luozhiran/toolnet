@@ -86,9 +86,10 @@ class TaskState {
     }
 
     @Synchronized
-    fun markRunningTaskCanceled(task: Task?) {
-        if (task == null) return
+    fun markRunningTaskCanceled(task: Task?): Boolean {
+        if (task == null || !runningTasks.contains(task)) return false
         task.cancelUrl = task.url
+        return true
     }
 
     @Synchronized

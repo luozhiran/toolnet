@@ -71,24 +71,22 @@ class Download {
 
     fun cancel(url: String?) {
         val taskState = dispatchTool.getTaskState()
-        if (taskState.exitRunningUrl(url)) {
-            taskState.markRunningTaskCanceled(url)
-            taskState.deleteRunningTask(url)
+        if (taskState.markRunningTaskCanceled(url) != null) {
             Net.instance.cancelFirstTag(url)
-            dispatchTool.continueDownload()
-        } else if (taskState.exitWaitUrl(url)) {
+            return
+        }
+        if (taskState.exitWaitUrl(url)) {
             taskState.deleteWaitTask(url)
         }
     }
 
     fun cancel(task: Task?) {
         val taskState = dispatchTool.getTaskState()
-        if (taskState.exitRunningTask(task)) {
-            taskState.markRunningTaskCanceled(task)
-            taskState.deleteRunningTask(task)
+        if (taskState.markRunningTaskCanceled(task)) {
             Net.instance.cancelFirstTag(task?.url)
-            dispatchTool.continueDownload()
-        } else if (taskState.exitWaitTask(task)) {
+            return
+        }
+        if (taskState.exitWaitTask(task)) {
             taskState.deleteWaitTask(task)
         }
     }

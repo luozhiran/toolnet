@@ -157,7 +157,7 @@ class DispatchTool : Dispatch {
 
     private fun handleResult(task: Task, type: Int, tag: String) {
         if (type == RESULT_DOWNLOAD_FAILED) {
-            if (!task.cancelUrl.isNullOrBlank() && task.cancelUrl == task.url) {
+            if (tag == ERROR_DOWNLOAD_CANCELED || task.cancelUrl == task.url) {
                 task.progressCallback?.onFail(ERROR_DOWNLOAD_CANCELED, task)
                 taskStateInstance.deleteRunningTask(task)
             } else if (task.tryAgainCount > 0) {

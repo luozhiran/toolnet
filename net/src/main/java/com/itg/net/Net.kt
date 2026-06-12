@@ -82,20 +82,21 @@ class Net {
     fun cancel(tag: Any?) = cancelTag(tag)
 
 
-    fun cancelFirstTag(tag: Any?) {
-        if (tag == null) return
+    fun cancelFirstTag(tag: Any?): Boolean {
+        if (tag == null) return false
         okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
             if (tag == it.request().tag()) {
                 it.cancel()
-                return
+                return true
             }
         }
         okhttpManager.okHttpClient.dispatcher.runningCalls().forEach {
             if (tag == it.request().tag()) {
                 it.cancel()
-                return
+                return true
             }
         }
+        return false
     }
 
 }
