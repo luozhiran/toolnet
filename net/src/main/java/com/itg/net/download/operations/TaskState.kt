@@ -9,21 +9,15 @@ import com.itg.net.download.data.Task
 class TaskState {
 
     private val maxDownloadSize = Net.instance.ddNetConfig.maxDownloadNum.coerceAtLeast(1)
-
-    // 队列下载任务
     private val waitingTasks: MutableList<Task> by lazy { mutableListOf() }
     private val waitingTaskUrls: MutableSet<String> by lazy { mutableSetOf() }
-
-    // 正在执行任务
     private val runningTasks: MutableList<Task> by lazy { mutableListOf() }
     private val runningTaskUrls: MutableSet<String> by lazy { mutableSetOf() }
-
 
     @Synchronized
     fun addWaitTask(task: Task): Boolean {
         val url = task.url?.takeIf { it.isNotBlank() }
         if (url == null || waitingTaskUrls.contains(url)) {
-            // 添加下载任务失败时，需要删除创建任务时生成的全局变量
             HoldActivityCallbackMap.removeProgressCallback(task)
             return false
         }
@@ -31,7 +25,6 @@ class TaskState {
             waitingTaskUrls.add(url)
             return true
         }
-        // 添加下载任务失败时，需要删除创建任务时生成的全局变量
         HoldActivityCallbackMap.removeProgressCallback(task)
         return false
     }
@@ -53,32 +46,10 @@ class TaskState {
     }
 
     @Synchronized
-    private fun removeTaskByUrl(
-        tasks: MutableList<Task>,
-        taskUrls: MutableSet<String>,
-        url: String?
-    ): Task? {
-        val targetUrl = url?.takeIf { it.isNotBlank() } ?: return null
-        val position = tasks.indexOfFirst { it.url == targetUrl }
-        if (position < 0) return null
-        taskUrls.remove(targetUrl)
-        return tasks.removeAt(position)
-    }
-
-    @Synchronized
-    private fun findFirstTaskFromWaitQueue(): Task? {
-        if (waitingTasks.isEmpty()) return null
-        val task = waitingTasks.removeAt(0)
-        task.url?.let { waitingTaskUrls.remove(it) }
-        return task
-    }
-
-    @Synchronized
     fun addRunningTask(task: Task?): Boolean {
         if (task == null) return false
         val url = task.url?.takeIf { it.isNotBlank() }
         if (url == null || runningTaskUrls.contains(url)) {
-            // 添加下载任务失败时，需要删除创建任务时生成的全局变量
             HoldActivityCallbackMap.removeProgressCallback(task)
             return false
         }
@@ -86,7 +57,6 @@ class TaskState {
             runningTaskUrls.add(url)
             return true
         }
-        // 添加下载任务失败时，需要删除创建任务时生成的全局变量
         HoldActivityCallbackMap.removeProgressCallback(task)
         return false
     }
@@ -97,7 +67,6 @@ class TaskState {
         if (runningTasks.remove(task)) {
             task.url?.let { runningTaskUrls.remove(it) }
         }
-        //下载成功后，删除存储在单例集合中的持有Activity引用的回调对象
         HoldActivityCallbackMap.removeProgressCallback(task)
     }
 
@@ -124,80 +93,49 @@ class TaskState {
 
     @Synchronized
     fun exitRunningTask(task: Task?): Boolean {
-        if (task == null) return false
-        return runningTasks.contains(task)
+        return task != null && runningTasks.contains(task)
     }
 
     @Synchronized
     fun exitWaitTask(task: Task?): Boolean {
-        if (task == null) return false
-        return waitingTasks.contains(task)
+        return task != null && waitingTasks.contains(task)
     }
 
     @Synchronized
     fun exitRunningUrl(url: String?): Boolean {
-        if (url.isNullOrBlank()) return false
-        return runningTaskUrls.contains(url)
+        return !url.isNullOrBlank() && runningTaskUrls.contains(url)
     }
 
     @Synchronized
     fun exitWaitUrl(url: String?): Boolean {
-        if (url.isNullOrBlank()) return false
-        return waitingTaskUrls.contains(url)
+        return !url.isNullOrBlank() && waitingTaskUrls.contains(url)
     }
 
-    /**
-     * 校验是否是无效下载任务
-     * @param task DTask?
-     * @return Boolean
-     */
     fun isInvalidTask(task: Task?): Boolean {
-        if (task == null) return true
-        if (task.url.isNullOrBlank()) return true
-        if (task.url == task.cancelUrl) return true
-        return false
+        return task == null || task.url.isNullOrBlank() || task.url == task.cancelUrl
     }
 
-    /**
-     * 断点续传
-     * @param task Task
-     * @return Boolean
-     */
     fun isBreakpointContinuation(task: Task): Boolean {
         return task.append
     }
 
-
-    /**
-     * 下载队列是否可以接收新的下载任务
-     * @return Boolean
-     */
     @Synchronized
     fun runningQueueCanAcceptTask(): Boolean {
         return runningTasks.size < maxDownloadSize
     }
 
-    /**
-     * 按顺序从等待队列中取出下载任务
-     * @param task Task
-     */
     @Synchronized
     fun getTaskFromWaitQueue(task: Task?): Task? {
         return if (task == null) {
             findFirstTaskFromWaitQueue()
         } else if (runningQueueCanAcceptTask()) {
             task
-        }else {
+        } else {
             addWaitTask(task)
             findFirstTaskFromWaitQueue()
         }
     }
 
-    /**
-     * 是否需要检测md5
-     * @param task Task
-     * @return Boolean
-     */
     fun isCheckMd5(task: Task): Boolean {
         return task.md5.orEmpty().isNotBlank()
     }
@@ -213,6 +151,30 @@ class TaskState {
 
     @Synchronized
     fun debugPrint() {
-        Log.i(DOWNLOAD_DEBUG_TAG, "下载队列：等待任务=${waitingTasks.size}，运行任务=${runningTasks.size}")
+        Log.i(
+            DOWNLOAD_DEBUG_TAG,
+            "download queue: waiting=${waitingTasks.size}, running=${runningTasks.size}"
+        )
+    }
+
+    @Synchronized
+    private fun removeTaskByUrl(
+        tasks: MutableList<Task>,
+        taskUrls: MutableSet<String>,
+        url: String?
+    ): Task? {
+        val targetUrl = url?.takeIf { it.isNotBlank() } ?: return null
+        val position = tasks.indexOfFirst { it.url == targetUrl }
+        if (position < 0) return null
+        taskUrls.remove(targetUrl)
+        return tasks.removeAt(position)
+    }
+
+    @Synchronized
+    private fun findFirstTaskFromWaitQueue(): Task? {
+        if (waitingTasks.isEmpty()) return null
+        val task = waitingTasks.removeAt(0)
+        task.url?.let { waitingTaskUrls.remove(it) }
+        return task
     }
 }

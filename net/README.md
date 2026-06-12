@@ -88,4 +88,4 @@ Download errors are defined in `com.itg.net.download.data.Tag.kt`, for example:
 
 ## Compatibility Notes
 
-The historical package name `com.itg.net.reqeust` is kept for binary/source compatibility.
+The historical package name `com.itg.net.request` is kept for binary/source compatibility.

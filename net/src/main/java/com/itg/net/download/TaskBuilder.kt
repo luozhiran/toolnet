@@ -8,14 +8,14 @@ import com.itg.net.Download
 import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
-import com.itg.net.download.interfaces.IProgressCallback
+import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.operations.DownloadEndNotify
 import com.itg.net.download.operations.HoldActivityCallbackMap
 import java.io.File
 
 class TaskBuilder {
     private val task by lazy { Task() }
-    private val iProgressCallback by lazy {
+    private val progressCallback by lazy {
         object : IProgressCallback {
             override fun onConnecting(task: Task) {
                 DownloadEndNotify.connectNotify(task)
@@ -119,11 +119,11 @@ class TaskBuilder {
 
         // 下载任务是否启动断点续传
         if (taskState.isBreakpointContinuation(task)) {
-            task.iProgressCallback = iProgressCallback
+            task.progressCallback = progressCallback
             Download.instance.dispatchTool.appendDownload(task)
             return task
         }
-        task.iProgressCallback = iProgressCallback
+        task.progressCallback = progressCallback
         Download.instance.dispatchTool.download(task)
         return task
     }

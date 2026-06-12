@@ -1,8 +1,6 @@
 package com.itg.net.download.data
 
-
 const val MSG_START_NEXT_DOWNLOAD = 2
-
 
 const val RESULT_DOWNLOAD_FAILED = 3
 const val RESULT_DOWNLOAD_SUCCESS = 4

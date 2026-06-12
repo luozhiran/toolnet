@@ -2,8 +2,8 @@ package com.itg.net.download.operations
 
 import android.util.Log
 import com.itg.net.download.data.Task
-import com.itg.net.download.interfaces.IProgressCallback
-import com.itg.net.tools.TaskTools
+import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.util.TaskTools
 import java.util.concurrent.CopyOnWriteArrayList
 
 class GlobalDownloadProgressCache {

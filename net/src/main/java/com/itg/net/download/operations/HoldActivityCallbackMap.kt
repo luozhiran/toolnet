@@ -1,10 +1,10 @@
 package com.itg.net.download.operations
 
 import android.util.Log
+import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.download.data.Task
-import com.itg.net.download.interfaces.IProgressCallback
-import com.itg.net.tools.TaskTools
+import com.itg.net.util.TaskTools
 
 object HoldActivityCallbackMap {
 
@@ -41,7 +41,6 @@ object HoldActivityCallbackMap {
         }
     }
 
-
     fun setProgressCallback(task: Task, progressCallback: IProgressCallback) {
         val url = task.url?.takeIf { it.isNotBlank() } ?: return
         synchronized(lock) {
@@ -51,7 +50,6 @@ object HoldActivityCallbackMap {
             }
         }
     }
-
 
     fun removeProgressCallback(task: Task) {
         val url = task.url?.takeIf { it.isNotBlank() } ?: return
@@ -65,11 +63,11 @@ object HoldActivityCallbackMap {
      * @param task Task
      * @param iProgressCallback IProgressCallback
      */
-    fun removeProgressCallback(task: Task, iProgressCallback: IProgressCallback) {
+    fun removeProgressCallback(task: Task, progressCallback: IProgressCallback) {
         val url = task.url?.takeIf { it.isNotBlank() } ?: return
         synchronized(lock) {
             val callbackList = progressCallbackMap[url]
-            callbackList?.remove(iProgressCallback)
+            callbackList?.remove(progressCallback)
             if (callbackList.isNullOrEmpty()) {
                 progressCallbackMap.remove(url)
             }
@@ -98,7 +96,7 @@ object HoldActivityCallbackMap {
         val size = synchronized(lock) {
             progressCallbackMap.size
         }
-        Log.i(DOWNLOAD_DEBUG_TAG, "下载监听器缓存数量：$size")
+        Log.i(DOWNLOAD_DEBUG_TAG, "下载监听器缓存数量=$size")
     }
 
     private fun callbacks(task: Task): List<IProgressCallback> {

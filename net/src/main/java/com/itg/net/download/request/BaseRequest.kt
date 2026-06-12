@@ -11,9 +11,9 @@ import com.itg.net.download.data.ERROR_RENAME_TEMP_FILE_FAILED
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
 import com.itg.net.download.operations.TaskState
-import com.itg.net.reqeust.base.ParamsBuilder
-import com.itg.net.tools.CheckTools
-import com.itg.net.tools.TaskTools
+import com.itg.net.request.base.ParamsBuilder
+import com.itg.net.util.CheckTools
+import com.itg.net.util.TaskTools
 import okhttp3.Response
 import java.io.*
 
@@ -137,7 +137,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                                     { msg -> failureCallback?.invoke(task, msg) })
                                 return
                             } else {
-                                task.iProgressCallback?.onProgress(task, cur == 100)
+                                task.progressCallback?.onProgress(task, cur == 100)
                             }
                         } else {
                             if (taskCancel(task)) {
@@ -156,7 +156,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                     { msg -> successCallback?.invoke(task, msg) },
                     { msg -> failureCallback?.invoke(task, msg) })
             } else {
-                failureCallback?.invoke(task, "下载数据不完整")
+                failureCallback?.invoke(task, "Downloaded data is incomplete")
             }
         } catch (e: FileNotFoundException) {
             failureCallback?.invoke(task, e.message ?: e.javaClass.simpleName)

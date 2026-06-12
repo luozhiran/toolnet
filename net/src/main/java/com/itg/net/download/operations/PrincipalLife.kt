@@ -8,7 +8,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.download.data.LockData
-import com.itg.net.tools.ThreadTool
+import com.itg.net.util.ThreadTool
 import okhttp3.Call
 import java.util.WeakHashMap
 
@@ -30,7 +30,7 @@ object PrincipalLife {
             }
         }
         if (needObserve) {
-            ThreadTool.runOnUIThread{
+            ThreadTool.runOnUIThread {
                 val componentActivity = activity as? ComponentActivity ?: return@runOnUIThread
                 componentActivity.lifecycle.addObserver(object : LifecycleEventObserver {
                     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
@@ -41,7 +41,7 @@ object PrincipalLife {
                                     callWeakHash.remove(ownerActivity)?.toList().orEmpty()
                                 }
                                 calls.forEach { it.cancel() }
-                                ThreadTool.runOnUIThread{
+                                ThreadTool.runOnUIThread {
                                     source.lifecycle.removeObserver(this)
                                 }
                             }
@@ -60,18 +60,18 @@ object PrincipalLife {
             while (iterator.hasNext()) {
                 val entryValue = iterator.next().value
                 entryValue.remove(call)
-                if (entryValue.size == 0) {
+                if (entryValue.isEmpty()) {
                     iterator.remove()
                 }
             }
         }
     }
 
-    fun debugPrint(){
+    fun debugPrint() {
         val size = synchronized(lockCall) {
             callWeakHash.size
         }
-        Log.i(DOWNLOAD_DEBUG_TAG,"生命周期绑定请求数：${size}")
+        Log.i(DOWNLOAD_DEBUG_TAG, "lifecycle-bound request count=$size")
     }
 
 
