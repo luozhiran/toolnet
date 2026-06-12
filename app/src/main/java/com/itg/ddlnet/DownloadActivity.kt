@@ -7,11 +7,12 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.itg.net.Download
 import com.itg.net.download.data.Task
-import com.itg.net.download.interfaces.IProgressCallback
+
 import java.io.File
 import java.security.MessageDigest
 import com.itg.net.Net
-import com.itg.net.reqeust.base.DdCallback
+import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.request.base.DdCallback
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
@@ -81,6 +82,7 @@ class DownloadActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.get).setOnClickListener {
+
             Net.instance.get()
                 .url("http://www.baidu.com")
                 .addParam("key1", "a")

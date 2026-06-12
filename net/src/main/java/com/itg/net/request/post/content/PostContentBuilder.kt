@@ -11,43 +11,39 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
 abstract class PostContentBuilder : ParamsBuilder() {
-    private var contents: MutableList<String?>? = null
-    private var contentMediaTypes: MutableList<String?>? = null
-    private var contentNames: MutableList<String?>? = null
+    private val contents = mutableListOf<String?>()
+    private val contentMediaTypes = mutableListOf<String?>()
+    private val contentNames = mutableListOf<String?>()
     private val urlParams = StringBuilder()
-    init {
-        contents = mutableListOf()
-        contentMediaTypes = mutableListOf()
-        contentNames = mutableListOf()
-    }
+
    internal fun addRealContent(content: String?, mediaType: String?): PostContentBuilder =
-       addRealContent(content, "", mediaType)
+       addRealContent(content, null, mediaType)
 
    internal fun addRealContent(content: String?, contentFlag: String?, mediaType: String?): PostContentBuilder {
-        this.contents?.add(content)
-        this.contentNames?.add(contentFlag)
-        this.contentMediaTypes?.add(mediaType)
+        contents.add(content)
+        contentNames.add(contentFlag)
+        contentMediaTypes.add(mediaType)
         return this
     }
 
     protected fun getRequestBody(): RequestBody? {
-        if (contentMediaTypes.isNullOrEmpty()) return null
-        if (contentMediaTypes.isNullOrEmpty()) return null
-        val mt = contentMediaTypes?.get(0)?.toMediaTypeOrNull()
-        return contents?.get(0)?.toRequestBody(mt)
+        if (contents.isEmpty()) return null
+        val mediaType = contentMediaTypes.getOrNull(0)?.toMediaTypeOrNull()
+        return contents.getOrNull(0)?.toRequestBody(mediaType)
     }
 
-    fun getCount():Int {
-        return this.contents?.size?:0
+    fun getCount(): Int {
+        return contents.size
     }
 
-    fun getContentName(index:Int):String{
-        return contentNames?.get(index)?:""
+    fun getContentName(index: Int): String {
+        val configuredName = contentNames.getOrNull(index)?.takeIf { it.isNotBlank() }
+        return configuredName ?: if (index == 0) "body" else "body$index"
     }
 
-    fun getRequestBody(index:Int): RequestBody?{
-        val mt = contentMediaTypes?.get(index)?.toMediaTypeOrNull()
-        return contents?.get(index)?.toRequestBody(mt)
+    fun getRequestBody(index: Int): RequestBody? {
+        val mediaType = contentMediaTypes.getOrNull(index)?.toMediaTypeOrNull()
+        return contents.getOrNull(index)?.toRequestBody(mediaType)
     }
 
     fun addAppendParams(key: String?, value: String?): PostContentBuilder {
@@ -55,8 +51,8 @@ abstract class PostContentBuilder : ParamsBuilder() {
         return this
     }
 
-   protected fun getAppendParams():StringBuilder{
-        return urlParams;
+   protected fun getAppendParams(): StringBuilder {
+        return urlParams
     }
 
 

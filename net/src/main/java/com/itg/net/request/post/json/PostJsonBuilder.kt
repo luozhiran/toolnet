@@ -8,6 +8,7 @@ import com.itg.net.util.JsonTools
 import com.itg.net.util.UrlTools
 import okhttp3.CacheControl
 import okhttp3.Cookie
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -19,6 +20,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     private val urlParams = StringBuilder()
     private val params = StringBuilder()
     private var jsonObject = JSONObject()
+    private var hasExplicitJsonBody = false
 
     fun addJson(key: String?, value: Any?): PostJsonBuilder {
         putParam(key, value)
@@ -68,6 +70,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     fun addParam(obj: JSONObject?): PostJsonBuilder {
         if (obj == null) return this
         this.jsonObject = JsonTools.deepMerge(obj, this.jsonObject)
+        hasExplicitJsonBody = true
         return this
     }
 
@@ -75,6 +78,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
         val json = obj?.takeIf { it.isNotBlank() } ?: return this
         try {
             this.jsonObject = JsonTools.deepMerge(JSONObject(json), this.jsonObject)
+            hasExplicitJsonBody = true
         } catch (e: Exception) {
             return this
         }
@@ -92,6 +96,14 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
 
     internal fun getParams(): StringBuilder {
         return params
+    }
+
+    internal fun hasJsonBody(): Boolean {
+        return hasExplicitJsonBody
+    }
+
+    internal fun getMultipartJsonRequestBody(): RequestBody {
+        return jsonObject.toString().toRequestBody("application/json;charset=utf-8".toMediaTypeOrNull())
     }
 
     internal fun getUrl(): String {
@@ -149,6 +161,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     private fun putParam(key: String?, value: Any?) {
         if (!key.isNullOrBlank()) {
             jsonObject.put(key, value)
+            hasExplicitJsonBody = true
         }
     }
 }
