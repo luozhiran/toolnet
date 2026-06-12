@@ -20,6 +20,7 @@ class TaskState {
     private val mRunningTasksUrl: MutableList<String?> by lazy { mutableListOf() }
 
 
+    @Synchronized
     fun addWaitTask(task: Task):Boolean {
         if (exitWaitUrl(task.url)) {
             // 添加下载任务失败时，需要删除创建任务时生成的全局变量
@@ -35,6 +36,7 @@ class TaskState {
         return false
     }
 
+    @Synchronized
     fun deleteWaitTask(task: Task?) {
         if (task == null) return
         if (mWaitTask.remove(task)) {
@@ -43,6 +45,7 @@ class TaskState {
         HoldActivityCallbackMap.removeProgressCallback(task)
     }
 
+    @Synchronized
     fun deleteWaitTask(url: String?) {
         if (!quickDeleteWaitTask(url)) {
             val iterator = mWaitTask.iterator()
@@ -59,10 +62,11 @@ class TaskState {
         }
     }
 
+    @Synchronized
     private fun quickDeleteWaitTask(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val position = mWaitQueueUrl.indexOf(url)
-        if (position > 0 && position < mWaitTask.size) {
+        if (position >= 0 && position < mWaitTask.size) {
             if (mWaitTask[position].url == url) {
                 mWaitQueueUrl.removeAt(position)
                 val task = mWaitTask.removeAt(position)
@@ -73,6 +77,7 @@ class TaskState {
         return false
     }
 
+    @Synchronized
     private fun findFirstTaskFromWaitQueue(): Task? {
         if (mWaitTask.size > 0) {
             mWaitQueueUrl.removeAt(0)
@@ -81,6 +86,7 @@ class TaskState {
         return null
     }
 
+    @Synchronized
     fun addRunningTask(task: Task?): Boolean {
         if (task == null) return false
         if (mRunningTasksUrl.contains(task.url)) {
@@ -97,6 +103,7 @@ class TaskState {
         return false
     }
 
+    @Synchronized
     fun deleteRunningTask(task: Task?) {
         if (task == null) return
         if (mRunningTasks.remove(task)) {
@@ -106,10 +113,11 @@ class TaskState {
         HoldActivityCallbackMap.removeProgressCallback(task)
     }
 
+    @Synchronized
     private fun quickDeleteRunningTask(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val position = mRunningTasksUrl.indexOf(url)
-        if (position > 0 && position < mRunningTasks.size) {
+        if (position >= 0 && position < mRunningTasks.size) {
             if (mRunningTasks[position].url == url) {
                 mRunningTasksUrl.removeAt(position)
                 val task = mRunningTasks.removeAt(position)
@@ -120,6 +128,7 @@ class TaskState {
         return false
     }
 
+    @Synchronized
     fun deleteRunningTask(url: String?) {
         if (!quickDeleteRunningTask(url)) {
             val iterator = mRunningTasks.iterator()
@@ -136,21 +145,39 @@ class TaskState {
         }
     }
 
+    @Synchronized
+    fun markRunningTaskCanceled(url: String?): Task? {
+        if (url.isNullOrBlank()) return null
+        return mRunningTasks.firstOrNull { it.url == url }?.apply {
+            cancelUrl = url
+        }
+    }
+
+    @Synchronized
+    fun markRunningTaskCanceled(task: Task?) {
+        if (task == null) return
+        task.cancelUrl = task.url
+    }
+
+    @Synchronized
     fun exitRunningTask(task: Task?): Boolean {
         if (task == null) return false
         return mRunningTasks.contains(task)
     }
 
+    @Synchronized
     fun exitWaitTask(task: Task?): Boolean {
         if (task == null) return false
         return mWaitTask.contains(task)
     }
 
+    @Synchronized
     fun exitRunningUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         return mRunningTasksUrl.contains(url)
     }
 
+    @Synchronized
     fun exitWaitUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         return mWaitQueueUrl.contains(url)
@@ -182,6 +209,7 @@ class TaskState {
      * 下载队列是否可以接收新的下载任务
      * @return Boolean
      */
+    @Synchronized
     fun runningQueueCanAcceptTask(): Boolean {
         return mRunningTasks.size < maxDownloadSize
     }
@@ -190,6 +218,7 @@ class TaskState {
      * 按顺序从等待队列中取出下载任务
      * @param task Task
      */
+    @Synchronized
     fun getTaskFromWaitQueue(task: Task?): Task? {
         return if (task == null) {
             findFirstTaskFromWaitQueue()
@@ -210,6 +239,7 @@ class TaskState {
         return task.md5.orEmpty().isNotBlank()
     }
 
+    @Synchronized
     fun canNextTask(): Boolean {
         if (runningQueueCanAcceptTask() && mWaitTask.size > 0) return true
         return false
@@ -223,6 +253,7 @@ class TaskState {
         return false
     }
 
+    @Synchronized
     fun debugPrint(){
         Log.i(DEBUG_TAG,"下载队列： 等待任务队列：${mWaitTask.size}，正在下载队列：${mRunningTasks.size}")
     }

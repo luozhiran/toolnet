@@ -38,16 +38,16 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
     }
 
     private fun checkFileDir(file: File): Boolean {
-        if (file.parentFile != null && !file.parentFile!!.exists()) {
-            return file.parentFile!!.mkdirs()
+        val parentFile = file.parentFile
+        if (parentFile != null && !parentFile.exists()) {
+            return parentFile.mkdirs()
         }
         return true
     }
 
     private fun checkMd5(path: String, task: Task): Boolean {
         if (!CheckTools.checkMd5(task.md5, path)) {
-            File(task.path.toString() + ".tmp").delete()
-            failureCallback?.invoke(task, ERROR_TAG_4)
+            File(path).delete()
             return false
         }
         return true
@@ -79,7 +79,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         successCallback: (String) -> Unit,
         failCallback: (String) -> Unit
     ) {
-        if (taskStateInstance.isCheckMd5(task) && checkMd5(file.absolutePath, task)) {
+        if (taskStateInstance.isCheckMd5(task) && !checkMd5(file.absolutePath, task)) {
             failCallback.invoke(ERROR_TAG_4)
         } else {
             val distFile = File(file.absolutePath.replace(".tmp", ""))
@@ -104,30 +104,38 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
     ) {
         val buffer = ByteArray(1024 shl 2)
         var length = -1
-        var out: OutputStream? = null
         try {
-            out = FileOutputStream(file, task.append)
+            val out = FileOutputStream(file, task.append)
             var pre = 0
             var cur = 0
-            while (inputStream.read(buffer).also { length = it } > 0) {
-                out.write(buffer, 0, length)
-                updateTask(file.length(), task)
-                cur = TaskTools.getDownloadProgress(task)
-                if (taskCancel(task)) {
-                    failureCallback?.invoke(task, ERROR_TAG_3)
-                } else {
-                    if (cur != pre) {
-                        if (cur == 100) {
-                            lastOneCheck(
-                                file,
-                                { msg -> successCallback?.invoke(task, msg) },
-                                { msg -> failureCallback?.invoke(task, msg) })
-                        } else {
-                            task.iProgressCallback?.onProgress(task, cur == 100)
+            inputStream.use { input ->
+                out.use { output ->
+                    while (input.read(buffer).also { length = it } > 0) {
+                        if (taskCancel(task)) {
+                            failureCallback?.invoke(task, ERROR_TAG_3)
+                            return
                         }
+                        output.write(buffer, 0, length)
+                        updateTask(file.length(), task)
+                        cur = TaskTools.getDownloadProgress(task)
+                        if (cur != pre) {
+                            if (cur == 100) {
+                                lastOneCheck(
+                                    file,
+                                    { msg -> successCallback?.invoke(task, msg) },
+                                    { msg -> failureCallback?.invoke(task, msg) })
+                            } else {
+                                task.iProgressCallback?.onProgress(task, cur == 100)
+                            }
+                        } else {
+                            if (taskCancel(task)) {
+                                failureCallback?.invoke(task, ERROR_TAG_3)
+                                return
+                            }
+                        }
+                        pre = cur
                     }
                 }
-                pre = cur
             }
         } catch (e: FileNotFoundException) {
             e.printStackTrace()
@@ -135,28 +143,26 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         } catch (e: IOException) {
             e.printStackTrace()
             failureCallback?.invoke(task, e.message.toString())
-        } finally {
-            try {
-                out?.close()
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
         }
     }
 
     protected fun handleResponse(response: Response) {
         val file = File(task.path + ".tmp")
-        task.contentLength = response.body?.contentLength() ?: 0
-        if (checkFileDir(file)) {
-            if (response.body == null) {
-                failureCallback?.invoke(task, ERROR_TAG_6)
+        val body = response.body
+        val localSize = if (task.append && file.exists()) file.length() else 0L
+        task.contentLength = localSize + (body?.contentLength() ?: 0)
+        try {
+            if (checkFileDir(file)) {
+                if (body == null) {
+                    failureCallback?.invoke(task, ERROR_TAG_6)
+                } else {
+                    saveNetStream(body.byteStream(), file)
+                }
             } else {
-                saveNetStream(response.body!!.byteStream(), file)
+                failureCallback?.invoke(task, ERROR_TAG_2)
             }
-            response.body?.close()
-        } else {
-            failureCallback?.invoke(task, ERROR_TAG_2)
-            response.body?.close()
+        } finally {
+            response.close()
         }
     }
 

@@ -25,11 +25,9 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
 
     private fun getLocalFileRange(fileSize:Long?):String{
         val file = File(task.path + ".tmp")
-        return if (file.exists()) {
-            "${file.length()}-${fileSize ?: 0 - 1}"
-        } else {
-            "${0}-${fileSize ?: 0 - 1}"
-        }
+        val start = if (file.exists()) file.length() else 0L
+        val end = (fileSize ?: 0L) - 1L
+        return "${start}-${end}"
     }
 
     private fun breakpointRequest(range:String?){
@@ -37,7 +35,11 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
             if (response.code == 206) {
                 handleResponse(response)
             } else {
-                failureCallback?.invoke(task, ERROR_TAG_1)
+                try {
+                    failureCallback?.invoke(task, ERROR_TAG_1)
+                } finally {
+                    response.close()
+                }
             }
         }, onFailure = { _, ioException ->
             failureCallback?.invoke(task,ioException.message.toString())
@@ -49,9 +51,15 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
         val okHttpCallback = OnDownloadListenerImpl(onResponse = { _, response ->
             val code = response.code
             if (code == 200) {
-                breakpointRequest(getLocalFileRange(response.body?.contentLength()))
+                val contentLength = response.body?.contentLength()
+                response.close()
+                breakpointRequest(getLocalFileRange(contentLength))
             } else {
-                failureCallback?.invoke(task,"请求失败：response.code=${code}")
+                try {
+                    failureCallback?.invoke(task,"请求失败：response.code=${code}")
+                } finally {
+                    response.close()
+                }
             }
         }, onFailure = { _, iOException ->
             failureCallback?.invoke(task,iOException.message.toString())

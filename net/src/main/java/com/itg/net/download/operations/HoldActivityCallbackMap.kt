@@ -9,27 +9,34 @@ import com.itg.net.tools.TaskTools
 object HoldActivityCallbackMap {
 
     private val progressCallbackMap: MutableMap<String, MutableList<IProgressCallback>> by lazy { mutableMapOf() }
+    private val lock = Any()
 
     fun loopConnecting(task: Task) {
-        progressCallbackMap[task.url?:""]?.iterator()?.apply {
-            while (hasNext()) {
-                next().onConnecting(task)
+        callbacks(task).forEach {
+            try {
+                it.onConnecting(task)
+            } catch (e: Exception) {
+                Log.w(DEBUG_TAG, "Progress callback onConnecting failed.", e)
             }
         }
     }
 
     fun loop(task: Task) {
-        progressCallbackMap[task.url?:""]?.iterator()?.apply {
-            while (hasNext()) {
-                next().onProgress(task, TaskTools.getDownloadProgress(task) == 100)
+        callbacks(task).forEach {
+            try {
+                it.onProgress(task, TaskTools.getDownloadProgress(task) == 100)
+            } catch (e: Exception) {
+                Log.w(DEBUG_TAG, "Progress callback onProgress failed.", e)
             }
         }
     }
 
     fun loopFail(msg: String, task: Task) {
-        progressCallbackMap[task.url?:""]?.iterator()?.apply {
-            while (hasNext()) {
-                next().onFail(msg, task)
+        callbacks(task).forEach {
+            try {
+                it.onFail(msg, task)
+            } catch (e: Exception) {
+                Log.w(DEBUG_TAG, "Progress callback onFail failed.", e)
             }
         }
     }
@@ -37,18 +44,24 @@ object HoldActivityCallbackMap {
 
     fun setProgressCallback(task: Task, progressCallback: IProgressCallback) {
         if (task.url.isNullOrBlank()) return
-        var callbackList = progressCallbackMap[task.url]
-        if (callbackList == null) {
-            callbackList = mutableListOf()
-            progressCallbackMap[task.url!!] = callbackList
+        synchronized(lock) {
+            var callbackList = progressCallbackMap[task.url]
+            if (callbackList == null) {
+                callbackList = mutableListOf()
+                progressCallbackMap[task.url!!] = callbackList
+            }
+            if (!callbackList.contains(progressCallback)) {
+                callbackList.add(progressCallback)
+            }
         }
-        callbackList.add(progressCallback)
     }
 
 
     fun removeProgressCallback(task: Task) {
         if (task.url.isNullOrBlank()) return
-        progressCallbackMap.remove(task.url)
+        synchronized(lock) {
+            progressCallbackMap.remove(task.url)
+        }
     }
 
     /**
@@ -58,10 +71,12 @@ object HoldActivityCallbackMap {
      */
     fun removeProgressCallback(task: Task, iProgressCallback:IProgressCallback) {
         if (task.url.isNullOrBlank()) return
-        val callbackList = progressCallbackMap[task.url]
-        callbackList?.remove(iProgressCallback)
-        if (callbackList.isNullOrEmpty()) {
-            progressCallbackMap.remove(task.url)
+        synchronized(lock) {
+            val callbackList = progressCallbackMap[task.url]
+            callbackList?.remove(iProgressCallback)
+            if (callbackList.isNullOrEmpty()) {
+                progressCallbackMap.remove(task.url)
+            }
         }
     }
 
@@ -70,8 +85,9 @@ object HoldActivityCallbackMap {
      */
     fun getUrlProgressCallbackNum(url:String):Int{
         if (url.isBlank()) return 0
-        val callbackList = progressCallbackMap[url]
-        return callbackList?.size ?:0
+        return synchronized(lock) {
+            progressCallbackMap[url]?.size ?: 0
+        }
     }
 
     /**
@@ -83,6 +99,16 @@ object HoldActivityCallbackMap {
     }
 
     fun debugPrint(){
-        Log.i(DEBUG_TAG,"监听器数量：${progressCallbackMap.size}")
+        val size = synchronized(lock) {
+            progressCallbackMap.size
+        }
+        Log.i(DEBUG_TAG,"监听器数量：${size}")
+    }
+
+    private fun callbacks(task: Task): List<IProgressCallback> {
+        val url = task.url ?: return emptyList()
+        return synchronized(lock) {
+            progressCallbackMap[url]?.toList().orEmpty()
+        }
     }
 }

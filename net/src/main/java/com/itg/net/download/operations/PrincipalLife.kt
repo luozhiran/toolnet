@@ -10,34 +10,39 @@ import com.itg.net.download.data.DEBUG_TAG
 import com.itg.net.download.data.LockData
 import com.itg.net.tools.ThreadTool
 import okhttp3.Call
-import kotlin.collections.LinkedHashMap
+import java.util.WeakHashMap
 
 object PrincipalLife {
-    private val callWeakHash by lazy { LinkedHashMap<Activity, MutableList<Call>>() }
+    private val callWeakHash by lazy { WeakHashMap<Activity, MutableList<Call>>() }
     private val lockCall = LockData()
 
 
     fun observeActivityLife(call: Call?, activity: Activity?) {
         if (call == null || activity == null) return
-        if (!callWeakHash.containsKey(activity)) {
-            val taskList: MutableList<Call> = mutableListOf()
-            callWeakHash[activity] = taskList
+        var needObserve = false
+        synchronized(lockCall) {
+            val taskList = callWeakHash.getOrPut(activity) {
+                needObserve = true
+                mutableListOf()
+            }
+            if (!taskList.contains(call)) {
+                taskList.add(call)
+            }
+        }
+        if (needObserve) {
             ThreadTool.runOnUIThread{
-                (activity as? ComponentActivity)?.lifecycle?.addObserver(object :
-                    LifecycleEventObserver {
+                val componentActivity = activity as? ComponentActivity ?: return@runOnUIThread
+                componentActivity.lifecycle.addObserver(object : LifecycleEventObserver {
                     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
                         if (event == Lifecycle.Event.ON_DESTROY) {
+                            val ownerActivity = source as? Activity ?: return
                             ThreadTool.runOnExecutor {
-                                synchronized(lockCall) {
-                                    callWeakHash[activity]?.iterator()?.apply {
-                                        while (hasNext()) {
-                                            next().cancel()
-                                        }
-                                    }
-                                    callWeakHash.remove(activity)
-                                    ThreadTool.runOnUIThread{
-                                        (activity as? ComponentActivity)?.lifecycle?.removeObserver(this)
-                                    }
+                                val calls = synchronized(lockCall) {
+                                    callWeakHash.remove(ownerActivity)?.toList().orEmpty()
+                                }
+                                calls.forEach { it.cancel() }
+                                ThreadTool.runOnUIThread{
+                                    source.lifecycle.removeObserver(this)
                                 }
                             }
                         }
@@ -46,19 +51,14 @@ object PrincipalLife {
             }
 
         }
-        synchronized(lockCall) {
-            val taskList = callWeakHash[activity]
-            taskList?.add(call)
-        }
     }
 
     fun removeCall(call: Call?) {
         if (call == null) return
         synchronized(lockCall) {
             val iterator = callWeakHash.iterator()
-            var entryValue:MutableList<Call>?=null
             while (iterator.hasNext()) {
-                entryValue = iterator.next().value
+                val entryValue = iterator.next().value
                 entryValue.remove(call)
                 if (entryValue.size == 0) {
                     iterator.remove()
@@ -68,7 +68,10 @@ object PrincipalLife {
     }
 
     fun debugPrint(){
-        Log.i(DEBUG_TAG,"生命周期， 请求接口数：${callWeakHash.size}")
+        val size = synchronized(lockCall) {
+            callWeakHash.size
+        }
+        Log.i(DEBUG_TAG,"生命周期， 请求接口数：${size}")
     }
 
 

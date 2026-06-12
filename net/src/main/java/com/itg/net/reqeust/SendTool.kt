@@ -55,20 +55,27 @@ class SendTool {
     fun send(callback: DdCallback?, call: Call?) {
         if (call == null) callback?.onFailure("url is error,please check url")
         PrincipalLife.observeActivityLife(call,this.activity)
+        this.activity = null
         call?.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (!call.isCanceled()) {
-                    callback?.onFailure(e.message)
+                try {
+                    if (!call.isCanceled()) {
+                        callback?.onFailure(e.message)
+                    }
+                } finally {
+                    PrincipalLife.removeCall(call)
                 }
-                PrincipalLife.removeCall(call)
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (!call.isCanceled()) {
-                    callback?.onResponse(response.body?.string(), response.code)
+                try {
+                    if (!call.isCanceled()) {
+                        callback?.onResponse(response.body?.string(), response.code)
+                    }
+                } finally {
+                    response.close()
+                    PrincipalLife.removeCall(call)
                 }
-                response.body?.close()
-                PrincipalLife.removeCall(call)
             }
         })
     }
@@ -81,27 +88,33 @@ class SendTool {
             handler?.sendMessage(msg)
         }
         PrincipalLife.observeActivityLife(call,this.activity)
+        this.activity = null
         call?.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (!call.isCanceled()) {
-                    val msg = Message.obtain()
-                    msg.what = errorWhat
-                    msg.obj = e.message
-                    handler?.sendMessage(msg)
+                try {
+                    if (!call.isCanceled()) {
+                        val msg = Message.obtain()
+                        msg.what = errorWhat
+                        msg.obj = e.message
+                        handler?.sendMessage(msg)
+                    }
+                } finally {
+                    PrincipalLife.removeCall(call)
                 }
-                PrincipalLife.removeCall(call)
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (!call.isCanceled()) {
-                    val msg = Message.obtain()
-                    msg.what = what
-                    msg.obj = response
-                    msg.obj = response.body?.string()
-                    handler?.sendMessage(msg)
+                try {
+                    if (!call.isCanceled()) {
+                        val msg = Message.obtain()
+                        msg.what = what
+                        msg.obj = response.body?.string()
+                        handler?.sendMessage(msg)
+                    }
+                } finally {
+                    response.close()
+                    PrincipalLife.removeCall(call)
                 }
-                response.body?.close()
-                PrincipalLife.removeCall(call)
             }
         })
     }

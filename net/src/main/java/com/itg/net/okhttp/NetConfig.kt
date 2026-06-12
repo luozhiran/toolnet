@@ -3,6 +3,7 @@ package com.itg.net.okhttp
 import android.app.Application
 import android.os.Environment
 import android.os.Handler
+import android.os.Looper
 import android.text.TextUtils
 import com.orhanobut.logger.AndroidLogAdapter
 import com.orhanobut.logger.Logger
@@ -62,7 +63,7 @@ class NetConfig {
     val uiHandler: Handler
         get() {
             if (handler == null) {
-                handler = Handler(application!!.mainLooper)
+                handler = Handler(application?.mainLooper ?: Looper.getMainLooper())
             }
             return handler!!
         }
@@ -89,60 +90,25 @@ class NetConfig {
     fun getOkHttpClient() = okHttpClient
 
     val httpLog: String
-        get() = if (TextUtils.isEmpty(logPath)) {
-            var file = Environment.getExternalStorageDirectory()
-            file = File(file, "/itg/$logPath/httpLog.txt")
-            if (!file.parentFile.exists()) {
-                file.parentFile.mkdirs()
-            }
-            if (!file.exists()) {
-                try {
-                    file.createNewFile()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
+        get() {
+            val file = if (TextUtils.isEmpty(logPath)) {
+                File(Environment.getExternalStorageDirectory(), "itg/httpLog.txt")
             } else {
-                if (file.length() > 1024 * 1024 * 5) {
-                    file.delete()
-                }
+                File(logPath!!)
             }
-            file.absolutePath
-        } else {
-            val file = File(logPath)
-            if (!file.exists()) {
-                try {
-                    file.createNewFile()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
-            } else {
-                if (file.length() > 1024 * 1024 * 5) {
-                    file.delete()
-                }
-            }
-            file.absolutePath
+            return prepareLogFile(file)
         }
 
 
     val debugLog: String
         get() {
-            var file = Environment.getExternalStorageDirectory()
-            file = File(file, "/itg/$logPath/debug.txt")
-            if (!file.parentFile.exists()) {
-                file.parentFile.mkdirs()
-            }
-            if (!file.exists()) {
-                try {
-                    file.createNewFile()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
+            val relativePath = if (logPath.isNullOrBlank()) {
+                "itg/debug.txt"
             } else {
-                if (file.length() > 1024 * 1024 * 5) {
-                    file.delete()
-                }
+                "itg/$logPath/debug.txt"
             }
-            return file.absolutePath
+            val file = File(Environment.getExternalStorageDirectory(), relativePath)
+            return prepareLogFile(file)
         }
 
     fun useHttpLog(use: Boolean): NetConfig {
@@ -168,5 +134,23 @@ class NetConfig {
     }
     fun getCache():Cache?{
         return this.okhttpCache;
+    }
+
+    private fun prepareLogFile(file: File): String {
+        file.parentFile?.let {
+            if (!it.exists()) {
+                it.mkdirs()
+            }
+        }
+        if (!file.exists()) {
+            try {
+                file.createNewFile()
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        } else if (file.length() > 1024 * 1024 * 5) {
+            file.delete()
+        }
+        return file.absolutePath
     }
 }

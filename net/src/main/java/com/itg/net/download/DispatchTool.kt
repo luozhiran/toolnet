@@ -7,6 +7,7 @@ import android.util.Log
 import com.itg.net.download.data.DOWNLOAD_FILE
 import com.itg.net.download.data.DOWNLOAD_SUCCESS
 import com.itg.net.download.data.DOWNLOAD_TASK
+import com.itg.net.download.data.ERROR_TAG_3
 import com.itg.net.download.data.ERROR_TAG_11
 import com.itg.net.download.data.LockData
 import com.itg.net.download.data.DOWNLOAD_LOG
@@ -167,7 +168,10 @@ class DispatchTool : Dispatch {
 
     private fun handleResult(task: Task, type: Int, tag: String) {
         if (type == DOWNLOAD_FILE) {
-            if (task.tryAgainCount > 0) {
+            if (!task.cancelUrl.isNullOrBlank() && task.cancelUrl == task.url) {
+                task.iProgressCallback?.onFail(ERROR_TAG_3, task)
+                taskStateInstance.deleteRunningTask(task)
+            } else if (task.tryAgainCount > 0) {
                 task.iProgressCallback?.onFail(ERROR_TAG_11, task)
             } else {
                 task.iProgressCallback?.onFail(tag, task)

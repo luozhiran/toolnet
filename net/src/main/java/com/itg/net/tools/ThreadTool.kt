@@ -25,10 +25,12 @@ object ThreadTool {
     }
 
     fun postDelayed(runnable: Runnable?, delayMillis: Long) {
-        mHandler.postDelayed(runnable!!, delayMillis)
+        runnable ?: return
+        mHandler.postDelayed(runnable, delayMillis)
     }
 
     fun removeCallback(runnable: Runnable?) {
-        mHandler.removeCallbacks(runnable!!)
+        runnable ?: return
+        mHandler.removeCallbacks(runnable)
     }
 }

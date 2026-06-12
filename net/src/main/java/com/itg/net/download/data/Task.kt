@@ -16,6 +16,7 @@ class Task {
     // 下载进度大小
     var downloadSize: Long = 0
     // 需要取消的任务url
+    @Volatile
     var cancelUrl: String? = null
     // 是否支持断点续传
     var append = false

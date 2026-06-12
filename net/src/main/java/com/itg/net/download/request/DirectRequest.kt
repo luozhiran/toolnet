@@ -17,7 +17,11 @@ class DirectRequest(private val task: Task, taskStateInstance: TaskState) : Base
             if (code == 200) {
                 handleResponse(response)
             } else {
-                failureCallback?.invoke(task,"请求失败：response.code=${code}")
+                try {
+                    failureCallback?.invoke(task,"请求失败：response.code=${code}")
+                } finally {
+                    response.close()
+                }
             }
         }, onFailure = { _, ioException ->
             failureCallback?.invoke(task,ioException.message.toString())

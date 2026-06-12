@@ -61,6 +61,7 @@ class Download {
     fun cancel(url: String?) {
         val taskState = dispatchTool.getTaskState()
         if (taskState.exitRunningUrl(url)) {
+            taskState.markRunningTaskCanceled(url)
             taskState.deleteRunningTask(url)
             Net.instance.cancelFirstTag(url)
         }else if (taskState.exitWaitUrl(url)) {
@@ -71,6 +72,7 @@ class Download {
     fun cancel(task: Task?) {
         val taskState = dispatchTool.getTaskState()
         if (taskState.exitRunningTask(task)) {
+            taskState.markRunningTaskCanceled(task)
             taskState.deleteRunningTask(task)
             Net.instance.cancelFirstTag(task?.url)
         } else if (taskState.exitWaitTask(task)) {

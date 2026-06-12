@@ -12,6 +12,7 @@ import com.itg.net.download.data.Task
 import com.itg.net.download.interfaces.IProgressCallback
 import com.itg.net.download.operations.DownloadEndNotify
 import com.itg.net.download.operations.HoldActivityCallbackMap
+import java.io.File
 
 class TaskBuilder {
     private val task by lazy { Task() }
@@ -92,7 +93,7 @@ class TaskBuilder {
             holdActivityRef?.onFail(ERROR_TAG_7, task)
             return task
         }
-        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
+
         // 校验请求地址是否正在下载
         if (taskState.exitRunningUrl(task.url)) {
             return task
@@ -101,12 +102,15 @@ class TaskBuilder {
         if (taskState.exitWaitUrl(task.url)) {
             return task
         }
+
         // 下载任务是否启动断点续传
         if (taskState.isBreakpointContinuation(task)) {
             task.iProgressCallback = iProgressCallback
             Download.instance.dispatchTool.appendDownload(task)
             return task
         }
+        Log.e("MainActivity", "增加任务---"+task.url + " "+task.path);
+        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
         task.iProgressCallback = iProgressCallback
         Download.instance.dispatchTool.download(task)
         return task
