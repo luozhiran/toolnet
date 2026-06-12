@@ -1,15 +1,16 @@
 package com.itg.net.download.operations
 
-import com.itg.net.download.data.LockData
+import android.util.Log
 import com.itg.net.download.data.Task
 import com.itg.net.download.interfaces.IProgressCallback
 import com.itg.net.tools.TaskTools
+import java.util.concurrent.CopyOnWriteArrayList
 
 class GlobalDownloadProgressCache {
-    private val progressCallbackList : MutableList<IProgressCallback> by lazy { mutableListOf() }
+    private val progressCallbackList = CopyOnWriteArrayList<IProgressCallback>()
 
     fun addItem(progressCallback:IProgressCallback){
-        progressCallbackList.add(progressCallback)
+        progressCallbackList.addIfAbsent(progressCallback)
     }
 
     fun removeItem(progressCallback:IProgressCallback){
@@ -18,24 +19,35 @@ class GlobalDownloadProgressCache {
 
 
     fun execAllConnecting(task: Task){
-        val list = progressCallbackList.toMutableList()
-        for (callback in list) {
-            callback.onConnecting(task)
+        forEachCallback {
+            it.onConnecting(task)
         }
     }
 
     fun execAllOnProgress(task: Task){
-        val list = progressCallbackList.toMutableList()
-        for (callback in list) {
-            callback.onProgress(task,TaskTools.getDownloadProgress(task) == 100)
+        val complete = TaskTools.getDownloadProgress(task) >= 100
+        forEachCallback {
+            it.onProgress(task, complete)
         }
     }
 
     fun execAllOnFail(msg:String, task: Task){
-        val list = progressCallbackList.toMutableList()
-        for (callback in list) {
-            callback.onFail(msg,task)
+        forEachCallback {
+            it.onFail(msg,task)
         }
     }
 
+    private inline fun forEachCallback(action: (IProgressCallback) -> Unit) {
+        for (callback in progressCallbackList) {
+            try {
+                action(callback)
+            } catch (e: Exception) {
+                Log.w(TAG, "Global download progress callback failed.", e)
+            }
+        }
+    }
+
+    private companion object {
+        private const val TAG = "GlobalProgressCache"
+    }
 }
