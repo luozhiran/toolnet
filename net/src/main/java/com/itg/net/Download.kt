@@ -28,12 +28,20 @@ class Download {
         globalDownloadProgressCache.addItem(progressBack)
     }
 
+    fun removeGlobalProgressListener(progressBack: IProgressCallback) {
+        globalDownloadProgressCache.removeItem(progressBack)
+    }
+
     /**
      * 和setGlobalProgressListener配套使用
      * @param progressBack IProgressCallback
      */
+    @Deprecated(
+        message = "Use removeGlobalProgressListener instead.",
+        replaceWith = ReplaceWith("removeGlobalProgressListener(progressBack)")
+    )
     fun remoteGlobalProgressListener(progressBack: IProgressCallback) {
-        globalDownloadProgressCache.removeItem(progressBack)
+        removeGlobalProgressListener(progressBack)
     }
 
 
@@ -54,6 +62,10 @@ class Download {
     }
 
     fun isQueue(url: String): Boolean {
+        return isQueued(url)
+    }
+
+    fun isQueued(url: String): Boolean {
         val taskState = dispatchTool.getTaskState()
         return taskState.exitWaitUrl(url) || taskState.exitRunningUrl(url)
     }

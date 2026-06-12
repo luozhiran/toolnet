@@ -5,14 +5,14 @@ import android.os.Looper
 import java.util.concurrent.Executors
 
 object ThreadTool {
-    private val mExecutors by lazy { Executors.newCachedThreadPool() }
-    private val mHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val executor by lazy { Executors.newCachedThreadPool() }
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     fun runOnExecutor(runnable: Runnable) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             runnable.run()
         } else {
-            mExecutors.execute(runnable)
+            executor.execute(runnable)
         }
     }
 
@@ -20,17 +20,17 @@ object ThreadTool {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             runnable.run()
         } else {
-            mHandler.post(runnable)
+            mainHandler.post(runnable)
         }
     }
 
     fun postDelayed(runnable: Runnable?, delayMillis: Long) {
         runnable ?: return
-        mHandler.postDelayed(runnable, delayMillis)
+        mainHandler.postDelayed(runnable, delayMillis)
     }
 
     fun removeCallback(runnable: Runnable?) {
         runnable ?: return
-        mHandler.removeCallbacks(runnable)
+        mainHandler.removeCallbacks(runnable)
     }
 }

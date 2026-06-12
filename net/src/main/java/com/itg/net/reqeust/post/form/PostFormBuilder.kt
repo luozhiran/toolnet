@@ -1,9 +1,7 @@
 package com.itg.net.reqeust.post.form
 
 import android.app.Activity
-import android.text.TextUtils
 import com.itg.net.Net
-import com.itg.net.reqeust.base.Builder
 import com.itg.net.reqeust.get.GetBuilder
 import com.itg.net.reqeust.base.ParamsBuilder
 import com.itg.net.tools.UrlTools
@@ -24,7 +22,7 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
         }
         if (!this.noGlobalParams) {
             Net.instance.ddNetConfig.globalParams.forEach {
-                if (!TextUtils.isEmpty(it.key)) {
+                if (it.key.isNotBlank()) {
                     builder.add(it.key, it.value.toString())
                 }
             }
@@ -38,7 +36,7 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     }
 
     internal fun getAppendParams(): StringBuilder {
-        return urlParams;
+        return urlParams
     }
 
     override fun addParam(key: String?, value: String?): PostFormBuilder {
@@ -54,12 +52,12 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
         return this
     }
 
-    internal fun getParams(): java.lang.StringBuilder {
+    internal fun getParams(): StringBuilder {
         return params
     }
 
     internal fun getUrl(): String {
-        return UrlTools.getSpliceUrl(null, this.url ?: "")
+        return UrlTools.getSpliceUrl(UrlTools.cutOffStrToMap(urlParams.toString()), this.url ?: "")
     }
 
     override fun addHeader(key: String?, value: String?): PostFormBuilder {

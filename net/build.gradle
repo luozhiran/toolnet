@@ -5,6 +5,7 @@ plugins {
 }
 
 android {
+    namespace 'com.itg.net'
     compileSdk 31
 
     defaultConfig {
@@ -32,14 +33,12 @@ android {
 
 dependencies {
     implementation 'androidx.core:core-ktx:1.7.0'
-    implementation 'androidx.appcompat:appcompat:1.3.0'
-    implementation 'com.google.android.material:material:1.4.0'
+    api 'androidx.appcompat:appcompat:1.3.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
-    implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+    api 'com.squareup.okhttp3:okhttp:4.9.2'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.9.2'
-    implementation 'com.orhanobut:logger:2.2.0'
 
 }
 
@@ -48,10 +47,15 @@ afterEvaluate {
         publications {
             release(MavenPublication) {
                 from components.release
-                //和你的仓库地址的反写一致，此处不会修改最终发布的组件依赖名，最终发布的groupId由你的仓库地址和名称决定
-                groupId = 'com.gitee.osard.test-jitpack'
-                //单组件发布时随意填写，多组件时即为此组件的artifactId
-                artifactId = 'net'
+                groupId = 'com.itg'
+                artifactId = 'itg-net'
+                version = '0.1.0'
+
+                pom {
+                    name = 'ITG Net'
+                    description = 'A lightweight Android networking and download library built on OkHttp.'
+                    packaging = 'aar'
+                }
             }
         }
     }

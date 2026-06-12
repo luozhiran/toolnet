@@ -2,9 +2,7 @@ package com.itg.net.tools
 
 import java.io.File
 import java.io.FileInputStream
-import java.io.IOException
 import java.security.MessageDigest
-import java.security.NoSuchAlgorithmException
 
 object CheckTools {
 
@@ -12,7 +10,7 @@ object CheckTools {
      fun checkMd5(targetMd5: String?, path: String?): Boolean {
         if (targetMd5.orEmpty().isNotBlank()) {
             val downloadFileMd5 = getMD5Three(path)
-            return downloadFileMd5 == targetMd5
+            return downloadFileMd5.equals(targetMd5, ignoreCase = true)
         }
         return false
     }
@@ -22,20 +20,17 @@ object CheckTools {
         if (path.isNullOrBlank()) return null
         try {
             val buffer = ByteArray(8192)
-            var len = 0
+            var length: Int
             val md: MessageDigest = MessageDigest.getInstance("MD5")
             val f = File(path)
             FileInputStream(f).use { fis ->
-                while (fis.read(buffer).also { len = it } != -1) {
-                    md.update(buffer, 0, len)
+                while (fis.read(buffer).also { length = it } != -1) {
+                    md.update(buffer, 0, length)
                 }
             }
             return md.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-        } catch (e: NoSuchAlgorithmException) {
-            e.printStackTrace()
-        } catch (e: IOException) {
-            e.printStackTrace()
+        } catch (e: Exception) {
+            return null
         }
-        return null
     }
 }

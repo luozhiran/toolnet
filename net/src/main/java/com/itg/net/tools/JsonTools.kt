@@ -12,13 +12,12 @@ object JsonTools {
      * @return 格式化后的json串
      */
     fun formatJson(jsonStr: String?): String {
-        if (null == jsonStr || "" == jsonStr) return ""
+        if (jsonStr.isNullOrBlank()) return ""
         val sb = StringBuilder()
-        var last = '\u0000'
         var current = '\u0000'
         var indent = 0
         for (i in 0 until jsonStr.length) {
-            last = current
+            val previous = current
             current = jsonStr[i]
             when (current) {
                 '{', '[' -> {
@@ -37,7 +36,7 @@ object JsonTools {
 
                 ',' -> {
                     sb.append(current)
-                    if (last != '\\') {
+                    if (previous != '\\') {
                         sb.append('\n')
                         addIndentBlank(sb, indent)
                     }
@@ -70,7 +69,7 @@ object JsonTools {
     fun decodeUnicode(theString: String): String {
         var aChar: Char
         val len = theString.length
-        val outBuffer = StringBuffer(len)
+        val outBuffer = StringBuilder(len)
         var x = 0
         while (x < len) {
             aChar = theString[x++]

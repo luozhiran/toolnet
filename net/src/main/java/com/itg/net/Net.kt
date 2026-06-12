@@ -10,7 +10,6 @@ import com.itg.net.reqeust.post.content.PostContent
 import com.itg.net.reqeust.post.file.PostFile
 import com.itg.net.reqeust.post.form.PostForm
 import com.itg.net.reqeust.post.json.PostJson
-import java.lang.Exception
 
 
 const val MEDIA_JSON = "application/json; charset=utf-8"
@@ -31,10 +30,15 @@ class Net {
 
     val ddNetConfig: NetConfig by lazy { NetConfig() }
     val okhttpManager: OkhttpManager by lazy { OkhttpManager(ddNetConfig) }
+    val download: Download by lazy { Download.instance }
 
+    fun configure(block: NetConfig.() -> Unit): Net {
+        ddNetConfig.block()
+        return this
+    }
 
     fun builder(type: ModeType): ParamsBuilder {
-        return create(type) ?: throw Exception("dot support $type")
+        return create(type)
     }
 
     fun get() = builder(ModeType.Get) as Get
@@ -48,6 +52,8 @@ class Net {
     fun postJson() = builder(ModeType.PostJson) as PostJson
 
     fun postContent() = builder(ModeType.PostContent) as PostContent
+
+    fun newDownload() = download.taskBuilder()
 
 
     fun cancelAll() {
@@ -72,6 +78,8 @@ class Net {
             }
         }
     }
+
+    fun cancel(tag: Any?) = cancelTag(tag)
 
 
     fun cancelFirstTag(tag: Any?) {

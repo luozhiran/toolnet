@@ -5,7 +5,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okio.*
 import java.io.File
-import java.io.FileNotFoundException
 
 class IntervalBody constructor(private val file: File, private val offset: Long = 0) :
     RequestBody() {
@@ -16,28 +15,16 @@ class IntervalBody constructor(private val file: File, private val offset: Long 
     }
 
     override fun contentLength(): Long {
-        return file.length() - offset
+        return (file.length() - offset.coerceAtLeast(0L)).coerceAtLeast(0L)
     }
 
     override fun writeTo(sink: BufferedSink) {
-        var source: Source? = null
-        try {
-            source = file.source()
-            val bufferedSource: BufferedSource = source.buffer()
-            val buffer = ByteArray(4096)
-            var len = 0
-            var totleSize = 0
-            while (bufferedSource.read(buffer).also { len = it } != -1) {
-                if (totleSize.toLong() == offset) {
-                    sink.write(buffer, 0, len)
-                } else {
-                    totleSize += len
-                }
+        file.source().buffer().use { source ->
+            val skipBytes = offset.coerceIn(0L, file.length())
+            if (skipBytes > 0L) {
+                source.skip(skipBytes)
             }
-        } catch (e: FileNotFoundException) {
-            e.printStackTrace()
-        } finally {
-            source?.close()
+            sink.writeAll(source)
         }
     }
 

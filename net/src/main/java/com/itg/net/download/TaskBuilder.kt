@@ -50,6 +50,8 @@ class TaskBuilder {
         return this
     }
 
+    fun savePath(path: String): TaskBuilder = path(path)
+
     fun url(url: String): TaskBuilder {
         task.url = url
         return this
@@ -59,6 +61,8 @@ class TaskBuilder {
         task.tryAgainCount = count.coerceAtLeast(1)
         return this
     }
+
+    fun retryCount(count: Int): TaskBuilder = tryAgainCount(count)
 
     fun overwrite(overwrite: Boolean): TaskBuilder {
         task.overwrite = overwrite
@@ -87,6 +91,8 @@ class TaskBuilder {
         holdActivityRef = progressBack
         return this
     }
+
+    fun listener(progressBack: IProgressCallback): TaskBuilder = setDownloadListener(progressBack)
 
 
     fun start(): Task {

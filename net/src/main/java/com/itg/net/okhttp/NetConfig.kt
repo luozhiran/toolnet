@@ -1,36 +1,53 @@
 package com.itg.net.okhttp
 
 import android.app.Application
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.text.TextUtils
-import com.orhanobut.logger.AndroidLogAdapter
-import com.orhanobut.logger.Logger
+import android.util.Log
+import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import okhttp3.Cache
-import okhttp3.CacheControl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 
 class NetConfig {
+    @Volatile
     internal var url: String? = null
-    internal var maxDownloadNum = 3
-    internal var pkgName: String? = null
-    val globalParams = HashMap<String, Any?>()
-    private var handler: Handler? = null
-    var application: Application? = null
-    private var mDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
-    private var logPath: String? = null
-    private val interceptors: MutableList<Interceptor> = ArrayList()
-    private var okHttpClient: OkHttpClient? = null
-    private var useHeepLogger = false
 
-    private var okhttpCache:Cache?=null
+    @Volatile
+    internal var maxDownloadNum = 3
+
+    @Volatile
+    internal var pkgName: String? = null
+
+    val globalParams: MutableMap<String, Any?> = ConcurrentHashMap()
+
+    @Volatile
+    private var handler: Handler? = null
+
+    @Volatile
+    var application: Application? = null
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
+
+    @Volatile
+    private var logPath: String? = null
+
+    private val interceptors: MutableList<Interceptor> = CopyOnWriteArrayList()
+
+    @Volatile
+    private var okHttpClient: OkHttpClient? = null
+
+    @Volatile
+    private var httpLoggerEnabled = false
+
+    @Volatile
+    private var okhttpCache: Cache? = null
 
     fun app(application: Application): NetConfig {
         this.application = application
@@ -44,10 +61,17 @@ class NetConfig {
     }
 
     fun setGlobalParams(key: String, value: Any): NetConfig {
-        if (globalParams.containsKey(key)) {
-            globalParams.remove(key)
-        }
         globalParams[key] = value
+        return this
+    }
+
+    fun removeGlobalParam(key: String): NetConfig {
+        globalParams.remove(key)
+        return this
+    }
+
+    fun clearGlobalParams(): NetConfig {
+        globalParams.clear()
         return this
     }
 
@@ -57,19 +81,26 @@ class NetConfig {
     }
 
     fun getInterceptors(): List<Interceptor> {
-        return interceptors
+        return interceptors.toList()
     }
 
     val uiHandler: Handler
         get() {
-            if (handler == null) {
-                handler = Handler(application?.mainLooper ?: Looper.getMainLooper())
+            val current = handler
+            if (current != null) {
+                return current
             }
-            return handler!!
+            return synchronized(this) {
+                handler ?: Handler(application?.mainLooper ?: Looper.getMainLooper()).also {
+                    handler = it
+                }
+            }
         }
 
     fun today(): String {
-        return mDateFormat.format(Date())
+        return synchronized(dateFormat) {
+            dateFormat.format(Date())
+        }
     }
 
     fun log(path: String?): NetConfig {
@@ -91,10 +122,11 @@ class NetConfig {
 
     val httpLog: String
         get() {
-            val file = if (TextUtils.isEmpty(logPath)) {
-                File(Environment.getExternalStorageDirectory(), "itg/httpLog.txt")
+            val configuredLogPath = logPath
+            val file = if (configuredLogPath.isNullOrBlank()) {
+                defaultLogFile("httpLog.txt")
             } else {
-                File(logPath!!)
+                File(configuredLogPath)
             }
             return prepareLogFile(file)
         }
@@ -102,38 +134,41 @@ class NetConfig {
 
     val debugLog: String
         get() {
-            val relativePath = if (logPath.isNullOrBlank()) {
-                "itg/debug.txt"
+            val configuredLogPath = logPath
+            val file = if (configuredLogPath.isNullOrBlank()) {
+                defaultLogFile("debug.txt")
             } else {
-                "itg/$logPath/debug.txt"
+                File(File(configuredLogPath), "debug.txt")
             }
-            val file = File(Environment.getExternalStorageDirectory(), relativePath)
             return prepareLogFile(file)
         }
 
     fun useHttpLog(use: Boolean): NetConfig {
-        this.useHeepLogger = use
-        if (use) {
-            Logger.addLogAdapter(AndroidLogAdapter())
-        }
+        this.httpLoggerEnabled = use
         return this
     }
 
     fun useHttpLog(): Boolean {
-        return this.useHeepLogger
+        return this.httpLoggerEnabled
     }
 
-    fun maxDownloadNum(max:Int): NetConfig {
-        maxDownloadNum = max
+    fun maxDownloadNum(max: Int): NetConfig {
+        maxDownloadNum = max.coerceAtLeast(1)
         return this
     }
 
-    fun useCacheControl(cache: Cache):NetConfig{
+    fun useCacheControl(cache: Cache): NetConfig {
         this.okhttpCache = cache
         return this
     }
-    fun getCache():Cache?{
-        return this.okhttpCache;
+
+    fun getCache(): Cache? {
+        return this.okhttpCache
+    }
+
+    private fun defaultLogFile(fileName: String): File {
+        val baseDir = application?.getExternalFilesDir(null) ?: application?.filesDir ?: File(".")
+        return File(baseDir, "itg/$fileName")
     }
 
     private fun prepareLogFile(file: File): String {
@@ -146,7 +181,7 @@ class NetConfig {
             try {
                 file.createNewFile()
             } catch (e: IOException) {
-                e.printStackTrace()
+                Log.w(DOWNLOAD_DEBUG_TAG, "创建日志文件失败：${file.absolutePath}", e)
             }
         } else if (file.length() > 1024 * 1024 * 5) {
             file.delete()

@@ -1,7 +1,6 @@
 package com.itg.net.download
 
 import android.os.HandlerThread
-import android.os.Looper
 import android.os.Message
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
@@ -23,18 +22,14 @@ class DispatchTool : Dispatch {
     private val taskStateInstance by lazy { TaskState() }
 
     @Volatile
-    private var looper: Looper? = null
-
-    @Volatile
     private var handler: ReceiverHandler? = null
 
     private val lock by lazy { LockData() }
 
     init {
-        val thread = HandlerThread("ddl")
+        val thread = HandlerThread("itg-net-download")
         thread.start()
-        looper = thread.looper
-        handler = ReceiverHandler(looper!!) { execNextDownloadRequest(it) }
+        handler = ReceiverHandler(thread.looper) { execNextDownloadRequest(it) }
     }
 
     /**
@@ -58,15 +53,15 @@ class DispatchTool : Dispatch {
      * 任务有重试次数，在一次上次失败的任务
      */
     private fun tryAgainDownloadTask(preTask: Task) {
-            if (taskStateInstance.exitRunningTask(preTask)) {
-                if (taskStateInstance.isBreakpointContinuation(preTask)) {
-                    logisticsBreakpointContinuation(preTask)
-                } else {
-                    logisticsDownload(preTask)
-                }
+        if (taskStateInstance.exitRunningTask(preTask)) {
+            if (taskStateInstance.isBreakpointContinuation(preTask)) {
+                logisticsBreakpointContinuation(preTask)
             } else {
-                downloadNextTask()
+                logisticsDownload(preTask)
             }
+        } else {
+            downloadNextTask()
+        }
     }
 
     override fun download(task: Task) {
@@ -106,7 +101,7 @@ class DispatchTool : Dispatch {
         task.iProgressCallback?.onConnecting(task)
         DirectRequest(task, taskStateInstance)
             .setFailCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_FAILED, msg) }
-            .setSuccessCallback { tk, msg -> handleResult(tk , RESULT_DOWNLOAD_SUCCESS, msg) }
+            .setSuccessCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_SUCCESS, msg) }
             .start()
     }
 
@@ -153,7 +148,7 @@ class DispatchTool : Dispatch {
      * 转发断点续传
      * @param task DTask
      */
-    private fun logisticsBreakpointContinuation(task: Task){
+    private fun logisticsBreakpointContinuation(task: Task) {
         task.tryAgainCount = task.tryAgainCount - 1
         task.iProgressCallback?.onConnecting(task)
         BreakpointContinuationRequest(task, taskStateInstance)
@@ -198,7 +193,7 @@ class DispatchTool : Dispatch {
         return true
     }
 
-    private fun isAgainDownload(obj:Any?):Boolean{
+    private fun isAgainDownload(obj: Any?): Boolean {
         val task = obj as? Task ?: return false
         return task.tryAgainCount > 0
     }

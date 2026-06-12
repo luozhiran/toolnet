@@ -1,8 +1,6 @@
 package com.itg.net.tools
 
 import android.net.Uri
-import java.lang.StringBuilder
-import java.util.HashMap
 
 object UrlTools {
 
@@ -18,11 +16,11 @@ object UrlTools {
      */
     @JvmStatic
     fun getSpliceUrl(pastMap:MutableMap<String, Any?>?,url:String): String {
-        val urlBuild = Uri.parse(url).buildUpon()
+        val urlBuilder = Uri.parse(url).buildUpon()
         pastMap?.forEach{ entry: Map.Entry<String, Any?> ->
-            urlBuild.appendQueryParameter(entry.key,entry.value.toString())
+            urlBuilder.appendQueryParameter(entry.key,entry.value.toString())
         }
-        return urlBuild.build().toString()
+        return urlBuilder.build().toString()
 
     }
 
@@ -33,21 +31,17 @@ object UrlTools {
      * @return String?
      */
     @JvmStatic
-    fun mapKeyValueToStrAppend(pastMap: HashMap<String, Any?>?, urlParams:String?): String?{
+    fun mapKeyValueToStrAppend(pastMap: Map<String, Any?>?, urlParams:String?): String?{
         if (pastMap == null) return urlParams
-        val resultUrl = StringBuilder()
-        val iterator = pastMap.entries.iterator()
-        var entry : MutableMap.MutableEntry<String,Any?> ? = null
-        var tempStr : String? = null
-        while (iterator.hasNext()) {
-            entry = iterator.next()
-            tempStr = "${entry.key}$POUND_SIGN_TRUNCATION_TAG${entry.value}"
-            if (!resultUrl.contains(tempStr)) {
-                resultUrl.append(tempStr).append(DOLLAR_TRUNCATION_TAG)
+        val resultParams = StringBuilder()
+        pastMap.forEach { entry ->
+            val paramEntry = "${entry.key}$POUND_SIGN_TRUNCATION_TAG${entry.value}"
+            if (!resultParams.contains(paramEntry)) {
+                resultParams.append(paramEntry).append(DOLLAR_TRUNCATION_TAG)
             }
         }
-        resultUrl.append(urlParams)
-        return resultUrl.toString()
+        resultParams.append(urlParams.orEmpty())
+        return resultParams.toString()
     }
 
     /**
@@ -60,14 +54,12 @@ object UrlTools {
     fun cutOffStrToMap(urlParams:String?): MutableMap<String, Any?>? {
         if (urlParams.isNullOrBlank()) return null
         val firstSplit = urlParams.split(DOLLAR_TRUNCATION_TAG)
-        if (firstSplit.isNullOrEmpty()) return null
+        if (firstSplit.isEmpty()) return null
         val resultMap = mutableMapOf<String,Any?>()
-        var tempArray:List<String>? = null
         firstSplit.forEach { secondStr->
-            tempArray = secondStr.split(POUND_SIGN_TRUNCATION_TAG)
-            val notExec = tempArray.isNullOrEmpty() || tempArray?.size != 2
-            if (!notExec){
-                resultMap[tempArray!![0]] = tempArray!![1]
+            val keyValue = secondStr.split(POUND_SIGN_TRUNCATION_TAG, limit = 2)
+            if (keyValue.size == 2) {
+                resultMap[keyValue[0]] = keyValue[1]
             }
         }
         return resultMap

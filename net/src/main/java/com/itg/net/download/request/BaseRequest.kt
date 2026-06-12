@@ -159,11 +159,9 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                 failureCallback?.invoke(task, "下载数据不完整")
             }
         } catch (e: FileNotFoundException) {
-            e.printStackTrace()
-            failureCallback?.invoke(task, e.message.toString())
+            failureCallback?.invoke(task, e.message ?: e.javaClass.simpleName)
         } catch (e: IOException) {
-            e.printStackTrace()
-            failureCallback?.invoke(task, e.message.toString())
+            failureCallback?.invoke(task, e.message ?: e.javaClass.simpleName)
         }
     }
 

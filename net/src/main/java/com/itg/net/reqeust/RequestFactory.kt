@@ -10,17 +10,14 @@ import com.itg.net.reqeust.post.file.PostResumeFile
 import com.itg.net.reqeust.post.form.PostForm
 import com.itg.net.reqeust.post.json.PostJson
 
-fun create(type: ModeType): ParamsBuilder? {
-    var adapterBuilder: ParamsBuilder? = null
-    adapterBuilder = when (type) {
+fun create(type: ModeType): ParamsBuilder {
+    return when (type) {
         ModeType.Get -> Get()
         ModeType.PostMul -> PostMul()
-        ModeType.PostJson-> PostJson()
-        ModeType.PostForm-> PostForm()
-        ModeType.PostFile-> PostFile()
-        ModeType.PostContent-> PostContent()
-        ModeType.PostResume-> PostResumeFile()
-        else-> null
+        ModeType.PostJson -> PostJson()
+        ModeType.PostForm -> PostForm()
+        ModeType.PostFile -> PostFile()
+        ModeType.PostContent -> PostContent()
+        ModeType.PostResume -> PostResumeFile()
     }
-    return adapterBuilder
 }

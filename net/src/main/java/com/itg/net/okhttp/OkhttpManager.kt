@@ -6,16 +6,16 @@ import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 
 class OkhttpManager(ddNetConfig: NetConfig) {
-    var okHttpClient: OkHttpClient = if (ddNetConfig.getOkHttpClient() != null) {
-        ddNetConfig.getOkHttpClient()!!
-    } else {
+    var okHttpClient: OkHttpClient = ddNetConfig.getOkHttpClient() ?: run {
+        createDefaultClient(ddNetConfig)
+    }
+
+    private fun createDefaultClient(ddNetConfig: NetConfig): OkHttpClient {
         val builder = OkHttpClient.Builder()
         builder.connectTimeout(15, TimeUnit.SECONDS)
         builder.readTimeout(20, TimeUnit.SECONDS)
         builder.writeTimeout(35, TimeUnit.SECONDS)
-        ddNetConfig.getInterceptors().let { list ->
-            list.forEach { builder.addInterceptor(it) }
-        }
+        ddNetConfig.getInterceptors().forEach { builder.addInterceptor(it) }
         ddNetConfig.getCache()?.let {
             builder.cache(it)
         }
@@ -25,8 +25,6 @@ class OkhttpManager(ddNetConfig: NetConfig) {
             builder.addNetworkInterceptor(logInterceptor)
         }
 
-        builder.build()
+        return builder.build()
     }
-
 }
-
