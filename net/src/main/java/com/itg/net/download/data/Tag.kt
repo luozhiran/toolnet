@@ -1,24 +1,25 @@
 package com.itg.net.download.data
 
 
-const val CANCEL_TASK = 1
-const val DOWNLOAD_TASK = 2
+const val MSG_CANCEL_DOWNLOAD = 1
+const val MSG_START_NEXT_DOWNLOAD = 2
 
 
-const val DOWNLOAD_FILE = 3
-const val DOWNLOAD_SUCCESS = 4
+const val RESULT_DOWNLOAD_FAILED = 3
+const val RESULT_DOWNLOAD_SUCCESS = 4
 
-const val ERROR_TAG_1 = "不支持断点续传"
-const val ERROR_TAG_2 = "创建文件夹失败"
-const val ERROR_TAG_3 = "下载任务被主动取消"
-const val ERROR_TAG_4 = "md5校验失败,并删除校验失败文件"
-const val ERROR_TAG_5 = "下载任务失败，重命名失败"
-const val ERROR_TAG_6 = "response.body is null"
-const val ERROR_TAG_7 = "无效任务"
-const val ERROR_TAG_8 = "相同请求地址的任务正在下载中,禁止重复请求"
-const val ERROR_TAG_9 = "response.code() not is 200"
-const val ERROR_TAG_10 = "相同请求地址已在下载队列中,禁止重复请求"
-const val ERROR_TAG_11 = "即将重试下载任务"
-const val ERROR_TAG_12 = "任务下载成功"
-const val DEBUG_TAG="debug-tag"
-const val DOWNLOAD_LOG="下载日志"
+const val ERROR_RANGE_NOT_SUPPORTED = "服务器不支持断点续传"
+const val ERROR_CREATE_DOWNLOAD_DIR_FAILED = "下载目录创建失败"
+const val ERROR_DOWNLOAD_CANCELED = "下载任务已取消"
+const val ERROR_MD5_CHECK_FAILED = "文件校验失败，已删除临时文件"
+const val ERROR_RENAME_TEMP_FILE_FAILED = "下载完成但文件重命名失败"
+const val ERROR_EMPTY_RESPONSE_BODY = "服务器响应体为空"
+const val ERROR_INVALID_DOWNLOAD_TASK = "下载任务无效"
+const val ERROR_DUPLICATE_RUNNING_TASK = "相同 URL 的下载任务正在执行"
+const val ERROR_UNEXPECTED_HTTP_CODE = "服务器返回了非预期状态码"
+const val ERROR_DUPLICATE_QUEUED_TASK = "相同 URL 的下载任务已在等待队列中"
+const val ERROR_DOWNLOAD_RETRYING = "下载失败，准备重试"
+const val DOWNLOAD_SUCCESS_MESSAGE = "下载完成"
+const val ERROR_TARGET_FILE_EXISTS = "目标文件已存在，未开启覆盖"
+const val DOWNLOAD_DEBUG_TAG = "ItgNetDownload"
+const val DOWNLOAD_LOG_TAG = "ItgNetDownloadLog"

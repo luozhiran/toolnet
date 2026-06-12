@@ -7,7 +7,7 @@ import com.itg.net.BROAD_ACTION
 import com.itg.net.Download
 import com.itg.net.Net
 import com.itg.net.download.data.Task
-import com.itg.net.download.data.ERROR_TAG_3
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 
 object DownloadEndNotify {
 
@@ -58,7 +58,7 @@ object DownloadEndNotify {
 
     @JvmStatic
     fun failNotify(task: Task, msg: String?) {
-        if (task.contentLength > 0L && ERROR_TAG_3 != msg ) {
+        if (task.contentLength > 0L && ERROR_DOWNLOAD_CANCELED != msg ) {
             Download.instance.globalDownloadProgressCache.execAllOnProgress(task)
             HoldActivityCallbackMap.loop(task)
         }

@@ -20,6 +20,8 @@ class Task {
     var cancelUrl: String? = null
     // 是否支持断点续传
     var append = false
+    // 目标文件已存在时是否覆盖
+    var overwrite = false
     // 是否支持下载完成后，发送特定广播
     var broad = false
     // 广播组件名称

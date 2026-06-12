@@ -1,13 +1,12 @@
 package com.itg.net.download
 
-import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.itg.net.Download
-import com.itg.net.download.data.DEBUG_TAG
-import com.itg.net.download.data.ERROR_TAG_7
+import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
+import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
 import com.itg.net.download.interfaces.IProgressCallback
 import com.itg.net.download.operations.DownloadEndNotify
@@ -35,7 +34,6 @@ class TaskBuilder {
                 if (Download.instance.dispatchTool.getTaskState()
                         .isTryAgainDownload(error)
                 ) {
-                    Log.e(DEBUG_TAG,"重新开始下载")
                     return
                 }
                 DownloadEndNotify.failNotify(task, error)
@@ -58,7 +56,12 @@ class TaskBuilder {
     }
 
     fun tryAgainCount(count: Int): TaskBuilder {
-        task.tryAgainCount = count
+        task.tryAgainCount = count.coerceAtLeast(1)
+        return this
+    }
+
+    fun overwrite(overwrite: Boolean): TaskBuilder {
+        task.overwrite = overwrite
         return this
     }
 
@@ -90,9 +93,14 @@ class TaskBuilder {
         val taskState = Download.instance.dispatchTool.getTaskState()
         // 校验任务是否为无效任务
         if (taskState.isInvalidTask(task)) {
-            holdActivityRef?.onFail(ERROR_TAG_7, task)
+            holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
             return task
         }
+        if (!task.overwrite && File(task.path.orEmpty()).exists()) {
+            holdActivityRef?.onFail(ERROR_TARGET_FILE_EXISTS, task)
+            return task
+        }
+        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
 
         // 校验请求地址是否正在下载
         if (taskState.exitRunningUrl(task.url)) {
@@ -109,8 +117,6 @@ class TaskBuilder {
             Download.instance.dispatchTool.appendDownload(task)
             return task
         }
-        Log.e("MainActivity", "增加任务---"+task.url + " "+task.path);
-        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
         task.iProgressCallback = iProgressCallback
         Download.instance.dispatchTool.download(task)
         return task

@@ -6,7 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
-import com.itg.net.download.data.DEBUG_TAG
+import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.download.data.LockData
 import com.itg.net.tools.ThreadTool
 import okhttp3.Call
@@ -71,7 +71,7 @@ object PrincipalLife {
         val size = synchronized(lockCall) {
             callWeakHash.size
         }
-        Log.i(DEBUG_TAG,"生命周期， 请求接口数：${size}")
+        Log.i(DOWNLOAD_DEBUG_TAG,"生命周期绑定请求数：${size}")
     }
 
 

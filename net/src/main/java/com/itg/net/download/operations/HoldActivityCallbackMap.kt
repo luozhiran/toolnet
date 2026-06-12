@@ -1,7 +1,7 @@
 package com.itg.net.download.operations
 
 import android.util.Log
-import com.itg.net.download.data.DEBUG_TAG
+import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.download.data.Task
 import com.itg.net.download.interfaces.IProgressCallback
 import com.itg.net.tools.TaskTools
@@ -16,7 +16,7 @@ object HoldActivityCallbackMap {
             try {
                 it.onConnecting(task)
             } catch (e: Exception) {
-                Log.w(DEBUG_TAG, "Progress callback onConnecting failed.", e)
+                Log.w(DOWNLOAD_DEBUG_TAG, "下载连接回调执行异常", e)
             }
         }
     }
@@ -26,7 +26,7 @@ object HoldActivityCallbackMap {
             try {
                 it.onProgress(task, TaskTools.getDownloadProgress(task) == 100)
             } catch (e: Exception) {
-                Log.w(DEBUG_TAG, "Progress callback onProgress failed.", e)
+                Log.w(DOWNLOAD_DEBUG_TAG, "下载进度回调执行异常", e)
             }
         }
     }
@@ -36,7 +36,7 @@ object HoldActivityCallbackMap {
             try {
                 it.onFail(msg, task)
             } catch (e: Exception) {
-                Log.w(DEBUG_TAG, "Progress callback onFail failed.", e)
+                Log.w(DOWNLOAD_DEBUG_TAG, "下载失败回调执行异常", e)
             }
         }
     }
@@ -102,7 +102,7 @@ object HoldActivityCallbackMap {
         val size = synchronized(lock) {
             progressCallbackMap.size
         }
-        Log.i(DEBUG_TAG,"监听器数量：${size}")
+        Log.i(DOWNLOAD_DEBUG_TAG,"下载监听器缓存数量：${size}")
     }
 
     private fun callbacks(task: Task): List<IProgressCallback> {

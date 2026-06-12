@@ -64,6 +64,7 @@ class Download {
             taskState.markRunningTaskCanceled(url)
             taskState.deleteRunningTask(url)
             Net.instance.cancelFirstTag(url)
+            dispatchTool.continueDownload()
         }else if (taskState.exitWaitUrl(url)) {
             taskState.deleteWaitTask(url)
         }
@@ -75,6 +76,7 @@ class Download {
             taskState.markRunningTaskCanceled(task)
             taskState.deleteRunningTask(task)
             Net.instance.cancelFirstTag(task?.url)
+            dispatchTool.continueDownload()
         } else if (taskState.exitWaitTask(task)) {
             taskState.deleteWaitTask(task)
         }

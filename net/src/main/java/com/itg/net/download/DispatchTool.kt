@@ -3,14 +3,12 @@ package com.itg.net.download
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.Message
-import android.util.Log
-import com.itg.net.download.data.DOWNLOAD_FILE
-import com.itg.net.download.data.DOWNLOAD_SUCCESS
-import com.itg.net.download.data.DOWNLOAD_TASK
-import com.itg.net.download.data.ERROR_TAG_3
-import com.itg.net.download.data.ERROR_TAG_11
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
+import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
 import com.itg.net.download.data.LockData
-import com.itg.net.download.data.DOWNLOAD_LOG
+import com.itg.net.download.data.MSG_START_NEXT_DOWNLOAD
+import com.itg.net.download.data.RESULT_DOWNLOAD_FAILED
+import com.itg.net.download.data.RESULT_DOWNLOAD_SUCCESS
 import com.itg.net.download.data.Task
 import com.itg.net.download.implement.ReceiverHandler
 import com.itg.net.download.operations.TaskState
@@ -93,7 +91,7 @@ class DispatchTool : Dispatch {
             // 从等待队列中取得下载任务
             val downloadTask = taskStateInstance.getTaskFromWaitQueue(task) ?: return
             // 把任务存储到下载队列
-            taskStateInstance.addRunningTask(downloadTask)
+            if (!taskStateInstance.addRunningTask(downloadTask)) return
             // 开始下载
             logisticsDownload(downloadTask)
         }
@@ -107,8 +105,8 @@ class DispatchTool : Dispatch {
         task.tryAgainCount = task.tryAgainCount - 1
         task.iProgressCallback?.onConnecting(task)
         DirectRequest(task, taskStateInstance)
-            .setFailCallback { tk, msg -> handleResult(tk, DOWNLOAD_FILE, msg) }
-            .setSuccessCallback { tk, msg -> handleResult(tk , DOWNLOAD_SUCCESS, msg) }
+            .setFailCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_FAILED, msg) }
+            .setSuccessCallback { tk, msg -> handleResult(tk , RESULT_DOWNLOAD_SUCCESS, msg) }
             .start()
     }
 
@@ -116,9 +114,8 @@ class DispatchTool : Dispatch {
      * 等待未来下载数据
      */
     private fun pendingDownload(task: Task) {
-        taskStateInstance.addWaitTask(task)
-        if (taskStateInstance.canNextTask()) {
-            sendMsg(null, DOWNLOAD_TASK)
+        if (taskStateInstance.addWaitTask(task) && taskStateInstance.canNextTask()) {
+            sendMsg(null, MSG_START_NEXT_DOWNLOAD)
         }
     }
 
@@ -147,8 +144,8 @@ class DispatchTool : Dispatch {
             // 从等待队列中取得下载任务
             val downloadTask = taskStateInstance.getTaskFromWaitQueue(task) ?: return
             // 把任务存储到下载队列
-            taskStateInstance.addRunningTask(downloadTask)
-            logisticsBreakpointContinuation(task)
+            if (!taskStateInstance.addRunningTask(downloadTask)) return
+            logisticsBreakpointContinuation(downloadTask)
         }
     }
 
@@ -160,24 +157,24 @@ class DispatchTool : Dispatch {
         task.tryAgainCount = task.tryAgainCount - 1
         task.iProgressCallback?.onConnecting(task)
         BreakpointContinuationRequest(task, taskStateInstance)
-            .setFailCallback { tk, msg -> handleResult(tk, DOWNLOAD_FILE, msg) }
-            .setSuccessCallback { tk, msg -> handleResult(tk, DOWNLOAD_SUCCESS, msg) }
+            .setFailCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_FAILED, msg) }
+            .setSuccessCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_SUCCESS, msg) }
             .start()
     }
 
 
     private fun handleResult(task: Task, type: Int, tag: String) {
-        if (type == DOWNLOAD_FILE) {
+        if (type == RESULT_DOWNLOAD_FAILED) {
             if (!task.cancelUrl.isNullOrBlank() && task.cancelUrl == task.url) {
-                task.iProgressCallback?.onFail(ERROR_TAG_3, task)
+                task.iProgressCallback?.onFail(ERROR_DOWNLOAD_CANCELED, task)
                 taskStateInstance.deleteRunningTask(task)
             } else if (task.tryAgainCount > 0) {
-                task.iProgressCallback?.onFail(ERROR_TAG_11, task)
+                task.iProgressCallback?.onFail(ERROR_DOWNLOAD_RETRYING, task)
             } else {
                 task.iProgressCallback?.onFail(tag, task)
                 taskStateInstance.deleteRunningTask(task)
             }
-        } else if (type == DOWNLOAD_SUCCESS) {
+        } else if (type == RESULT_DOWNLOAD_SUCCESS) {
             val progress = TaskTools.getDownloadProgress(task)
             task.iProgressCallback?.onProgress(task, progress == 100)
             taskStateInstance.deleteRunningTask(task)
@@ -193,18 +190,21 @@ class DispatchTool : Dispatch {
     }
 
     private fun execNextDownloadRequest(message: Message): Boolean {
-        if (message.what == DOWNLOAD_FILE && isAgainDownload(message.obj)) {
+        if (message.what == RESULT_DOWNLOAD_FAILED && isAgainDownload(message.obj)) {
             tryAgainDownloadTask(message.obj as Task)
-        } else { // DOWNLOAD_TASK CANCEL_TASK DOWNLOAD_FILE  DOWNLOAD_SUCCESS
+        } else {
             downloadNextTask()
         }
         return true
     }
 
     private fun isAgainDownload(obj:Any?):Boolean{
-        if (obj == null) return false
-        val task = obj as Task
+        val task = obj as? Task ?: return false
         return task.tryAgainCount > 0
+    }
+
+    fun continueDownload() {
+        sendMsg(null, MSG_START_NEXT_DOWNLOAD)
     }
 
     fun getTaskState(): TaskState {

@@ -2,12 +2,13 @@ package com.itg.net.download.request
 
 import com.itg.net.Net
 import com.itg.net.ModeType
-import com.itg.net.download.data.ERROR_TAG_12
-import com.itg.net.download.data.ERROR_TAG_2
-import com.itg.net.download.data.ERROR_TAG_3
-import com.itg.net.download.data.ERROR_TAG_4
-import com.itg.net.download.data.ERROR_TAG_5
-import com.itg.net.download.data.ERROR_TAG_6
+import com.itg.net.download.data.DOWNLOAD_SUCCESS_MESSAGE
+import com.itg.net.download.data.ERROR_CREATE_DOWNLOAD_DIR_FAILED
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
+import com.itg.net.download.data.ERROR_EMPTY_RESPONSE_BODY
+import com.itg.net.download.data.ERROR_MD5_CHECK_FAILED
+import com.itg.net.download.data.ERROR_RENAME_TEMP_FILE_FAILED
+import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
 import com.itg.net.download.operations.TaskState
 import com.itg.net.reqeust.base.ParamsBuilder
@@ -80,18 +81,26 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         failCallback: (String) -> Unit
     ) {
         if (taskStateInstance.isCheckMd5(task) && !checkMd5(file.absolutePath, task)) {
-            failCallback.invoke(ERROR_TAG_4)
+            failCallback.invoke(ERROR_MD5_CHECK_FAILED)
         } else {
-            val distFile = File(file.absolutePath.replace(".tmp", ""))
+            val distFile = File(file.absolutePath.removeSuffix(".tmp"))
             try {
-                file.renameTo(distFile).apply {
-                    if (this) {
-                        successCallback.invoke(ERROR_TAG_12)
-                    } else {
-                        failCallback.invoke(ERROR_TAG_5)
+                if (distFile.exists()) {
+                    if (!task.overwrite) {
+                        failCallback.invoke(ERROR_TARGET_FILE_EXISTS)
+                        return
+                    }
+                    if (!distFile.delete()) {
+                        failCallback.invoke(ERROR_RENAME_TEMP_FILE_FAILED)
+                        return
                     }
                 }
-            } catch (e: NullPointerException) {
+                if (file.renameTo(distFile)) {
+                    successCallback.invoke(DOWNLOAD_SUCCESS_MESSAGE)
+                } else {
+                    failCallback.invoke(ERROR_RENAME_TEMP_FILE_FAILED)
+                }
+            } catch (e: Exception) {
                 failCallback.invoke(e.message.toString())
             }
         }
@@ -102,21 +111,23 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         inputStream: InputStream,
         file: File,
     ) {
-        val buffer = ByteArray(1024 shl 2)
-        var length = -1
+        val buffer = ByteArray(1024 shl 5)
+        var length: Int
         try {
             val out = FileOutputStream(file, task.append)
+            var writtenSize = if (task.append && file.exists()) file.length() else 0L
             var pre = 0
-            var cur = 0
+            var cur: Int
             inputStream.use { input ->
                 out.use { output ->
                     while (input.read(buffer).also { length = it } > 0) {
                         if (taskCancel(task)) {
-                            failureCallback?.invoke(task, ERROR_TAG_3)
+                            failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
                             return
                         }
                         output.write(buffer, 0, length)
-                        updateTask(file.length(), task)
+                        writtenSize += length.toLong()
+                        updateTask(writtenSize, task)
                         cur = TaskTools.getDownloadProgress(task)
                         if (cur != pre) {
                             if (cur == 100) {
@@ -124,18 +135,28 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                                     file,
                                     { msg -> successCallback?.invoke(task, msg) },
                                     { msg -> failureCallback?.invoke(task, msg) })
+                                return
                             } else {
                                 task.iProgressCallback?.onProgress(task, cur == 100)
                             }
                         } else {
                             if (taskCancel(task)) {
-                                failureCallback?.invoke(task, ERROR_TAG_3)
+                                failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
                                 return
                             }
                         }
                         pre = cur
                     }
                 }
+            }
+            updateTask(writtenSize, task)
+            if (task.contentLength <= 0L || writtenSize >= task.contentLength) {
+                lastOneCheck(
+                    file,
+                    { msg -> successCallback?.invoke(task, msg) },
+                    { msg -> failureCallback?.invoke(task, msg) })
+            } else {
+                failureCallback?.invoke(task, "下载数据不完整")
             }
         } catch (e: FileNotFoundException) {
             e.printStackTrace()
@@ -154,12 +175,12 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         try {
             if (checkFileDir(file)) {
                 if (body == null) {
-                    failureCallback?.invoke(task, ERROR_TAG_6)
+                    failureCallback?.invoke(task, ERROR_EMPTY_RESPONSE_BODY)
                 } else {
                     saveNetStream(body.byteStream(), file)
                 }
             } else {
-                failureCallback?.invoke(task, ERROR_TAG_2)
+                failureCallback?.invoke(task, ERROR_CREATE_DOWNLOAD_DIR_FAILED)
             }
         } finally {
             response.close()

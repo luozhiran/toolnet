@@ -2,14 +2,13 @@ package com.itg.net.download.operations
 
 import android.util.Log
 import com.itg.net.Net
-import com.itg.net.download.data.DEBUG_TAG
-import com.itg.net.download.data.ERROR_TAG_11
-import com.itg.net.download.data.DOWNLOAD_LOG
+import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
+import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
 import com.itg.net.download.data.Task
 
 class TaskState {
 
-    private val maxDownloadSize = Net.instance.ddNetConfig.maxDownloadNum
+    private val maxDownloadSize = Net.instance.ddNetConfig.maxDownloadNum.coerceAtLeast(1)
 
     //队列下载任务
     private val mWaitTask: MutableList<Task> by lazy { mutableListOf() }
@@ -247,7 +246,7 @@ class TaskState {
 
     fun isTryAgainDownload(tag:String?):Boolean{
         if (tag.isNullOrBlank()) return false
-        if (tag == ERROR_TAG_11) {
+        if (tag == ERROR_DOWNLOAD_RETRYING) {
             return true
         }
         return false
@@ -255,6 +254,6 @@ class TaskState {
 
     @Synchronized
     fun debugPrint(){
-        Log.i(DEBUG_TAG,"下载队列： 等待任务队列：${mWaitTask.size}，正在下载队列：${mRunningTasks.size}")
+        Log.i(DOWNLOAD_DEBUG_TAG,"下载队列：等待任务=${mWaitTask.size}，运行任务=${mRunningTasks.size}")
     }
 }
