@@ -45,6 +45,9 @@ class TaskBuilder {
     // 持有activity引用的回调
     private var holdActivityRef: IProgressCallback? = null
 
+    @Volatile
+    private var lifecycleDestroyed = false
+
     fun path(path: String): TaskBuilder {
         task.path = path
         return this
@@ -69,18 +72,26 @@ class TaskBuilder {
         return this
     }
 
-    //自动移除持有activity引用的回调,无法取消下载任务(需要调用取消方法，取消下载任务)
     fun autoRemoveActivity(activity: FragmentActivity): TaskBuilder {
+        if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+            lifecycleDestroyed = true
+            task.cancelUrl = task.url
+            holdActivityRef = null
+            return this
+        }
         activity.lifecycle.addObserver(object : LifecycleEventObserver {
             override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
                 if (event == Lifecycle.Event.ON_DESTROY) {
-                    holdActivityRef?.apply {
+                    lifecycleDestroyed = true
+                    holdActivityRef?.let {
                         HoldActivityCallbackMap.removeProgressCallback(
                             task,
-                            this
+                            it
                         )
                     }
-                    activity.lifecycle.removeObserver(this)
+                    holdActivityRef = null
+                    Download.instance.cancel(task)
+                    source.lifecycle.removeObserver(this)
                 }
             }
         })
@@ -97,6 +108,10 @@ class TaskBuilder {
 
     fun start(): Task {
         val taskState = Download.instance.dispatchTool.getTaskState()
+        if (lifecycleDestroyed) {
+            task.cancelUrl = task.url
+            return task
+        }
         // 校验任务是否为无效任务
         if (taskState.isInvalidTask(task)) {
             holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
