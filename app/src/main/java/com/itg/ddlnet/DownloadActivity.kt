@@ -19,6 +19,7 @@ import java.util.Date
 
 class DownloadActivity : AppCompatActivity() {
 
+    private val ip = "10.100.50.108:3000"
 
     private val progress = object : IProgressCallback {
         override fun onConnecting(task: Task) {
@@ -82,6 +83,11 @@ class DownloadActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.get).setOnClickListener {
+            Net.instance.get()
+                .url(ip)
+                .path("api/data")
+                .autoCancel(this)
+
 
             Net.instance.get()
                 .url("http://www.baidu.com")
