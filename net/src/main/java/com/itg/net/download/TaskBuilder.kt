@@ -76,7 +76,6 @@ class TaskBuilder {
         if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
             lifecycleDestroyed = true
             task.cancelUrl = task.url
-            holdActivityRef = null
             return this
         }
         activity.lifecycle.addObserver(object : LifecycleEventObserver {
