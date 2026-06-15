@@ -120,7 +120,7 @@ class TaskBuilder {
             holdActivityRef?.onFail(ERROR_TARGET_FILE_EXISTS, task)
             return task
         }
-        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
+
 
         // 校验请求地址是否正在下载
         if (taskState.exitRunningUrl(task.url)) {
@@ -137,6 +137,7 @@ class TaskBuilder {
             Download.instance.dispatchTool.appendDownload(task)
             return task
         }
+        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
         task.progressCallback = progressCallback
         Download.instance.dispatchTool.download(task)
         return task

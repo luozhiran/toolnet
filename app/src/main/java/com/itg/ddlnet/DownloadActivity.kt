@@ -19,7 +19,7 @@ import java.util.Date
 
 class DownloadActivity : AppCompatActivity() {
 
-    private val ip = "10.100.50.108:3000"
+    private val ip = "http://10.100.219.242:3000"
 
     private val progress = object : IProgressCallback {
         override fun onConnecting(task: Task) {
@@ -47,26 +47,26 @@ class DownloadActivity : AppCompatActivity() {
 
         Download.instance.setGlobalProgressListener(progress)
         findViewById<Button>(R.id.download).setOnClickListener {
-            for (i in 0..10) {
+//            for (i in 0..10) {
 //                Thread.sleep(1000)
 //                Log.e("MainActivity", "延时$i")
-                val path = "${filesDir}/$i.zip"
+                val path = "${filesDir}/$1.png"
                 Download.instance
                     .taskBuilder()
                     .path(path)
-                    .url("https://www.baidu.com/img/PCtm_d9c8750bed0b3c7d089fa7d55720d6cf.png")
+                    .url("${ip}/download/1781446055306-94565585-1778425317121.jpg")
                     .tryAgainCount(3)
                     .autoRemoveActivity(this)
                     .setDownloadListener(object : IProgressCallback {
                         override fun onConnecting(task: Task) {
-                            Log.e("MainActivity", "onConnecting $i")
+                            Log.e("MainActivity", "onConnecting $1")
                         }
 
                         override fun onProgress(task: Task, complete: Boolean) {
                             if (complete) {
                                 Log.e(
                                     "MainActivity",
-                                    "download is success $path $i ${File(task.path ?: "").exists()}"
+                                    "download is success $path $1 ${File(task.path ?: "").exists()}"
                                 )
                             }
                         }
@@ -77,7 +77,7 @@ class DownloadActivity : AppCompatActivity() {
 
                     })
                     .start()
-            }
+//            }
 
 
         }
@@ -87,23 +87,14 @@ class DownloadActivity : AppCompatActivity() {
                 .url(ip)
                 .path("api/data")
                 .autoCancel(this)
-
-
-            Net.instance.get()
-                .url("http://www.baidu.com")
-                .addParam("key1", "a")
-                .addParam("key2", "b")
-                .noUseGlobalParams()
-                .autoCancel(this)
-                .send(object : DdCallback {
+                .send(object : DdCallback{
                     override fun onFailure(er: String?) {
-
+                        Log.e("luozhiran", er + "")
                     }
 
                     override fun onResponse(result: String?, code: Int) {
-
+                        Log.e("luozhiran", result + "")
                     }
-
                 })
 
         }
