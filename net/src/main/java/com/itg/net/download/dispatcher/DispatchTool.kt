@@ -13,6 +13,7 @@ import com.itg.net.download.data.Task
 import com.itg.net.download.operations.TaskState
 import com.itg.net.download.request.BreakpointContinuationRequest
 import com.itg.net.download.request.DirectRequest
+import com.itg.net.util.PrintLog
 import com.itg.net.util.TaskTools
 
 class DispatchTool : Dispatch {
@@ -156,21 +157,29 @@ class DispatchTool : Dispatch {
     }
 
     private fun handleResult(task: Task, type: Int, tag: String) {
+        PrintLog.logd("开始处理完成或失败任务")
+        taskStateInstance.debugPrint()
         if (type == RESULT_DOWNLOAD_FAILED) {
             if (tag == ERROR_DOWNLOAD_CANCELED || task.cancelUrl == task.url) {
                 task.progressCallback?.onFail(ERROR_DOWNLOAD_CANCELED, task)
                 taskStateInstance.deleteRunningTask(task)
+                PrintLog.logd("删除任务")
             } else if (task.tryAgainCount > 0) {
                 task.progressCallback?.onFail(ERROR_DOWNLOAD_RETRYING, task)
+                PrintLog.logd("不删除任务，重试请求 ${task.tryAgainCount}")
             } else {
                 task.progressCallback?.onFail(tag, task)
                 taskStateInstance.deleteRunningTask(task)
+                PrintLog.logd("删除任务")
             }
         } else if (type == RESULT_DOWNLOAD_SUCCESS) {
             val progress = TaskTools.getDownloadProgress(task)
             task.progressCallback?.onProgress(task, progress == 100)
             taskStateInstance.deleteRunningTask(task)
+            PrintLog.logd("下载任务完成，删除任务")
         }
+        taskStateInstance.debugPrint()
+        PrintLog.logd("任务处理完成，准备开启下个任务")
         sendMsg(task, type)
     }
 

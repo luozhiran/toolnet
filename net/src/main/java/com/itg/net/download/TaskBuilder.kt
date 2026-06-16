@@ -11,6 +11,8 @@ import com.itg.net.download.data.Task
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.operations.DownloadEndNotify
 import com.itg.net.download.operations.HoldActivityCallbackMap
+import com.itg.net.util.PrintLog
+import com.itg.net.util.ThreadTool
 import java.io.File
 
 class TaskBuilder {
@@ -76,24 +78,35 @@ class TaskBuilder {
         if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
             lifecycleDestroyed = true
             task.cancelUrl = task.url
+            PrintLog.logd("Activity已经销毁，无法绑定Activity")
             return this
         }
-        activity.lifecycle.addObserver(object : LifecycleEventObserver {
-            override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-                if (event == Lifecycle.Event.ON_DESTROY) {
-                    lifecycleDestroyed = true
-                    holdActivityRef?.let {
-                        HoldActivityCallbackMap.removeProgressCallback(
-                            task,
-                            it
-                        )
+        ThreadTool.runOnUIThread {
+            PrintLog.logd("绑定Activity")
+            activity.lifecycle.addObserver(object : LifecycleEventObserver {
+                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                    if (event == Lifecycle.Event.ON_DESTROY) {
+                        PrintLog.logd("销毁Activity 开始释放资源")
+                        lifecycleDestroyed = true
+                        holdActivityRef?.let {
+                            PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用)")
+                            HoldActivityCallbackMap.debugPrint()
+                            HoldActivityCallbackMap.removeProgressCallback(
+                                task,
+                                it
+                            )
+                            PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用),完成")
+                            HoldActivityCallbackMap.debugPrint()
+                        }
+                        holdActivityRef = null
+                        PrintLog.logSubd("自动取消下载任务 ${task.url}")
+                        Download.instance.cancel(task)
+                        source.lifecycle.removeObserver(this)
+                        PrintLog.logSubd("销毁Activity 资源释放完成")
                     }
-                    holdActivityRef = null
-                    Download.instance.cancel(task)
-                    source.lifecycle.removeObserver(this)
                 }
-            }
-        })
+            })
+        }
         return this
     }
 

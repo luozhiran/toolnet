@@ -1,6 +1,8 @@
 package com.itg.net.util
 
 import okhttp3.Cookie
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 
@@ -39,6 +41,24 @@ object StrTools {
             String(hex)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    fun extractUrlFileName(url: String?, defaultName: String?): String? {
+        if (url == null || url.trim { it <= ' ' }.isEmpty()) return defaultName
+        try {
+            // 去掉 ? 后面的参数
+            val path = url.split("\\?".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0]
+            // 取最后一个 / 之后的内容
+            val lastSlash = path.lastIndexOf('/')
+            if (lastSlash == -1 || lastSlash == path.length - 1) {
+                return defaultName
+            }
+            val encodedName = path.substring(lastSlash + 1)
+            // URL 解码
+            return URLDecoder.decode(encodedName, StandardCharsets.UTF_8.name())
+        } catch (e: java.lang.Exception) {
+            return defaultName
         }
     }
 }

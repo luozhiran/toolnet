@@ -13,6 +13,7 @@ import java.security.MessageDigest
 import com.itg.net.Net
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.request.base.DdCallback
+import com.itg.net.util.StrTools
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
@@ -40,6 +41,14 @@ class DownloadActivity : AppCompatActivity() {
 
     }
 
+
+    private val downloadUrlList= mutableListOf<String>(
+        "${ip}/download/1781446055306-94565585-1778425317121.jpg",
+        "${ip}/download/1781446430194-921360704-bg.jpg",
+        "${ip}/download/1781451464361-210732640-fasdf.jpg")
+
+    private fun intArrayOf(elements: String, elements2: String, elements3: String) {}
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -47,37 +56,39 @@ class DownloadActivity : AppCompatActivity() {
 
         Download.instance.setGlobalProgressListener(progress)
         findViewById<Button>(R.id.download).setOnClickListener {
-//            for (i in 0..10) {
-//                Thread.sleep(1000)
-//                Log.e("MainActivity", "延时$i")
-                val path = "${filesDir}/$1.png"
-                Download.instance
-                    .taskBuilder()
-                    .path(path)
-                    .url("${ip}/download/1781446055306-94565585-1778425317121.jpg")
-                    .tryAgainCount(3)
-                    .autoRemoveActivity(this)
-                    .setDownloadListener(object : IProgressCallback {
-                        override fun onConnecting(task: Task) {
-                            Log.e("MainActivity", "onConnecting $1")
-                        }
-
-                        override fun onProgress(task: Task, complete: Boolean) {
-                            if (complete) {
-                                Log.e(
-                                    "MainActivity",
-                                    "download is success $path $1 ${File(task.path ?: "").exists()}"
-                                )
+            Thread(){
+                downloadUrlList.forEach {
+                    Thread.sleep(1000)
+                    val fileName = StrTools.extractUrlFileName(it,"default")
+                    val path = "${filesDir}/$fileName.png"
+                    Download.instance
+                        .taskBuilder()
+                        .path(path)
+                        .url(it)
+                        .tryAgainCount(1)
+                        .autoRemoveActivity(this)
+                        .setDownloadListener(object : IProgressCallback {
+                            override fun onConnecting(task: Task) {
+                                Log.e("MainActivity", "onConnecting $1")
                             }
-                        }
 
-                        override fun onFail(error: String?, task: Task) {
-                            Log.e("MainActivity", "onFail $error")
-                        }
+                            override fun onProgress(task: Task, complete: Boolean) {
+                                if (complete) {
+                                    Log.e(
+                                        "MainActivity",
+                                        "download is success $path $1 ${File(task.path ?: "").exists()}"
+                                    )
+                                }
+                            }
 
-                    })
-                    .start()
-//            }
+                            override fun onFail(error: String?, task: Task) {
+                                Log.e("MainActivity", "onFail $error")
+                            }
+
+                        })
+                        .start()
+                }
+            }.start()
 
 
         }
@@ -106,8 +117,8 @@ class DownloadActivity : AppCompatActivity() {
             array.put(obj)
             val num = Date().time
             Net.instance.postJson()
-//                .url("https://www.baidu.com")
-                .path("login")
+                .url(ip)
+                .path("api/json")
                 .addParam("loginname", "18516607913")
                 .addJson("params", array)
                 .addParam("nonce", num)

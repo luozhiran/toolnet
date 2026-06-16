@@ -5,6 +5,7 @@ import com.itg.net.Net
 import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
 import com.itg.net.download.data.Task
+import com.itg.net.util.PrintLog
 
 class TaskState {
 
@@ -152,10 +153,7 @@ class TaskState {
 
     @Synchronized
     fun debugPrint() {
-        Log.i(
-            DOWNLOAD_DEBUG_TAG,
-            "download queue: waiting=${waitingTasks.size}, running=${runningTasks.size}"
-        )
+        PrintLog.logd("download queue: waiting=${waitingTasks.size}, running=${runningTasks.size}")
     }
 
     @Synchronized

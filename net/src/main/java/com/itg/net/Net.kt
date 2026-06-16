@@ -10,6 +10,7 @@ import com.itg.net.request.post.content.PostContent
 import com.itg.net.request.post.file.PostFile
 import com.itg.net.request.post.form.PostForm
 import com.itg.net.request.post.json.PostJson
+import com.itg.net.util.PrintLog
 
 
 const val MEDIA_JSON = "application/json; charset=utf-8"
@@ -38,6 +39,7 @@ class Net {
     }
 
     fun builder(type: ModeType): ParamsBuilder {
+        PrintLog.logr("创建 ${type.name} 类型")
         return create(type)
     }
 

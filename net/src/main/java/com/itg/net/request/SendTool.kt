@@ -6,6 +6,7 @@ import android.os.Message
 import com.itg.net.Net
 import com.itg.net.request.base.DdCallback
 import com.itg.net.download.operations.PrincipalLife
+import com.itg.net.util.PrintLog
 import okhttp3.*
 import java.io.IOException
 
@@ -56,12 +57,14 @@ class SendTool {
         if (call == null) callback?.onFailure("url is error,please check url")
         PrincipalLife.observeActivityLife(call,this.activity)
         this.activity = null
+        PrintLog.logr("开始发起请求 ${call?.request()?.url}")
         call?.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
                     if (!call.isCanceled()) {
                         callback?.onFailure(e.message)
                     }
+                    PrintLog.logr("请求失败 ${call.request().url}")
                 } finally {
                     PrincipalLife.removeCall(call)
                 }
@@ -72,6 +75,7 @@ class SendTool {
                     if (!call.isCanceled()) {
                         callback?.onResponse(response.body?.string(), response.code)
                     }
+                    PrintLog.logr("请求成功 ${call.request().url}")
                 } finally {
                     response.close()
                     PrincipalLife.removeCall(call)
@@ -89,6 +93,7 @@ class SendTool {
         }
         PrincipalLife.observeActivityLife(call,this.activity)
         this.activity = null
+        PrintLog.logr("开始发起请求 ${call?.request()?.url}")
         call?.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
@@ -98,6 +103,7 @@ class SendTool {
                         msg.obj = e.message
                         handler?.sendMessage(msg)
                     }
+                    PrintLog.logr("请求失败 ${call.request().url}")
                 } finally {
                     PrincipalLife.removeCall(call)
                 }
@@ -111,6 +117,7 @@ class SendTool {
                         msg.obj = response.body?.string()
                         handler?.sendMessage(msg)
                     }
+                    PrintLog.logr("请求成功 ${call.request().url}")
                 } finally {
                     response.close()
                     PrincipalLife.removeCall(call)
@@ -122,13 +129,16 @@ class SendTool {
     fun send(callback: Callback?, call: Call?) {
         call ?: return
         callback?:return
+        PrintLog.logr("开始发起请求 ${call.request().url}")
         call.enqueue(object :Callback{
             override fun onFailure(call: Call, e: IOException) {
                 callback.onFailure(call,e)
+                PrintLog.logr("请求失败 ${call.request().url}")
             }
 
             override fun onResponse(call: Call, response: Response) {
                callback.onResponse(call,response)
+                PrintLog.logr("请求成功 ${call.request().url}")
             }
 
         })
