@@ -2,7 +2,7 @@ package com.itg.ddlnet
 
 import android.app.Application
 import com.itg.net.Net
-import com.itg.net.okhttp.interceptors.HttpLogger
+import com.itg.net.logging.HttpLogger
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit

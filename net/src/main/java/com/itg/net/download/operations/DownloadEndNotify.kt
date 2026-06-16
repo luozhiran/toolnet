@@ -32,14 +32,15 @@ object DownloadEndNotify {
     }
 
     @JvmStatic
-     fun sendBroadcast(task: Task) {
-        var intent: Intent? = null
-        if (task.customBroadcast.orEmpty().isNotBlank()) {
-            intent = Intent(task.customBroadcast)
+    fun sendBroadcast(task: Task) {
+        val intent = if (task.customBroadcast.orEmpty().isNotBlank()) {
+            Intent(task.customBroadcast)
         } else if (task.broad) {
-            intent = Intent(BROAD_ACTION)
+            Intent(BROAD_ACTION)
+        } else {
+            null
         }
-        intent?.let { it ->
+        intent?.let {
             if (Build.VERSION.SDK_INT >= 26 && task.componentName.orEmpty()
                     .isNotBlank()
             ) {
@@ -58,12 +59,12 @@ object DownloadEndNotify {
 
     @JvmStatic
     fun failNotify(task: Task, msg: String?) {
-        if (task.contentLength > 0L && ERROR_DOWNLOAD_CANCELED != msg ) {
+        if (task.contentLength > 0L && ERROR_DOWNLOAD_CANCELED != msg) {
             Download.instance.globalDownloadProgressCache.execAllOnProgress(task)
             HoldActivityCallbackMap.loop(task)
         }
-        Download.instance.globalDownloadProgressCache.execAllOnFail(msg ?: "", task )
-        HoldActivityCallbackMap.loopFail(msg ?: "", task )
+        Download.instance.globalDownloadProgressCache.execAllOnFail(msg ?: "", task)
+        HoldActivityCallbackMap.loopFail(msg ?: "", task)
         Download.instance.dispatchTool.getTaskState().debugPrint()
         HoldActivityCallbackMap.debugPrint()
     }

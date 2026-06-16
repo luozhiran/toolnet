@@ -3,15 +3,15 @@ package com.itg.net.download.request
 
 import com.itg.net.Net
 import com.itg.net.ModeType
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_RANGE_NOT_SUPPORTED
 import com.itg.net.download.data.Task
-import com.itg.net.download.implement.OnDownloadListenerImpl
+import com.itg.net.download.request.DownloadRequestCallback
 import com.itg.net.download.operations.TaskState
-import com.itg.net.reqeust.base.ParamsBuilder
+import com.itg.net.request.base.ParamsBuilder
 import java.io.*
 
 /**
- * 断点续传下载
  * @property task DTask
  * @constructor
  */
@@ -29,7 +29,11 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
     }
 
     private fun breakpointRequest(start: Long){
-        val okHttpCallback = OnDownloadListenerImpl(onResponse = { _, response ->
+        if (isTaskCanceled()) {
+            failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
+            return
+        }
+        val okHttpCallback = DownloadRequestCallback(onResponse = { _, response ->
             when {
                 response.code == 206 -> handleResponse(response)
                 response.code == 200 && start == 0L -> handleResponse(response)
@@ -41,8 +45,13 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
                     }
                 }
             }
-        }, onFailure = { _, ioException ->
-            failureCallback?.invoke(task,ioException.message.toString())
+        }, onFailure = { call, ioException ->
+            val message = if (call.isCanceled() || isTaskCanceled()) {
+                ERROR_DOWNLOAD_CANCELED
+            } else {
+                ioException.message.toString()
+            }
+            failureCallback?.invoke(task, message)
         })
         getBreakpointContinuationBuilder(task, "${start}-").send(okHttpCallback,task)
     }

@@ -7,17 +7,20 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.itg.net.Download
 import com.itg.net.download.data.Task
-import com.itg.net.download.interfaces.IProgressCallback
+
 import java.io.File
 import java.security.MessageDigest
 import com.itg.net.Net
-import com.itg.net.reqeust.base.DdCallback
+import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.request.base.DdCallback
+import com.itg.net.util.StrTools
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
 
 class DownloadActivity : AppCompatActivity() {
 
+    private val ip = "http://10.100.219.242:3000"
 
     private val progress = object : IProgressCallback {
         override fun onConnecting(task: Task) {
@@ -38,6 +41,14 @@ class DownloadActivity : AppCompatActivity() {
 
     }
 
+
+    private val downloadUrlList= mutableListOf<String>(
+        "${ip}/download/1781446055306-94565585-1778425317121.jpg",
+        "${ip}/download/1781446430194-921360704-bg.jpg",
+        "${ip}/download/1781451464361-210732640-fasdf.jpg")
+
+    private fun intArrayOf(elements: String, elements2: String, elements3: String) {}
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -45,57 +56,56 @@ class DownloadActivity : AppCompatActivity() {
 
         Download.instance.setGlobalProgressListener(progress)
         findViewById<Button>(R.id.download).setOnClickListener {
-            for (i in 0..10) {
-//                Thread.sleep(1000)
-//                Log.e("MainActivity", "延时$i")
-                val path = "${filesDir}/$i.zip"
-                Download.instance
-                    .taskBuilder()
-                    .path(path)
-                    .url("https://www.baidu.com/img/PCtm_d9c8750bed0b3c7d089fa7d55720d6cf.png")
-                    .tryAgainCount(3)
-                    .autoRemoveActivity(this)
-                    .setDownloadListener(object : IProgressCallback {
-                        override fun onConnecting(task: Task) {
-                            Log.e("MainActivity", "onConnecting $i")
-                        }
-
-                        override fun onProgress(task: Task, complete: Boolean) {
-                            if (complete) {
-                                Log.e(
-                                    "MainActivity",
-                                    "download is success $path $i ${File(task.path ?: "").exists()}"
-                                )
+            Thread(){
+                downloadUrlList.forEach {
+                    Thread.sleep(1000)
+                    val fileName = StrTools.extractUrlFileName(it,"default")
+                    val path = "${filesDir}/$fileName.png"
+                    Download.instance
+                        .taskBuilder()
+                        .path(path)
+                        .url(it)
+                        .tryAgainCount(1)
+                        .autoRemoveActivity(this)
+                        .setDownloadListener(object : IProgressCallback {
+                            override fun onConnecting(task: Task) {
+                                Log.e("MainActivity", "onConnecting $1")
                             }
-                        }
 
-                        override fun onFail(error: String?, task: Task) {
-                            Log.e("MainActivity", "onFail $error")
-                        }
+                            override fun onProgress(task: Task, complete: Boolean) {
+                                if (complete) {
+                                    Log.e(
+                                        "MainActivity",
+                                        "download is success $path $1 ${File(task.path ?: "").exists()}"
+                                    )
+                                }
+                            }
 
-                    })
-                    .start()
-            }
+                            override fun onFail(error: String?, task: Task) {
+                                Log.e("MainActivity", "onFail $error")
+                            }
+
+                        })
+                        .start()
+                }
+            }.start()
 
 
         }
 
         findViewById<Button>(R.id.get).setOnClickListener {
             Net.instance.get()
-                .url("http://www.baidu.com")
-                .addParam("key1", "a")
-                .addParam("key2", "b")
-                .noUseGlobalParams()
+                .url(ip)
+                .path("api/data")
                 .autoCancel(this)
-                .send(object : DdCallback {
+                .send(object : DdCallback{
                     override fun onFailure(er: String?) {
-
+                        Log.e("luozhiran", er + "")
                     }
 
                     override fun onResponse(result: String?, code: Int) {
-
+                        Log.e("luozhiran", result + "")
                     }
-
                 })
 
         }
@@ -107,8 +117,8 @@ class DownloadActivity : AppCompatActivity() {
             array.put(obj)
             val num = Date().time
             Net.instance.postJson()
-//                .url("https://www.baidu.com")
-                .path("login")
+                .url(ip)
+                .path("api/json")
                 .addParam("loginname", "18516607913")
                 .addJson("params", array)
                 .addParam("nonce", num)

@@ -1,31 +1,39 @@
 package com.itg.net.download.request
 
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.Task
-import com.itg.net.download.implement.OnDownloadListenerImpl
 import com.itg.net.download.operations.TaskState
+import com.itg.net.util.PrintLog
 
-/**
- * 直接下载任务
- * @property task DTask
- * @constructor
- */
-class DirectRequest(private val task: Task, taskStateInstance: TaskState) : BaseRequest(task,taskStateInstance) {
+class DirectRequest(private val task: Task, taskStateInstance: TaskState) : BaseRequest(task, taskStateInstance) {
 
-    override fun start(){
-        val okHttpCallback = OnDownloadListenerImpl(onResponse = { _, response ->
+    override fun start() {
+        if (isTaskCanceled()) {
+            failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
+            return
+        }
+        val okHttpCallback = DownloadRequestCallback(onResponse = { _, response ->
             val code = response.code
             if (code == 200) {
+                PrintLog.logd("下载成功 ${task.url} ")
                 handleResponse(response)
             } else {
                 try {
+                    PrintLog.logd("下载失败 ${task.url} 请求失败：response.code=${code}")
                     failureCallback?.invoke(task,"请求失败：response.code=${code}")
                 } finally {
                     response.close()
                 }
             }
-        }, onFailure = { _, ioException ->
-            failureCallback?.invoke(task,ioException.message.toString())
+        }, onFailure = { call, ioException ->
+            val message = if (call.isCanceled() || isTaskCanceled()) {
+                ERROR_DOWNLOAD_CANCELED
+            } else {
+                ioException.message.toString()
+            }
+            PrintLog.logd("下载失败 ${task.url} $message")
+            failureCallback?.invoke(task, message)
         })
-        getBuilder().send(okHttpCallback,task)
+        getBuilder().send(okHttpCallback, task)
     }
 }
