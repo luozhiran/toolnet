@@ -16,6 +16,12 @@ import com.itg.net.util.ThreadTool
 import java.io.File
 
 class TaskBuilder {
+    // 将lifecycle和observer封装为单一对象，保证volatile读写原子性，避免部分可见问题
+    private class ActivityLifecycleBinding(
+        val lifecycle: Lifecycle,
+        val observer: LifecycleEventObserver
+    )
+
     private val task by lazy { Task() }
     private val progressCallback by lazy {
         object : IProgressCallback {
@@ -26,7 +32,7 @@ class TaskBuilder {
             override fun onProgress(task: Task, complete: Boolean) {
                 if (complete) {
                     DownloadEndNotify.completeNotify(task)
-
+                    removeActivityLifecycleObserver()
                 } else {
                     DownloadEndNotify.progressNotify(task)
                 }
@@ -39,6 +45,7 @@ class TaskBuilder {
                     return
                 }
                 DownloadEndNotify.failNotify(task, error)
+                removeActivityLifecycleObserver()
             }
 
         }
@@ -46,6 +53,10 @@ class TaskBuilder {
 
     // 持有activity引用的回调
     private var holdActivityRef: IProgressCallback? = null
+
+    // 保存绑定到Activity的生命周期和观察者，用于下载完成时主动移除
+    @Volatile
+    private var activityBinding: ActivityLifecycleBinding? = null
 
     @Volatile
     private var lifecycleDestroyed = false
@@ -83,31 +94,44 @@ class TaskBuilder {
         }
         ThreadTool.runOnUIThread {
             PrintLog.logd("绑定Activity")
-            activity.lifecycle.addObserver(object : LifecycleEventObserver {
-                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-                    if (event == Lifecycle.Event.ON_DESTROY) {
-                        PrintLog.logd("销毁Activity 开始释放资源")
-                        lifecycleDestroyed = true
-                        holdActivityRef?.let {
-                            PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用)")
-                            HoldActivityCallbackMap.debugPrint()
-                            HoldActivityCallbackMap.removeProgressCallback(
-                                task,
-                                it
-                            )
-                            PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用),完成")
-                            HoldActivityCallbackMap.debugPrint()
-                        }
-                        holdActivityRef = null
-                        PrintLog.logSubd("自动取消下载任务 ${task.url}")
-                        Download.instance.cancel(task)
-                        source.lifecycle.removeObserver(this)
-                        PrintLog.logSubd("销毁Activity 资源释放完成")
+            val observer = LifecycleEventObserver { source, event ->
+                if (event == Lifecycle.Event.ON_DESTROY) {
+                    PrintLog.logd("销毁Activity 开始释放资源")
+                    lifecycleDestroyed = true
+                    holdActivityRef?.let {
+                        PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用)")
+                        HoldActivityCallbackMap.debugPrint()
+                        HoldActivityCallbackMap.removeProgressCallback(
+                            task,
+                            it
+                        )
+                        PrintLog.logSubd("释放下完成")
+                        HoldActivityCallbackMap.debugPrint()
                     }
+                    holdActivityRef = null
+                    PrintLog.logSubd("自动取消下载任务 ${task.url}")
+                    Download.instance.cancel(task)
+                    removeActivityLifecycleObserver()
+                    PrintLog.logSubd("销毁Activity 资源释放完成")
                 }
-            })
+            }
+            activityBinding = ActivityLifecycleBinding(activity.lifecycle, observer)
+            activity.lifecycle.addObserver(observer)
         }
         return this
+    }
+
+    /**
+     * 移除绑定到Activity生命周期上的观察者。
+     * 在下载任务终结时（成功/最终失败/取消）主动调用，避免观察者只能在Activity销毁时才被移除。
+     * 该方法可在任意线程调用，内部会派发到主线程执行实际的removeObserver操作。
+     */
+    private fun removeActivityLifecycleObserver() {
+        val binding = activityBinding ?: return
+        activityBinding = null
+        ThreadTool.runOnUIThread {
+            binding.lifecycle.removeObserver(binding.observer)
+        }
     }
 
     fun setDownloadListener(progressBack: IProgressCallback): TaskBuilder {
@@ -127,20 +151,24 @@ class TaskBuilder {
         // 校验任务是否为无效任务
         if (taskState.isInvalidTask(task)) {
             holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
+            removeActivityLifecycleObserver()
             return task
         }
         if (!task.overwrite && File(task.path.orEmpty()).exists()) {
             holdActivityRef?.onFail(ERROR_TARGET_FILE_EXISTS, task)
+            removeActivityLifecycleObserver()
             return task
         }
 
 
         // 校验请求地址是否正在下载
         if (taskState.exitRunningUrl(task.url)) {
+            removeActivityLifecycleObserver()
             return task
         }
         // 校验请求地址是否已经在任务队列
         if (taskState.exitWaitUrl(task.url)) {
+            removeActivityLifecycleObserver()
             return task
         }
 
