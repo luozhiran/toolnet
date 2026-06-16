@@ -54,11 +54,14 @@ class SendTool {
 
 
     fun send(callback: DdCallback?, call: Call?) {
-        if (call == null) callback?.onFailure("url is error,please check url")
-        PrincipalLife.observeActivityLife(call,this.activity)
+        if (call == null) {
+            callback?.onFailure("url is error,please check url")
+            return
+        }
+        PrincipalLife.observeActivityLife(call, this.activity)
         this.activity = null
-        PrintLog.logr("开始发起请求 ${call?.request()?.url}")
-        call?.enqueue(object : Callback {
+        PrintLog.logr("开始发起请求 ${call.request().url}")
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
                     if (!call.isCanceled()) {
@@ -90,11 +93,12 @@ class SendTool {
             msg.what = errorWhat
             msg.obj = "url is error,please check url"
             handler?.sendMessage(msg)
+            return
         }
-        PrincipalLife.observeActivityLife(call,this.activity)
+        PrincipalLife.observeActivityLife(call, this.activity)
         this.activity = null
-        PrintLog.logr("开始发起请求 ${call?.request()?.url}")
-        call?.enqueue(object : Callback {
+        PrintLog.logr("开始发起请求 ${call.request().url}")
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
                     if (!call.isCanceled()) {

@@ -86,13 +86,16 @@ class TaskBuilder {
     }
 
     fun autoRemoveActivity(activity: FragmentActivity): TaskBuilder {
-        if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
-            lifecycleDestroyed = true
-            task.cancelUrl = task.url
-            PrintLog.logd("Activity已经销毁，无法绑定Activity")
-            return this
-        }
+        // 将检查和绑定放在同一个主线程任务中，避免 TOCTOU 竞态条件：
+        // 如果在检查 currentState 和添加 Observer 之间 Activity 被销毁，
+        // Observer 会被添加到已销毁的 Activity 上，导致回调泄漏且任务无法自动取消
         ThreadTool.runOnUIThread {
+            if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+                lifecycleDestroyed = true
+                task.cancelUrl = task.url
+                PrintLog.logd("Activity已经销毁，无法绑定Activity")
+                return@runOnUIThread
+            }
             PrintLog.logd("绑定Activity")
             val observer = LifecycleEventObserver { source, event ->
                 if (event == Lifecycle.Event.ON_DESTROY) {

@@ -1,6 +1,7 @@
 package com.itg.net.download.data
 
 import com.itg.net.download.callback.IProgressCallback
+import java.util.UUID
 
 class Task {
     //请求地址
@@ -32,6 +33,6 @@ class Task {
     var extra: String? = null
     // 下载可以尝试的次数
     var tryAgainCount = 1
-    // 创建任务的时间戳
-    val uniqueId = System.currentTimeMillis()
+    // 创建任务的唯一标识
+    val uniqueId = UUID.randomUUID().toString()
 }

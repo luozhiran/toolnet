@@ -83,7 +83,9 @@ class DispatchTool : Dispatch {
     }
 
     /**
-     * 任务有重试次数，在一次上次失败的任务
+     * 任务有重试次数，再一次发起上次失败的任务。
+     * 如果任务已不在运行队列中（可能被并发取消），但有剩余重试次数，
+     * 则将任务重新加入等待队列，避免任务被静默丢弃。
      */
     private fun tryAgainDownloadTask(preTask: Task) {
         if (taskStateInstance.exitRunningTask(preTask)) {

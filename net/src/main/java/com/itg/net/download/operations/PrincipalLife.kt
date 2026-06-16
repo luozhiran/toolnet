@@ -20,6 +20,7 @@ object PrincipalLife {
 
     fun observeActivityLife(call: Call?, activity: Activity?) {
         if (call == null || activity == null) return
+        val componentActivity = activity as? ComponentActivity ?: return
         PrintLog.logr("绑定 Activity ${call.request().url}")
         var needObserve = false
         synchronized(lockCall) {
@@ -33,7 +34,6 @@ object PrincipalLife {
         }
         if (needObserve) {
             ThreadTool.runOnUIThread {
-                val componentActivity = activity as? ComponentActivity ?: return@runOnUIThread
                 componentActivity.lifecycle.addObserver(object : LifecycleEventObserver {
                     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
                         if (event == Lifecycle.Event.ON_DESTROY) {

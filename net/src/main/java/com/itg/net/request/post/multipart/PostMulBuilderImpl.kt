@@ -2,6 +2,7 @@ package com.itg.net.request.post.multipart
 
 import android.app.Activity
 import android.os.Handler
+import androidx.annotation.VisibleForTesting
 import com.itg.net.Net
 import com.itg.net.request.base.DdCallback
 import com.itg.net.request.base.PostBuilder
@@ -101,7 +102,8 @@ abstract class PostMulBuilderImpl : ParamsBuilder(), PostBuilder, GetBuilder {
         return this
     }
 
-    protected fun getRequestBody(): RequestBody? {
+    @VisibleForTesting
+    internal fun getRequestBody(): RequestBody? {
         return getMultipartBody()
     }
 

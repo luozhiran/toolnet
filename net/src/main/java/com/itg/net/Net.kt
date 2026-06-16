@@ -17,7 +17,7 @@ const val MEDIA_JSON = "application/json; charset=utf-8"
 
 const val MEDIA_OCTET_STREAM = "application/octet-stream"
 
-//榛樿骞挎挱
+// Default broadcast action
 const val BROAD_ACTION = "com.yqtec.install.broadcast"
 
 enum class ModeType{PostFile,PostForm,PostJson,PostMul,Get,PostResume,PostContent}

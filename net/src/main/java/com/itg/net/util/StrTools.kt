@@ -48,7 +48,7 @@ object StrTools {
         if (url == null || url.trim { it <= ' ' }.isEmpty()) return defaultName
         try {
             // 去掉 ? 后面的参数
-            val path = url.split("\\?".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0]
+            val path = url.substringBefore('?')
             // 取最后一个 / 之后的内容
             val lastSlash = path.lastIndexOf('/')
             if (lastSlash == -1 || lastSlash == path.length - 1) {
