@@ -61,6 +61,7 @@ class TaskBuilder {
     @Volatile
     private var lifecycleDestroyed = false
 
+
     fun path(path: String): TaskBuilder {
         task.path = path
         return this
@@ -124,6 +125,11 @@ class TaskBuilder {
         return this
     }
 
+    fun supportCheckpoint() : TaskBuilder{
+        this.task.append = true
+        return this
+    }
+
     /**
      * 移除绑定到Activity生命周期上的观察者。
      * 在下载任务终结时（成功/最终失败/取消）主动调用，避免观察者只能在Activity销毁时才被移除。
@@ -174,15 +180,13 @@ class TaskBuilder {
             removeActivityLifecycleObserver()
             return task
         }
-
+        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
+        task.progressCallback = progressCallback
         // 下载任务是否启动断点续传
         if (taskState.isBreakpointContinuation(task)) {
-            task.progressCallback = progressCallback
             Download.instance.dispatchTool.appendDownload(task)
             return task
         }
-        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
-        task.progressCallback = progressCallback
         Download.instance.dispatchTool.download(task)
         return task
     }

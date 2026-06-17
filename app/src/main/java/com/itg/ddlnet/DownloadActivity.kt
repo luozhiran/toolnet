@@ -14,6 +14,7 @@ import com.itg.net.Net
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.request.base.DdCallback
 import com.itg.net.util.StrTools
+import com.itg.net.util.TaskTools
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
@@ -43,7 +44,7 @@ class DownloadActivity : AppCompatActivity() {
 
 
     private val downloadUrlList= mutableListOf<String>(
-        "${ip}/download/1781446055306-94565585-1778425317121.jpg",
+        "http://10.100.219.242:3000/download/big.zip",
         "${ip}/download/1781446430194-921360704-bg.jpg",
         "${ip}/download/1781451464361-210732640-fasdf.jpg")
 
@@ -58,15 +59,15 @@ class DownloadActivity : AppCompatActivity() {
         findViewById<Button>(R.id.download).setOnClickListener {
             Thread(){
                 downloadUrlList.forEach {
-                    Thread.sleep(1000)
                     val fileName = StrTools.extractUrlFileName(it,"default")
-                    val path = "${filesDir}/$fileName.png"
+                    val path = "${filesDir}/$fileName"
                     Download.instance
                         .taskBuilder()
                         .path(path)
                         .url(it)
                         .tryAgainCount(1)
                         .autoRemoveActivity(this)
+                        .supportCheckpoint()
                         .setDownloadListener(object : IProgressCallback {
                             override fun onConnecting(task: Task) {
                                 Log.e("MainActivity", "onConnecting $1")
@@ -78,6 +79,8 @@ class DownloadActivity : AppCompatActivity() {
                                         "MainActivity",
                                         "download is success $path $1 ${File(task.path ?: "").exists()}"
                                     )
+                                } else {
+                                    Log.e("MainActivity", "下载进度：${TaskTools.getDownloadProgress(task)}")
                                 }
                             }
 
@@ -87,7 +90,9 @@ class DownloadActivity : AppCompatActivity() {
 
                         })
                         .start()
+                    Thread.sleep(1000)
                 }
+
             }.start()
 
 

@@ -38,10 +38,8 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
                 response.code == 206 -> handleResponse(response)
                 response.code == 200 && start == 0L -> handleResponse(response)
                 else -> {
-                    try {
+                    response.use { response ->
                         failureCallback?.invoke(task, ERROR_RANGE_NOT_SUPPORTED)
-                    } finally {
-                        response.close()
                     }
                 }
             }
