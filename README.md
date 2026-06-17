@@ -252,14 +252,13 @@ val file = File("/sdcard/photo.jpg")
 Net.instance.postFile()
     .url("https://api.example.com/upload")
     .addFile(file)                       // 以 "file" 作为表单字段名上传
-    .addParam("userId", "10086")         // 附带额外表单参数
     .send(object : DdCallback {
         override fun onFailure(er: String?) { }
         override fun onResponse(result: String?, code: Int) { }
     })
 ```
 
-> **说明**：`postFile` 将文件以 multipart/form-data 形式上传，Content-Type 根据文件扩展名自动推断（`.png` → `image/png`，`.jpg` → `image/jpeg`，其他 → `application/octet-stream`）。
+> **说明**：`postFile` 将文件上传，Content-Type 根据文件扩展名自动推断（`.png` → `image/png`，`.jpg` → `image/jpeg`，其他 → `application/octet-stream`）。
 
 ---
 
