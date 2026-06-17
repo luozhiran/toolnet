@@ -69,4 +69,13 @@ object DownloadEndNotify {
         HoldActivityCallbackMap.debugPrint()
     }
 
+    /**
+     * 下载终结通知（成功或失败后统一调用）
+     */
+    @JvmStatic
+    fun finishNotify(task: Task) {
+        Download.instance.globalDownloadProgressCache.execAllOnFinish(task)
+        HoldActivityCallbackMap.loopFinish(task)
+    }
+
 }

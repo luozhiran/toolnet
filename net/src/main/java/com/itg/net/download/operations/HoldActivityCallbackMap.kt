@@ -41,6 +41,16 @@ object HoldActivityCallbackMap {
         }
     }
 
+    fun loopFinish(task: Task) {
+        callbacks(task).forEach {
+            try {
+                it.onFinish(task)
+            } catch (e: Exception) {
+                Log.w(DOWNLOAD_DEBUG_TAG, "下载完成回调执行异常", e)
+            }
+        }
+    }
+
     fun setProgressCallback(task: Task, progressCallback: IProgressCallback) {
         val url = task.url?.takeIf { it.isNotBlank() } ?: return
         synchronized(lock) {

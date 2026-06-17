@@ -39,6 +39,10 @@ class DownloadActivity : AppCompatActivity() {
         override fun onFail(error: String?, task: Task) {
         }
 
+        override fun onFinish(task: Task) {
+            Log.d("MainActivity", "下载任务结束: ${task.url}")
+        }
+
     }
 
 
@@ -85,6 +89,10 @@ class DownloadActivity : AppCompatActivity() {
 
                             override fun onFail(error: String?, task: Task) {
                                 Log.e("MainActivity", "onFail $error")
+                            }
+
+                            override fun onFinish(task: Task) {
+                                Log.e("MainActivity", "下载任务结束: ${task.url}")
                             }
 
                         })

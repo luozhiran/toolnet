@@ -61,6 +61,7 @@ class TaskBuilder {
             override fun onProgress(task: Task, complete: Boolean) {
                 if (complete) {
                     DownloadEndNotify.completeNotify(task)
+                    DownloadEndNotify.finishNotify(task)
                     removeActivityLifecycleObserver()
                 } else {
                     DownloadEndNotify.progressNotify(task)
@@ -75,6 +76,7 @@ class TaskBuilder {
                     return
                 }
                 DownloadEndNotify.failNotify(task, error)
+                DownloadEndNotify.finishNotify(task)
                 removeActivityLifecycleObserver()
             }
 
@@ -281,12 +283,14 @@ class TaskBuilder {
         // 校验任务是否为无效任务（URL 或保存路径未配置等）
         if (taskState.isInvalidTask(task)) {
             holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
+            holdActivityRef?.onFinish(task)
             removeActivityLifecycleObserver()
             return task
         }
         // 目标文件已存在且未开启覆盖
         if (!task.overwrite && File(task.path.orEmpty()).exists()) {
             holdActivityRef?.onFail(ERROR_TARGET_FILE_EXISTS, task)
+            holdActivityRef?.onFinish(task)
             removeActivityLifecycleObserver()
             return task
         }

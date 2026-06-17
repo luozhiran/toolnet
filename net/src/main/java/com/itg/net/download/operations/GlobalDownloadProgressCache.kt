@@ -37,6 +37,12 @@ class GlobalDownloadProgressCache {
         }
     }
 
+    fun execAllOnFinish(task: Task){
+        forEachCallback {
+            it.onFinish(task)
+        }
+    }
+
     private inline fun forEachCallback(action: (IProgressCallback) -> Unit) {
         for (callback in progressCallbackList) {
             try {
