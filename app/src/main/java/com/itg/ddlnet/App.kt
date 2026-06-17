@@ -3,8 +3,11 @@ package com.itg.ddlnet
 import android.app.Application
 import com.itg.net.Net
 import com.itg.net.logging.HttpLogger
+import com.itg.net.retrofit.NetRetrofit
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
 
 class App:Application() {
@@ -20,6 +23,12 @@ class App:Application() {
             .okHttpClient(getOkhppt())
             .useHttpLog(true)
             .url("http://47.76.59.147:8000/")
+
+        val retrofit = NetRetrofit.builder()
+            .baseUrl("https://api.example.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(ScalarsConverterFactory.create())  // 支持 String 响应
+            .build()
     }
 
 
