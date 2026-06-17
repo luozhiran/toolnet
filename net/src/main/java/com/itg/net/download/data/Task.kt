@@ -33,6 +33,8 @@ class Task {
     var extra: String? = null
     // 下载可以尝试的次数
     var tryAgainCount = 1
+    // 是否跳过全局参数，默认 false（附带全局参数）
+    var noGlobalParams = false
     // 创建任务的唯一标识
     val uniqueId = UUID.randomUUID().toString()
 }

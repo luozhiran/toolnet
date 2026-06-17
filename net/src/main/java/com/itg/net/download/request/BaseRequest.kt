@@ -25,6 +25,9 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
 
     protected fun getBuilder(): ParamsBuilder {
         val builder = Net.instance.builder(ModeType.Get).url(task.url)
+        if (task.noGlobalParams) {
+            builder.noUseGlobalParams()
+        }
         return builder
     }
 

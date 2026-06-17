@@ -19,6 +19,9 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
     private fun getBreakpointContinuationBuilder(task: Task, range:String?) : ParamsBuilder {
         val builder = Net.instance.builder(ModeType.Get).url(task.url)
         builder.addHeader("Range", "bytes=${range}")
+        if (task.noGlobalParams) {
+            builder.noUseGlobalParams()
+        }
         return builder
     }
 

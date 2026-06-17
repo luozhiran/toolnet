@@ -244,6 +244,19 @@ class TaskBuilder {
     }
 
     /**
+     * 跳过全局参数
+     *
+     * 设置后下载请求的 URL 不会附加 [NetConfig.globalParams] 中配置的全局参数，
+     * 适用于下载第三方域名的文件时避免泄露内部参数。
+     *
+     * @return 返回自身，支持链式调用
+     */
+    fun noUseGlobalParams(): TaskBuilder {
+        this.task.noGlobalParams = true
+        return this
+    }
+
+    /**
      * 启动下载任务
      *
      * 执行前会进行一系列校验，任一条件不满足则通过回调通知失败并返回：
