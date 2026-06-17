@@ -5,6 +5,7 @@ import android.util.Log
 import android.widget.Button
 
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.itg.net.download.data.Task
 
 import java.io.File
@@ -12,9 +13,12 @@ import java.security.MessageDigest
 import com.itg.net.Net
 import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.flow.flowString
 import com.itg.net.request.base.DdCallback
 import com.itg.net.util.StrTools
 import com.itg.net.util.TaskTools
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
@@ -121,6 +125,15 @@ class DownloadActivity : AppCompatActivity() {
                     }
                 })
 
+            lifecycleScope.launch {
+                Net.instance.get()
+                    .url("https://api.example.com/user/info")
+                    .flowString()
+                    .catch { e -> Log.e("TAG", "请求失败: ${e.message}") }
+                    .collect { body ->
+                        Log.d("TAG", "响应体: $body")
+                    }
+            }
         }
 
         findViewById<Button>(R.id.post).setOnClickListener {
