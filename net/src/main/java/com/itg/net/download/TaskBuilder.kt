@@ -247,6 +247,22 @@ class TaskBuilder {
     }
 
     /**
+     * 设置内部进度回调（供 net-flow 等扩展模块使用）
+     *
+     * 允许在 [start] 之前注入自定义的 [IProgressCallback]，扩展模块可借此
+     * 将下载事件桥接到 Flow / Channel 等响应式模型中。
+     *
+     * 注意：此方法为扩展模块预留，普通业务代码应使用 [listener] 方法。
+     *
+     * @param callback 要设置的进度回调
+     * @return 返回自身，支持链式调用
+     */
+    fun setProgressCallback(callback: IProgressCallback): TaskBuilder {
+        task.progressCallback = callback
+        return this
+    }
+
+    /**
      * 跳过全局参数
      *
      * 设置后下载请求的 URL 不会附加 [NetConfig.globalParams] 中配置的全局参数，

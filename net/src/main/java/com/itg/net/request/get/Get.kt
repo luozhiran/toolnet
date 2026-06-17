@@ -5,6 +5,7 @@ import android.os.Handler
 import com.itg.net.request.base.DdCallback
 import com.itg.net.download.data.Task
 import com.itg.net.request.SendTool
+import okhttp3.Call
 import okhttp3.Callback
 
 class Get : GetGenerator() {
@@ -51,7 +52,14 @@ class Get : GetGenerator() {
         sendTool.send(response, call)
     }
 
-
-
+    override fun buildCall(): Call? {
+        return sendTool.combineParamsAndRCall(
+            getHeader(),
+            getUrl(),
+            tag,
+            null,
+            cacheControl
+        ) { builder -> builder.get() }
+    }
 
 }

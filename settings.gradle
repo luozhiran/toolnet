@@ -1,3 +1,5 @@
 rootProject.name = "ddlnet"
 include ':app'
 include ':net'
+include ':net-retrofit'
+include ':net-flow'
