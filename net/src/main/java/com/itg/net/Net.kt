@@ -12,52 +12,157 @@ import com.itg.net.request.post.form.PostForm
 import com.itg.net.request.post.json.PostJson
 import com.itg.net.util.PrintLog
 
-
+/**
+ * JSON 请求的 Content-Type
+ */
 const val MEDIA_JSON = "application/json; charset=utf-8"
 
+/**
+ * 二进制流请求的 Content-Type
+ */
 const val MEDIA_OCTET_STREAM = "application/octet-stream"
 
-// Default broadcast action
+/**
+ * 默认广播 Action，用于 App 安装广播
+ */
 const val BROAD_ACTION = "com.yqtec.install.broadcast"
 
-enum class ModeType{PostFile,PostForm,PostJson,PostMul,Get,PostResume,PostContent}
+/**
+ * 网络请求类型枚举
+ *
+ * @property PostFile  文件上传
+ * @property PostForm  表单提交
+ * @property PostJson  JSON 请求体
+ * @property PostMul   multipart/form-data 上传
+ * @property Get       GET 请求
+ * @property PostResume 断点续传上传
+ * @property PostContent 自定义内容请求体
+ */
+enum class ModeType { PostFile, PostForm, PostJson, PostMul, Get, PostResume, PostContent }
+
+/**
+ * 网络库统一入口，全局单例
+ *
+ * 提供网络请求的配置、发送、取消以及下载任务管理等功能。
+ *
+ * ## 使用示例
+ * ```
+ * // 初始化配置
+ * Net.instance.configure {
+ *     app(application)
+ *     url("https://api.example.com")
+ *     setGlobalParams("token", "xxx")
+ * }
+ *
+ * // GET 请求
+ * Net.instance.get()
+ *     .url("https://api.example.com/data")
+ *     .tag("myTag")
+ *     .send(callback)
+ *
+ * // POST JSON 请求
+ * Net.instance.postJson()
+ *     .url("https://api.example.com/submit")
+ *     .json(jsonString)
+ *     .send(callback)
+ *
+ * // 取消请求
+ * Net.instance.cancel("myTag")
+ * ```
+ */
 class Net {
 
     companion object {
 
+        /**
+         * 全局单例实例
+         */
         @JvmStatic
         val instance: Net by lazy { Net() }
     }
 
+    /**
+     * 网络配置实例，在 [configure] 中通过 DSL 方式设置各项参数
+     */
     val ddNetConfig: NetConfig by lazy { NetConfig() }
+
+    /**
+     * OkHttp 客户端管理器，基于 [ddNetConfig] 构建 OkHttpClient 实例
+     */
     val okhttpManager: OkHttpManager by lazy { OkHttpManager(ddNetConfig) }
+
+    /**
+     * 下载管理器单例，用于创建和管理下载任务
+     */
     val download: Download by lazy { Download.instance }
 
+    /**
+     * DSL 方式配置网络库参数
+     *
+     * @param block 配置闭包，接收 [NetConfig] 作为接收者
+     * @return 返回自身，支持链式调用
+     */
     fun configure(block: NetConfig.() -> Unit): Net {
         ddNetConfig.block()
         return this
     }
 
+    /**
+     * 根据请求类型创建对应的参数构建器
+     *
+     * @param type 请求类型，详见 [ModeType]
+     * @return 对应类型的 [ParamsBuilder]，用于链式设置参数并最终发起请求
+     */
     fun builder(type: ModeType): ParamsBuilder {
         PrintLog.logr("创建 ${type.name} 类型")
         return create(type)
     }
 
+    /**
+     * 创建 GET 请求构建器
+     * @return [Get] 实例，支持链式设置 URL、参数、Header 等并发送
+     */
     fun get() = builder(ModeType.Get) as Get
 
+    /**
+     * 创建 multipart/form-data 上传请求构建器
+     * @return [PostMul] 实例，支持添加文件、文本等 Part
+     */
     fun postMultipart() = builder(ModeType.PostMul) as PostMul
 
+    /**
+     * 创建文件上传请求构建器
+     * @return [PostFile] 实例，支持上传单个文件
+     */
     fun postFile() = builder(ModeType.PostFile) as PostFile
 
+    /**
+     * 创建表单提交请求构建器（application/x-www-form-urlencoded）
+     * @return [PostForm] 实例
+     */
     fun postForm() = builder(ModeType.PostForm) as PostForm
 
+    /**
+     * 创建 JSON 请求构建器（application/json）
+     * @return [PostJson] 实例，支持传入 JSON 字符串或 Map
+     */
     fun postJson() = builder(ModeType.PostJson) as PostJson
 
+    /**
+     * 创建自定义内容请求构建器，适用于特殊 Content-Type 场景
+     * @return [PostContent] 实例
+     */
     fun postContent() = builder(ModeType.PostContent) as PostContent
 
+    /**
+     * 创建新的下载任务构建器
+     * @return [TaskBuilder] 实例，用于配置并启动下载任务
+     */
     fun newDownload() = download.taskBuilder()
 
-
+    /**
+     * 取消所有正在排队和正在执行的 OkHttp 请求
+     */
     fun cancelAll() {
         okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
             it.cancel()
@@ -67,6 +172,11 @@ class Net {
         }
     }
 
+    /**
+     * 取消所有匹配指定 tag 的请求（包括排队中和执行中的）
+     *
+     * @param tag 请求的标识 tag，传 null 则无操作
+     */
     fun cancelTag(tag: Any?) {
         if (tag == null) return
         okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
@@ -81,9 +191,21 @@ class Net {
         }
     }
 
+    /**
+     * [cancelTag] 的别名，取消所有匹配指定 tag 的请求
+     *
+     * @param tag 请求的标识 tag
+     */
     fun cancel(tag: Any?) = cancelTag(tag)
 
-
+    /**
+     * 取消第一个匹配指定 tag 的请求（优先匹配排队中的请求）
+     *
+     * 与 [cancelTag] 不同的是，该方法只取消第一个匹配到的请求，找到后立即返回。
+     *
+     * @param tag 请求的标识 tag，传 null 则返回 false
+     * @return true 表示找到并取消了一个请求，false 表示未找到匹配的请求
+     */
     fun cancelFirstTag(tag: Any?): Boolean {
         if (tag == null) return false
         okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
