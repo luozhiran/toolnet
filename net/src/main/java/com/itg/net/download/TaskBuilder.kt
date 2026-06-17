@@ -3,6 +3,7 @@ package com.itg.net.download
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
@@ -53,7 +54,7 @@ class TaskBuilder {
      * 并在下载完成或最终失败时自动移除 Activity 生命周期观察者
      */
     private val progressCallback by lazy {
-        object : IProgressCallback {
+        object : AbstractProgressCallback() {
             override fun onConnecting(task: Task) {
                 DownloadEndNotify.connectNotify(task)
             }

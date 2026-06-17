@@ -22,5 +22,5 @@ interface IProgressCallback {
      *
      * @param task 下载任务
      */
-    fun onFinish(task: Task) {}
+    fun onFinish(task: Task)
 }

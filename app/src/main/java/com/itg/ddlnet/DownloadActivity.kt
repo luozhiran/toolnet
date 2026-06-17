@@ -10,6 +10,7 @@ import com.itg.net.download.data.Task
 import java.io.File
 import java.security.MessageDigest
 import com.itg.net.Net
+import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.request.base.DdCallback
 import com.itg.net.util.StrTools
@@ -71,7 +72,7 @@ class DownloadActivity : AppCompatActivity() {
                         .retryCount(1)
                         .bindActivity(this)
                         .supportCheckpoint()
-                        .listener(object : IProgressCallback {
+                        .listener(object : AbstractProgressCallback() {
                             override fun onConnecting(task: Task) {
                                 Log.e("MainActivity", "onConnecting $1")
                             }
