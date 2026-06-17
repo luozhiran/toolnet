@@ -11,10 +11,22 @@ import javax.crypto.spec.SecretKeySpec
  * 加解密工具类
  *
  * 提供 AES/RSA 加解密、Base64 编解码、JSON 字段级加解密等基础操作。
+ * 内部使用 ThreadLocal 缓存 [Cipher] 实例，避免重复 JCA Provider 查找开销。
  */
 object EncryptUtil {
 
     private const val AES_ALGORITHM = "AES"
+
+    /**
+     * 线程级 Cipher 缓存
+     *
+     * 每个线程持有一组 transformation → Cipher 的映射。
+     * Cipher 实例本身非线程安全，通过 ThreadLocal 隔离。
+     * [Cipher.init] 开销远小于 [Cipher.getInstance]，因此只缓存实例，每次重新 init。
+     */
+    private val cipherCache = object : ThreadLocal<MutableMap<String, Cipher>>() {
+        override fun initialValue(): MutableMap<String, Cipher> = mutableMapOf()
+    }
 
     /**
      * 使用指定算法和密钥加密明文
@@ -26,7 +38,8 @@ object EncryptUtil {
      * @return Base64 编码的密文
      */
     fun encrypt(plaintext: String, key: ByteArray, algorithm: Algorithm, iv: ByteArray? = null): String {
-        val cipher = createCipher(Cipher.ENCRYPT_MODE, key, algorithm, iv)
+        val cipher = getCachedCipher(algorithm)
+        initCipher(cipher, Cipher.ENCRYPT_MODE, key, algorithm, iv)
         val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
         return Base64.encodeToString(encrypted, Base64.NO_WRAP)
     }
@@ -41,7 +54,8 @@ object EncryptUtil {
      * @return 明文字符串
      */
     fun decrypt(ciphertext: String, key: ByteArray, algorithm: Algorithm, iv: ByteArray? = null): String {
-        val cipher = createCipher(Cipher.DECRYPT_MODE, key, algorithm, iv)
+        val cipher = getCachedCipher(algorithm)
+        initCipher(cipher, Cipher.DECRYPT_MODE, key, algorithm, iv)
         val decoded = Base64.decode(ciphertext, Base64.NO_WRAP)
         val decrypted = cipher.doFinal(decoded)
         return String(decrypted, Charsets.UTF_8)
@@ -79,20 +93,27 @@ object EncryptUtil {
 
     // ==================== 内部方法 ====================
 
-    private fun createCipher(
+    /** 从缓存获取或创建 Cipher 实例 */
+    private fun getCachedCipher(algorithm: Algorithm): Cipher {
+        val map = cipherCache.get() ?: mutableMapOf<String, Cipher>().also { cipherCache.set(it) }
+        return map.getOrPut(algorithm.transformation) {
+            Cipher.getInstance(algorithm.transformation)
+        }
+    }
+
+    /** 初始化 Cipher（轻量操作） */
+    private fun initCipher(
+        cipher: Cipher,
         mode: Int,
         key: ByteArray,
         algorithm: Algorithm,
         iv: ByteArray?
-    ): Cipher {
-        val cipher = Cipher.getInstance(algorithm.transformation)
+    ) {
         val secretKey = SecretKeySpec(key, AES_ALGORITHM)
-
         if (iv != null && algorithm != Algorithm.AES_ECB_PKCS7) {
             cipher.init(mode, secretKey, IvParameterSpec(iv))
         } else {
             cipher.init(mode, secretKey)
         }
-        return cipher
     }
 }

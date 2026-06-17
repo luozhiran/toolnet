@@ -8,7 +8,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 
 /**
  * 字段级加解密拦截器
@@ -83,6 +82,9 @@ class EncryptInterceptor(
     }
 
     private fun encryptJson(bodyString: String, requestPath: String): String? {
+        // 快速预检：无匹配字段时跳过昂贵的 JSON 解析
+        if (!hasRuleMatch(bodyString, requestPath, forEncrypt = true)) return null
+
         return try {
             when {
                 bodyString.trimStart().startsWith("[") -> {
@@ -213,6 +215,9 @@ class EncryptInterceptor(
     }
 
     private fun decryptJson(bodyString: String, requestPath: String): String? {
+        // 快速预检：无匹配字段时跳过昂贵的 JSON 解析
+        if (!hasRuleMatch(bodyString, requestPath, forEncrypt = false)) return null
+
         return try {
             when {
                 bodyString.trimStart().startsWith("[") -> {
@@ -350,6 +355,59 @@ class EncryptInterceptor(
             if (matched) return true
         }
         return false
+    }
+
+    // ==================== 快速预检 ====================
+
+    /**
+     * 快速预检：判断 body 字符串中是否可能包含需要处理的字段
+     *
+     * 对 ByFieldName 和 ByPath 规则，使用 O(n) 子串匹配，
+     * 避免无匹配时昂贵的 JSONObject 解析。正则规则无法预检，保守返回 true。
+     *
+     * @param bodyString 请求/响应体字符串
+     * @param requestPath 请求路径
+     * @param forEncrypt true=加密方向, false=解密方向
+     */
+    private fun hasRuleMatch(bodyString: String, requestPath: String, forEncrypt: Boolean): Boolean {
+        val simpleNames = config.collectSimpleFieldNames()
+        if (simpleNames.isEmpty()) {
+            // 只有正则规则，无法预检，走完整解析
+            return true
+        }
+
+        for (rule in config.rules) {
+            // 检查方向
+            if (forEncrypt && rule.direction == Direction.RESPONSE_ONLY) continue
+            if (!forEncrypt && rule.direction == Direction.REQUEST_ONLY) continue
+
+            when (rule) {
+                is EncryptRule.ByFieldName -> {
+                    if (fieldNameInJson(bodyString, rule.fieldName)) return true
+                }
+                is EncryptRule.ByPath -> {
+                    if (!rule.pathPattern.matches(requestPath)) continue
+                    for (field in rule.fieldNames) {
+                        if (fieldNameInJson(bodyString, field)) return true
+                    }
+                }
+                is EncryptRule.ByFieldPattern -> {
+                    // 正则规则保守返回 true，交给完整解析
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /**
+     * 快速检查 JSON 字符串中是否包含指定字段名
+     *
+     * 搜索 "\"fieldName\"" 模式，覆盖 JSON key 的典型写法。
+     * 这是启发式检查，false positive 优于 false negative。
+     */
+    private fun fieldNameInJson(bodyString: String, fieldName: String): Boolean {
+        return bodyString.contains("\"$fieldName\"")
     }
 }
 

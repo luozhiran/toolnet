@@ -163,4 +163,22 @@ class EncryptConfig {
     internal fun hasValidConfig(): Boolean {
         return getKeyBytes() != null && rules.isNotEmpty()
     }
+
+    /**
+     * 收集所有可通过简单子串匹配的字段名（ByFieldName 和 ByPath 的字段）
+     *
+     * 用于加密拦截器中快速预检：在完整 JSON 解析前先检查 body 字符串中
+     * 是否包含这些字段名。正则需要完整解析，保守返回空集（走完整解析路径）。
+     */
+    internal fun collectSimpleFieldNames(): Set<String> {
+        val names = mutableSetOf<String>()
+        for (rule in rules) {
+            when (rule) {
+                is EncryptRule.ByFieldName -> names.add(rule.fieldName)
+                is EncryptRule.ByPath -> names.addAll(rule.fieldNames)
+                is EncryptRule.ByFieldPattern -> { /* 正则无法预检，跳过 */ }
+            }
+        }
+        return names
+    }
 }
