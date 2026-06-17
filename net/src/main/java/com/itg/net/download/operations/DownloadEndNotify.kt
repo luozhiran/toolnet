@@ -4,7 +4,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
 import com.itg.net.BROAD_ACTION
-import com.itg.net.Download
+import com.itg.net.download.Download
 import com.itg.net.Net
 import com.itg.net.download.data.Task
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED

@@ -1,17 +1,17 @@
-package com.itg.net
+package com.itg.net.download
 
-import com.itg.net.download.operations.GlobalDownloadProgressCache
+import com.itg.net.Net
+import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.data.Task
 import com.itg.net.download.dispatcher.DispatchTool
-import com.itg.net.download.TaskBuilder
-import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.download.operations.GlobalDownloadProgressCache
 import com.itg.net.download.operations.HoldActivityCallbackMap
 
 /**
  * 下载管理器（模块内部使用）
  *
  * 负责下载任务的创建、调度、进度监听和取消。
- * 外部统一通过 [Net] 暴露的公开方法访问下载功能，不直接依赖本类。
+ * 外部统一通过 [com.itg.net.Net] 暴露的公开方法访问下载功能，不直接依赖本类。
  */
 internal class Download {
     companion object {

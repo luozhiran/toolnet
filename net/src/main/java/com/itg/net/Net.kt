@@ -2,6 +2,7 @@ package com.itg.net
 
 import com.itg.net.config.NetConfig
 import com.itg.net.client.OkHttpManager
+import com.itg.net.download.Download
 import com.itg.net.request.create
 import com.itg.net.request.get.Get
 import com.itg.net.request.post.multipart.PostMul
