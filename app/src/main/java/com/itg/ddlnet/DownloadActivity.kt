@@ -63,12 +63,12 @@ class DownloadActivity : AppCompatActivity() {
                     val path = "${filesDir}/$fileName"
                     Download.instance
                         .taskBuilder()
-                        .path(path)
+                        .savePath(path)
                         .url(it)
-                        .tryAgainCount(1)
-                        .autoRemoveActivity(this)
+                        .retryCount(1)
+                        .bindActivity(this)
                         .supportCheckpoint()
-                        .setDownloadListener(object : IProgressCallback {
+                        .listener(object : IProgressCallback {
                             override fun onConnecting(task: Task) {
                                 Log.e("MainActivity", "onConnecting $1")
                             }

@@ -62,36 +62,43 @@ class TaskBuilder {
     private var lifecycleDestroyed = false
 
 
-    fun path(path: String): TaskBuilder {
+    fun savePath(path: String): TaskBuilder {
         task.path = path
         return this
     }
-
-    fun savePath(path: String): TaskBuilder = path(path)
 
     fun url(url: String): TaskBuilder {
         task.url = url
         return this
     }
 
-    fun tryAgainCount(count: Int): TaskBuilder {
+
+    /**
+     * 当下载请求失败后，可以重新发起请求的次数
+     */
+    fun retryCount(count: Int): TaskBuilder {
         task.tryAgainCount = count.coerceAtLeast(1)
         return this
     }
-
-    fun retryCount(count: Int): TaskBuilder = tryAgainCount(count)
 
     fun overwrite(overwrite: Boolean): TaskBuilder {
         task.overwrite = overwrite
         return this
     }
 
-    fun autoRemoveActivity(activity: FragmentActivity): TaskBuilder {
-        // 将检查和绑定放在同一个主线程任务中，避免 TOCTOU 竞态条件：
-        // 如果在检查 currentState 和添加 Observer 之间 Activity 被销毁，
-        // Observer 会被添加到已销毁的 Activity 上，导致回调泄漏且任务无法自动取消
+    /**
+     * 绑定生命周期后，发起下载请求和Activity生命周期一致，
+     * 当activity销毁，请求取消
+     */
+    fun bindActivity(activity: FragmentActivity): TaskBuilder {
+        bindLife(activity.lifecycle)
+        return this
+    }
+
+
+    private fun bindLife(lifecycle: Lifecycle): TaskBuilder {
         ThreadTool.runOnUIThread {
-            if (activity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+            if (lifecycle.currentState == Lifecycle.State.DESTROYED) {
                 lifecycleDestroyed = true
                 task.cancelUrl = task.url
                 PrintLog.logd("Activity已经销毁，无法绑定Activity")
@@ -119,13 +126,17 @@ class TaskBuilder {
                     PrintLog.logSubd("销毁Activity 资源释放完成")
                 }
             }
-            activityBinding = ActivityLifecycleBinding(activity.lifecycle, observer)
-            activity.lifecycle.addObserver(observer)
+            activityBinding = ActivityLifecycleBinding(lifecycle, observer)
+            lifecycle.addObserver(observer)
         }
         return this
+
     }
 
-    fun supportCheckpoint() : TaskBuilder{
+    /**
+     * 开启断点续传功能
+     */
+    fun supportCheckpoint(): TaskBuilder {
         this.task.append = true
         return this
     }
@@ -143,12 +154,13 @@ class TaskBuilder {
         }
     }
 
-    fun setDownloadListener(progressBack: IProgressCallback): TaskBuilder {
+    /**
+     * 设置下载监听器
+     */
+    fun listener(progressBack: IProgressCallback): TaskBuilder{
         holdActivityRef = progressBack
         return this
     }
-
-    fun listener(progressBack: IProgressCallback): TaskBuilder = setDownloadListener(progressBack)
 
 
     fun start(): Task {
