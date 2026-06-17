@@ -26,6 +26,9 @@ class EncryptConfig {
 
     // ==================== 开关 ====================
 
+    /** 加密模式，默认 OPT_OUT（全量加密，向后兼容） */
+    var encryptMode: EncryptMode = EncryptMode.OPT_OUT
+
     /** 是否启用请求加密 */
     var requestEncryptEnabled: Boolean = true
 
@@ -39,6 +42,9 @@ class EncryptConfig {
 
     /** 加密规则列表 */
     val rules: MutableList<EncryptRule> = mutableListOf()
+
+    /** 跳过路径列表（OPT_OUT 模式生效） */
+    val skipPaths: MutableList<Regex> = mutableListOf()
 
     // ==================== DSL 方法 ====================
 
@@ -87,6 +93,16 @@ class EncryptConfig {
      */
     fun iv(ivStr: String): EncryptConfig {
         this.iv = ivStr.toByteArray(Charsets.UTF_8)
+        return this
+    }
+
+    /**
+     * 设置加密模式
+     *
+     * @param mode [EncryptMode.OPT_OUT] 全量加密（默认）/ [EncryptMode.OPT_IN] 按需加密
+     */
+    fun encryptMode(mode: EncryptMode): EncryptConfig {
+        this.encryptMode = mode
         return this
     }
 
@@ -148,6 +164,17 @@ class EncryptConfig {
         return this
     }
 
+    /**
+     * 添加跳过路径（OPT_OUT 模式生效，OPT_IN 模式忽略）
+     *
+     * 匹配该正则的请求路径将跳过加解密处理。
+     * 单请求可通过 [com.itg.net.request.base.ParamsBuilder.encrypt] 覆盖此跳过。
+     */
+    fun skipPath(pattern: Regex): EncryptConfig {
+        skipPaths.add(pattern)
+        return this
+    }
+
     // ==================== 内部方法 ====================
 
     /**
@@ -180,5 +207,31 @@ class EncryptConfig {
             }
         }
         return names
+    }
+
+    /**
+     * 判断请求路径是否匹配任一 [EncryptRule.ByPath] 规则
+     *
+     * OPT_IN 模式下用于判断是否需要对当前请求进行加密。
+     */
+    internal fun matchesAnyEncryptPath(requestPath: String): Boolean {
+        for (rule in rules) {
+            if (rule is EncryptRule.ByPath && rule.pathPattern.matches(requestPath)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * 判断请求路径是否匹配任一 [skipPaths] 规则
+     *
+     * OPT_OUT 模式下用于判断是否跳过当前请求。
+     */
+    internal fun matchesAnySkipPath(requestPath: String): Boolean {
+        for (pattern in skipPaths) {
+            if (pattern.matches(requestPath)) return true
+        }
+        return false
     }
 }

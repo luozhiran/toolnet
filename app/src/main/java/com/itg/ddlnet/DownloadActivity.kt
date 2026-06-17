@@ -151,6 +151,7 @@ class DownloadActivity : AppCompatActivity() {
                 .addParam("nonce", num)
                 .addParam("pwd", md5("${md5("123456")}${num}"))
                 .noUseGlobalParams()
+                .addTag("ff")
                 .autoCancel(this)
                 .send(object : DdCallback {
                     override fun onFailure(er: String?) {

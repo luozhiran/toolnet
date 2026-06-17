@@ -15,10 +15,11 @@ import org.json.JSONObject
  * 在 OkHttp 拦截器层对 JSON/Form 请求体中的指定字段进行加密，
  * 对响应体中的指定字段进行解密。一次配置，所有模块（net / net-flow / net-retrofit）生效。
  *
- * ## 工作原理
- * - 请求拦截：读取 body → 匹配字段 → 加密 → 构造新 body
- * - 响应拦截：读取 body → 匹配字段 → 解密 → 构造新 body
- * - 对非 JSON/Form body（如文件上传）自动跳过
+ * ## 优先级链（由高到低）
+ * 1. 请求级 .encrypt() / .skipEncrypt() —— 最高优先级
+ * 2. GET 请求跳过 / 非文本 body 跳过
+ * 3. 全局 EncryptMode（OPT_IN / OPT_OUT）
+ * 4. 字段规则匹配
  */
 class EncryptInterceptor(
     private val config: EncryptConfig
@@ -26,36 +27,94 @@ class EncryptInterceptor(
 
     companion object {
         private const val TAG = "EncryptInterceptor"
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         var request = chain.request()
 
-        // ========== 请求加密 ==========
         if (config.requestEncryptEnabled && config.hasValidConfig()) {
-            request = encryptRequest(request)
+            if (shouldProcessRequest(request)) {
+                request = encryptRequest(request)
+            }
         }
 
-        // ========== 执行请求 ==========
         val response = chain.proceed(request)
 
-        // ========== 响应解密 ==========
         if (config.responseDecryptEnabled && config.hasValidConfig()) {
-            return decryptResponse(response)
+            if (shouldProcessResponse(response)) {
+                return decryptResponse(response)
+            }
         }
 
         return response
     }
 
+    // ==================== 优先级判断 ====================
+
+    /**
+     * 判断是否需要对请求执行加密
+     *
+     * 优先级链：
+     * 1. 请求级强制加密 → true
+     * 2. 请求级强制跳过 → false
+     * 3. GET 跳过 → false
+     * 4. 非文本 body 跳过 → false
+     * 5. 全局模式判断
+     */
+    private fun shouldProcessRequest(request: Request): Boolean {
+        // 1. 最高优先级：请求级强制加密（无视全局跳过）
+        val marker = request.tag(EncryptMarker::class.java)
+        if (marker?.value == EncryptMarker.ENCRYPT) return true
+
+        // 2. 最高优先级：请求级强制跳过（无视全局加密）
+        if (marker?.value == EncryptMarker.SKIP) return false
+
+        // 3. GET 跳过
+        if (config.skipGetRequest && request.method.equals("GET", ignoreCase = true)) return false
+
+        // 4. 非文本 body 跳过
+        val contentType = request.body?.contentType() ?: return false
+        if (!isTextBody(contentType)) return false
+
+        // 5. 全局模式判断
+        return when (config.encryptMode) {
+            EncryptMode.OPT_IN -> config.matchesAnyEncryptPath(request.url.encodedPath)
+            EncryptMode.OPT_OUT -> !config.matchesAnySkipPath(request.url.encodedPath)
+        }
+    }
+
+    /**
+     * 判断是否需要对响应执行解密，逻辑与请求对称
+     */
+    private fun shouldProcessResponse(response: Response): Boolean {
+        val request = response.request
+
+        // 1. 请求级强制加密
+        val marker = request.tag(EncryptMarker::class.java)
+        if (marker?.value == EncryptMarker.ENCRYPT) return true
+
+        // 2. 请求级强制跳过
+        if (marker?.value == EncryptMarker.SKIP) return false
+
+        // 3. 非文本 body 跳过
+        val contentType = response.body?.contentType() ?: return false
+        if (!isTextBody(contentType)) return false
+
+        // 4. 全局模式判断
+        return when (config.encryptMode) {
+            EncryptMode.OPT_IN -> config.matchesAnyEncryptPath(request.url.encodedPath)
+            EncryptMode.OPT_OUT -> !config.matchesAnySkipPath(request.url.encodedPath)
+        }
+    }
+
+    private fun isTextBody(contentType: MediaType): Boolean {
+        return contentType.subtype.contains("json", ignoreCase = true) ||
+                contentType.subtype.contains("x-www-form-urlencoded", ignoreCase = true)
+    }
+
     // ==================== 请求加密 ====================
 
     private fun encryptRequest(request: Request): Request {
-        // GET 请求通常无 body，按配置跳过
-        if (config.skipGetRequest && request.method.equals("GET", ignoreCase = true)) {
-            return request
-        }
-
         val body = request.body ?: return request
         val contentType = body.contentType() ?: return request
 
@@ -67,10 +126,7 @@ class EncryptInterceptor(
                 encryptJson(bodyString, request.url.encodedPath)
             contentType.subtype.contains("x-www-form-urlencoded", ignoreCase = true) ->
                 encryptForm(bodyString, request.url.encodedPath)
-            else -> {
-                PrintLog.logr("$TAG: skip non-text body, contentType=$contentType")
-                return request
-            }
+            else -> null
         }
 
         if (encryptedBody == null) return request
@@ -82,7 +138,6 @@ class EncryptInterceptor(
     }
 
     private fun encryptJson(bodyString: String, requestPath: String): String? {
-        // 快速预检：无匹配字段时跳过昂贵的 JSON 解析
         if (!hasRuleMatch(bodyString, requestPath, forEncrypt = true)) return null
 
         return try {
@@ -114,22 +169,16 @@ class EncryptInterceptor(
             val value = obj.opt(fieldName) ?: continue
 
             when {
-                // 嵌套 JSONObject
                 value is JSONObject -> {
-                    val childModified = encryptJsonObject(value, requestPath)
-                    if (childModified) modified = true
+                    if (encryptJsonObject(value, requestPath)) modified = true
                 }
-                // 嵌套 JSONArray
                 value is JSONArray -> {
-                    val arrModified = encryptJsonArray(value, requestPath)
-                    if (arrModified) modified = true
+                    if (encryptJsonArray(value, requestPath)) modified = true
                 }
-                // 基本类型字段
                 shouldEncrypt(fieldName, requestPath) -> {
-                    val ciphertext = EncryptUtil.encrypt(
+                    obj.put(fieldName, EncryptUtil.encrypt(
                         value.toString(), key, config.algorithm, config.iv
-                    )
-                    obj.put(fieldName, ciphertext)
+                    ))
                     modified = true
                 }
             }
@@ -140,16 +189,9 @@ class EncryptInterceptor(
     private fun encryptJsonArray(array: JSONArray, requestPath: String): Boolean {
         var modified = false
         for (i in 0 until array.length()) {
-            val element = array.opt(i) ?: continue
-            when (element) {
-                is JSONObject -> {
-                    val objModified = encryptJsonObject(element, requestPath)
-                    if (objModified) modified = true
-                }
-                is JSONArray -> {
-                    val arrModified = encryptJsonArray(element, requestPath)
-                    if (arrModified) modified = true
-                }
+            when (val element = array.opt(i)) {
+                is JSONObject -> { if (encryptJsonObject(element, requestPath)) modified = true }
+                is JSONArray -> { if (encryptJsonArray(element, requestPath)) modified = true }
             }
         }
         return modified
@@ -161,22 +203,17 @@ class EncryptInterceptor(
             val sb = StringBuilder()
             var modified = false
 
-            val pairs = bodyString.split("&")
-            for (pair in pairs) {
+            for (pair in bodyString.split("&")) {
                 if (sb.isNotEmpty()) sb.append("&")
                 val eqIndex = pair.indexOf("=")
-                if (eqIndex == -1) {
-                    sb.append(pair)
-                    continue
-                }
-                val paramName = pair.substring(0, eqIndex)
-                val paramValue = pair.substring(eqIndex + 1)
+                if (eqIndex == -1) { sb.append(pair); continue }
 
-                if (shouldEncrypt(paramName, requestPath)) {
-                    val ciphertext = EncryptUtil.encrypt(
-                        paramValue, key, config.algorithm, config.iv
-                    )
-                    sb.append(paramName).append("=").append(ciphertext)
+                val name = pair.substring(0, eqIndex)
+                val value = pair.substring(eqIndex + 1)
+
+                if (shouldEncrypt(name, requestPath)) {
+                    sb.append(name).append("=")
+                        .append(EncryptUtil.encrypt(value, key, config.algorithm, config.iv))
                     modified = true
                 } else {
                     sb.append(pair)
@@ -215,7 +252,6 @@ class EncryptInterceptor(
     }
 
     private fun decryptJson(bodyString: String, requestPath: String): String? {
-        // 快速预检：无匹配字段时跳过昂贵的 JSON 解析
         if (!hasRuleMatch(bodyString, requestPath, forEncrypt = false)) return null
 
         return try {
@@ -248,18 +284,15 @@ class EncryptInterceptor(
 
             when {
                 value is JSONObject -> {
-                    val childModified = decryptJsonObject(value, requestPath)
-                    if (childModified) modified = true
+                    if (decryptJsonObject(value, requestPath)) modified = true
                 }
                 value is JSONArray -> {
-                    val arrModified = decryptJsonArray(value, requestPath)
-                    if (arrModified) modified = true
+                    if (decryptJsonArray(value, requestPath)) modified = true
                 }
                 shouldDecrypt(fieldName, requestPath) -> {
-                    val plaintext = EncryptUtil.decrypt(
+                    obj.put(fieldName, EncryptUtil.decrypt(
                         value.toString(), key, config.algorithm, config.iv
-                    )
-                    obj.put(fieldName, plaintext)
+                    ))
                     modified = true
                 }
             }
@@ -270,16 +303,9 @@ class EncryptInterceptor(
     private fun decryptJsonArray(array: JSONArray, requestPath: String): Boolean {
         var modified = false
         for (i in 0 until array.length()) {
-            val element = array.opt(i) ?: continue
-            when (element) {
-                is JSONObject -> {
-                    val objModified = decryptJsonObject(element, requestPath)
-                    if (objModified) modified = true
-                }
-                is JSONArray -> {
-                    val arrModified = decryptJsonArray(element, requestPath)
-                    if (arrModified) modified = true
-                }
+            when (val element = array.opt(i)) {
+                is JSONObject -> { if (decryptJsonObject(element, requestPath)) modified = true }
+                is JSONArray -> { if (decryptJsonArray(element, requestPath)) modified = true }
             }
         }
         return modified
@@ -291,22 +317,17 @@ class EncryptInterceptor(
             val sb = StringBuilder()
             var modified = false
 
-            val pairs = bodyString.split("&")
-            for (pair in pairs) {
+            for (pair in bodyString.split("&")) {
                 if (sb.isNotEmpty()) sb.append("&")
                 val eqIndex = pair.indexOf("=")
-                if (eqIndex == -1) {
-                    sb.append(pair)
-                    continue
-                }
-                val paramName = pair.substring(0, eqIndex)
-                val paramValue = pair.substring(eqIndex + 1)
+                if (eqIndex == -1) { sb.append(pair); continue }
 
-                if (shouldDecrypt(paramName, requestPath)) {
-                    val plaintext = EncryptUtil.decrypt(
-                        paramValue, key, config.algorithm, config.iv
-                    )
-                    sb.append(paramName).append("=").append(plaintext)
+                val name = pair.substring(0, eqIndex)
+                val value = pair.substring(eqIndex + 1)
+
+                if (shouldDecrypt(name, requestPath)) {
+                    sb.append(name).append("=")
+                        .append(EncryptUtil.decrypt(value, key, config.algorithm, config.iv))
                     modified = true
                 } else {
                     sb.append(pair)
@@ -319,42 +340,31 @@ class EncryptInterceptor(
         }
     }
 
-    // ==================== 规则匹配 ====================
+    // ==================== 字段规则匹配 ====================
 
-    /**
-     * 判断请求路径 + 字段名是否匹配加密规则
-     */
     private fun shouldEncrypt(fieldName: String, requestPath: String): Boolean {
         for (rule in config.rules) {
             if (rule.direction == Direction.RESPONSE_ONLY) continue
-
-            val matched = when (rule) {
-                is EncryptRule.ByFieldName -> fieldName == rule.fieldName
-                is EncryptRule.ByFieldPattern -> rule.pattern.matches(fieldName)
-                is EncryptRule.ByPath ->
-                    rule.pathPattern.matches(requestPath) && fieldName in rule.fieldNames
-            }
-            if (matched) return true
+            if (ruleMatches(rule, fieldName, requestPath)) return true
         }
         return false
     }
 
-    /**
-     * 判断请求路径 + 字段名是否匹配解密规则
-     */
     private fun shouldDecrypt(fieldName: String, requestPath: String): Boolean {
         for (rule in config.rules) {
             if (rule.direction == Direction.REQUEST_ONLY) continue
-
-            val matched = when (rule) {
-                is EncryptRule.ByFieldName -> fieldName == rule.fieldName
-                is EncryptRule.ByFieldPattern -> rule.pattern.matches(fieldName)
-                is EncryptRule.ByPath ->
-                    rule.pathPattern.matches(requestPath) && fieldName in rule.fieldNames
-            }
-            if (matched) return true
+            if (ruleMatches(rule, fieldName, requestPath)) return true
         }
         return false
+    }
+
+    private fun ruleMatches(rule: EncryptRule, fieldName: String, requestPath: String): Boolean {
+        return when (rule) {
+            is EncryptRule.ByFieldName -> fieldName == rule.fieldName
+            is EncryptRule.ByFieldPattern -> rule.pattern.matches(fieldName)
+            is EncryptRule.ByPath ->
+                rule.pathPattern.matches(requestPath) && fieldName in rule.fieldNames
+        }
     }
 
     // ==================== 快速预检 ====================
@@ -364,55 +374,34 @@ class EncryptInterceptor(
      *
      * 对 ByFieldName 和 ByPath 规则，使用 O(n) 子串匹配，
      * 避免无匹配时昂贵的 JSONObject 解析。正则规则无法预检，保守返回 true。
-     *
-     * @param bodyString 请求/响应体字符串
-     * @param requestPath 请求路径
-     * @param forEncrypt true=加密方向, false=解密方向
      */
     private fun hasRuleMatch(bodyString: String, requestPath: String, forEncrypt: Boolean): Boolean {
         val simpleNames = config.collectSimpleFieldNames()
-        if (simpleNames.isEmpty()) {
-            // 只有正则规则，无法预检，走完整解析
-            return true
-        }
+        if (simpleNames.isEmpty()) return true
 
         for (rule in config.rules) {
-            // 检查方向
             if (forEncrypt && rule.direction == Direction.RESPONSE_ONLY) continue
             if (!forEncrypt && rule.direction == Direction.REQUEST_ONLY) continue
 
             when (rule) {
                 is EncryptRule.ByFieldName -> {
-                    if (fieldNameInJson(bodyString, rule.fieldName)) return true
+                    if (bodyString.contains("\"${rule.fieldName}\"")) return true
                 }
                 is EncryptRule.ByPath -> {
                     if (!rule.pathPattern.matches(requestPath)) continue
                     for (field in rule.fieldNames) {
-                        if (fieldNameInJson(bodyString, field)) return true
+                        if (bodyString.contains("\"$field\"")) return true
                     }
                 }
-                is EncryptRule.ByFieldPattern -> {
-                    // 正则规则保守返回 true，交给完整解析
-                    return true
-                }
+                is EncryptRule.ByFieldPattern -> return true
             }
         }
         return false
     }
-
-    /**
-     * 快速检查 JSON 字符串中是否包含指定字段名
-     *
-     * 搜索 "\"fieldName\"" 模式，覆盖 JSON key 的典型写法。
-     * 这是启发式检查，false positive 优于 false negative。
-     */
-    private fun fieldNameInJson(bodyString: String, fieldName: String): Boolean {
-        return bodyString.contains("\"$fieldName\"")
-    }
 }
 
 /**
- * 读取 RequestBody 内容为字符串（不消费原始流）
+ * 读取 RequestBody 内容为字符串
  */
 private fun RequestBody.readString(): String {
     val buffer = Buffer()

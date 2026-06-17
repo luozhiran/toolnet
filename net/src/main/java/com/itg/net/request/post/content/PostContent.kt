@@ -25,7 +25,7 @@ class PostContent: PostContentGenerator() {
     }
 
     override fun buildCall(): Call? {
-        return sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, getRequestBody(), cacheControl)
+        return sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, getRequestBody(), cacheControl, encryptFlag)
     }
 
 }

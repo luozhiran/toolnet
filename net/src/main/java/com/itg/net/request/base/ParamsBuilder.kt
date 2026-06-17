@@ -40,6 +40,15 @@ abstract class ParamsBuilder : Builder, SentBuilder {
     var noGlobalParams = false
     var cacheControl: CacheControl? = null
 
+    /**
+     * 加密标记：null=使用全局配置，"__encrypt_force__"=强制加密，"__encrypt_skip__"=强制跳过
+     *
+     * 通过 OkHttp Typed Tag 传递到 [com.itg.net.encrypt.EncryptInterceptor]，
+     * 不占用 [tag] 变量（tag 用于请求取消等功能）。
+     */
+    @Volatile
+    var encryptFlag: String? = null
+
     override fun addHeader(key: String?, value: String?): ParamsBuilder {
         if (key.isNullOrBlank() || value.isNullOrBlank()) return this
         UrlTools.appendUrlParamsToStr(headerStringBuilder,key,value)
@@ -101,6 +110,29 @@ abstract class ParamsBuilder : Builder, SentBuilder {
             json.put(entry.key, entry.value)
         }
         return json.toString()
+    }
+
+    /**
+     * 强制加密当前请求
+     *
+     * 优先级最高，覆盖全局 [com.itg.net.encrypt.EncryptConfig.skipPath]
+     * 和 [com.itg.net.encrypt.EncryptMode.OPT_IN] 模式下的默认跳过行为。
+     * 调用后当前请求的所有字段规则（encryptField / encryptPath / encryptPattern）都会生效。
+     */
+    /**
+     * 强制加密当前请求，优先级最高
+     */
+    fun encrypt(): ParamsBuilder {
+        this.encryptFlag = "__encrypt_force__"
+        return this
+    }
+
+    /**
+     * 强制跳过当前请求的加解密，优先级最高
+     */
+    fun skipEncrypt(): ParamsBuilder {
+        this.encryptFlag = "__encrypt_skip__"
+        return this
     }
 
     override fun autoCancel(activity: Activity?): ParamsBuilder =this
