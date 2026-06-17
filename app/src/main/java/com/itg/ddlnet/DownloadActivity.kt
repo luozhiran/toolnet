@@ -125,15 +125,6 @@ class DownloadActivity : AppCompatActivity() {
                     }
                 })
 
-            lifecycleScope.launch {
-                Net.instance.get()
-                    .url("https://api.example.com/user/info")
-                    .flowString()
-                    .catch { e -> Log.e("TAG", "请求失败: ${e.message}") }
-                    .collect { body ->
-                        Log.d("TAG", "响应体: $body")
-                    }
-            }
         }
 
         findViewById<Button>(R.id.post).setOnClickListener {
