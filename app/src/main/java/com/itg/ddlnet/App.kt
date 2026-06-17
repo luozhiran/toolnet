@@ -7,6 +7,7 @@ import com.itg.net.retrofit.retrofit
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
 
 class App:Application() {
@@ -25,6 +26,7 @@ class App:Application() {
 
         val retrofit = Net.instance.retrofit
             .baseUrl("https://api.example.com/")
+            .addConverterFactory(ScalarsConverterFactory.create())
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
