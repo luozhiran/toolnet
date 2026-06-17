@@ -48,14 +48,18 @@ Net 是一款基于 OkHttp 封装的 Android 网络请求库，包含三个模�
 **字段加密**
 
 25. [字段加密](#25-字段加密)
-   - 25.1 [快速开始](#25.1-快速开始)
-   - 25.2 [AES/CBC/PKCS7（最常用）](#252-aescbcpkcs7最常用)
-   - 25.3 [AES/ECB/PKCS7（无 IV）](#253-aesecbpkcs7无-iv)
-   - 25.4 [AES/GCM/NoPadding（推荐，带认证）](#254-aesgcmnopadding推荐带认证)
-   - 25.5 [RSA/ECB/PKCS1（非对称加密）](#255-rsaecbpkcs1非对称加密)
-   - 25.6 [按请求路径差异化加密](#256-按请求路径差异化加密)
-   - 25.7 [独立使用 EncryptUtil](#257-独立使用-encryptutil)
-   - 25.8 [密钥管理建议](#258-密钥管理建议)
+   - 25.1 [快速开始](#251-快速开始)
+   - 25.2 [加密模式](#252-加密模式)
+   - 25.3 [单请求控制](#253-单请求控制)
+   - 25.4 [跳过不需要加密的接口](#254-跳过不需要加密的接口)
+   - 25.5 [按路径差异化加密](#255-按路径差异化加密)
+   - 25.6 [AES/CBC/PKCS7](#256-aescbcpkcs7最常用)
+   - 25.7 [AES/ECB/PKCS7](#257-aesecbpkcs7无-iv)
+   - 25.8 [AES/GCM/NoPadding](#258-aesgcmnopadding推荐带认证)
+   - 25.9 [RSA/ECB/PKCS1](#259-rsaecbpkcs1非对称加密)
+   - 25.10 [独立使用 EncryptUtil](#2510-独立使用-encryptutil)
+   - 25.11 [API 速查表](#2511-api-速查表)
+   - 25.12 [密钥管理建议](#2512-密钥管理建议)
 
 ---
 
@@ -1293,34 +1297,130 @@ app
 
 ## 25. 字段加密
 
-`EncryptInterceptor` 在 OkHttp 层对 JSON/Form 请求体中的指定字段自动加密、响应体自动解密。一次配置，全局生效，对 net / net-flow / net-retrofit 三个模块均透明。
+`EncryptInterceptor` 在 OkHttp 层对 JSON/Form 请求体中的指定字段自动加密、响应体自动解密。支持两种全局模式 + 单请求精确控制，对 net / net-flow / net-retrofit 三个模块均透明。
 
 ### 25.1 快速开始
 
 ```kotlin
 Net.instance.configure {
     app(this@MyApp)
-    url("https://api.example.com")
+    url(“https://api.example.com”)
 
     encrypt {
-        algorithm(Algorithm.AES_CBC_PKCS7)       // 选择算法
-        secretKey("my-32-byte-secret-key!!")      // 设置密钥
-        iv("1234567890abcdef")                    // 设置 IV 向量
-        encryptField("password")                  // 加密 password 字段
-        encryptField("phone")                     // 加密 phone 字段
+        algorithm(Algorithm.AES_CBC_PKCS7)       // 选择加密算法
+        secretKey(“my-32-byte-secret-key!!”)      // 设置 AES 密钥
+        iv(“1234567890abcdef”)                    // 设置 IV 向量
+        encryptField(“password”)                  // 加密 password 字段
+        encryptField(“phone”)                     // 加密 phone 字段
     }
 }
 
-// 业务代码无感 —— “123456” 自动加密为 Base64 密文
+// 业务代码完全无感
 Net.instance.postJson()
-    .url("https://api.example.com/login")
-    .addParam("username", "admin")
-    .addParam("password", "123456")
+    .url(“https://api.example.com/login”)
+    .addParam(“password”, “123456”)
     .send(callback)
-// 实际发送 body: {"username":"admin","password":"a8f5e2d9b3c7f1..."}
+// 实际发送: {“password”:”a8f5e2d9b3c7f1...”}
 ```
 
-### 25.2 AES/CBC/PKCS7（最常用）
+### 25.2 加密模式
+
+通过 `encryptMode` 切换全局策略：
+
+```kotlin
+encrypt {
+    // ==== 方案一：OPT_OUT（默认）—— 全量加密，skipPath 排除 ====
+    encryptMode(EncryptMode.OPT_OUT)               // 全量加密模式（默认值）
+    encryptField(“password”)                        // 全局字段：所有接口加密
+    skipPath(Regex(“/public/.*”))                   // 排除不需要加密的接口
+
+    // ==== 方案二：OPT_IN —— 按需加密，仅 encryptPath 匹配的加密 ====
+    encryptMode(EncryptMode.OPT_IN)                 // 按需加密模式
+    encryptPath(Regex(“/user/login”), listOf(“password”))
+                                                    // 仅 /user/login 加密 password
+    encryptPath(Regex(“/payment/.*”), listOf(“bankCard”, “cvv”))
+                                                    // 仅 /payment/* 加密 bankCard、cvv
+}
+```
+
+| 模式 | 默认行为 | 适用场景 |
+|---|---|---|
+| `OPT_OUT`（默认） | 全量加密，`skipPath` 排除 | 大部分接口需要加密 |
+| `OPT_IN` | 全量透传，`encryptPath` 纳入 | 只有少数接口需要加密 |
+
+### 25.3 单请求控制
+
+优先级**高于全局配置**，在单个请求上调用即可：
+
+```kotlin
+// 强制加密：无视全局 skipPath 和 OPT_IN 默认跳过
+Net.instance.postJson()
+    .url(“https://api.example.com/public/apply”)
+    .addParam(“phone”, “13800138000”)
+    .encrypt()         // ← 单请求强制加密
+    .send(callback)
+
+// 强制跳过：无视全局 encryptField 和 OPT_OUT 默认加密
+Net.instance.postJson()
+    .url(“https://api.example.com/user/search”)
+    .addParam(“phone”, “13800138000”)
+    .skipEncrypt()     // ← 单请求强制跳过
+    .send(callback)
+```
+
+**优先级链**（从高到低）：
+
+```
+1. .encrypt()        → 强制加密
+2. .skipEncrypt()    → 强制跳过
+3. GET / 非文本 body  → 自动跳过
+4. EncryptMode       → OPT_IN / OPT_OUT
+5. 字段规则          → encryptField / encryptPath / encryptPattern
+```
+
+### 25.4 跳过不需要加密的接口
+
+通过 `skipPath` 声明全局跳过规则（OPT_OUT 模式下生效）：
+
+```kotlin
+encrypt {
+    encryptMode(EncryptMode.OPT_OUT)               // 全量加密模式
+    encryptField(“password”)                        // 全局字段：所有接口加密 password
+    skipPath(Regex(“/health-check”))                // 跳过健康检查接口
+    skipPath(Regex(“/public/.*”))                   // 跳过所有公开接口
+    skipPath(Regex(“/upload/.*”))                   // 跳过文件上传接口
+}
+```
+
+### 25.5 按路径差异化加密
+
+不同接口加密不同字段，使用 `encryptPath` + `encryptField` 组合：
+
+```kotlin
+encrypt {
+    algorithm(Algorithm.AES_CBC_PKCS7)               // 选择 AES-CBC 算法
+    secretKey(“my-32-byte-secret-key!!123456”)        // 32 字节密钥 = AES-256
+    iv(“1234567890abcdef”)                             // 16 字节 IV 向量
+
+    // ==== 全局规则：所有接口生效 ====
+    encryptField(“password”)                           // 双向加密 password
+
+    // ==== 路径规则：仅匹配路径的接口生效 ====
+    encryptPath(Regex(“/user/.*”), listOf(“phone”, “email”))
+                                                       // /user/* 接口加密 phone、email
+    encryptPath(Regex(“/payment/.*”), listOf(“bankCard”, “cvv”, “idCard”))
+                                                       // /payment/* 接口加密银行卡、CVV
+
+    // ==== 正则规则 ====
+    encryptPattern(Regex(“.*[Ss]ecret”))               // 所有以 Secret 结尾的字段
+
+    // ==== 仅响应解密（请求不加密） ====
+    decryptField(“realName”)                           // 仅解密 realName
+    decryptField(“idCard”)                             // 仅解密 idCard
+}
+```
+
+### 25.6 AES/CBC/PKCS7（最常用）
 
 **算法说明**：AES 对称加密，CBC 模式需要 IV 向量（16 字节），PKCS7 填充。密钥长度支持 128/192/256 位（对应 16/24/32 字节）。
 
@@ -1339,44 +1439,44 @@ Net.instance.postJson()
 ```kotlin
 // 方式一：字符串密钥 + 字符串 IV（自动转 UTF-8 字节）
 encrypt {
-    algorithm(Algorithm.AES_CBC_PKCS7)
-    secretKey("my-32-byte-secret-key!!123456")  // 32 字节 = AES-256
-    iv("1234567890abcdef")                       // 16 字节
-    encryptField("password")
-    encryptField("phone")
+    algorithm(Algorithm.AES_CBC_PKCS7)               // AES-CBC 算法
+    secretKey("my-32-byte-secret-key!!123456")        // 32 字节密钥 = AES-256
+    iv("1234567890abcdef")                             // 16 字节 IV 向量
+    encryptField("password")                           // 加密 password
+    encryptField("phone")                              // 加密 phone
 }
 
-// 方式二：字节数组密钥 + 字节数组 IV
+// 方式二：字节数组密钥 + 字节数组 IV（精确控制每个字节）
 encrypt {
-    algorithm(Algorithm.AES_CBC_PKCS7)
-    secretKey(byteArrayOf(0x01, 0x02, ...))      // 精确控制字节
-    iv(byteArrayOf(0x0a, 0x0b, ...))
-    encryptField("password")
+    algorithm(Algorithm.AES_CBC_PKCS7)               // AES-CBC 算法
+    secretKey(byteArrayOf(0x01, 0x02, ...))           // 字节数组密钥
+    iv(byteArrayOf(0x0a, 0x0b, ...))                  // 字节数组 IV
+    encryptField("password")                           // 加密 password
 }
 
-// 方式三：使用 EncryptUtil 生成随机密钥和 IV
-val aesKey = EncryptUtil.generateAesKey(256)       // 生成 AES-256 密钥
-val iv = EncryptUtil.generateIv()                   // 生成随机 IV
+// 方式三：使用 EncryptUtil 生成随机密钥和 IV（推荐生产使用）
+val aesKey = EncryptUtil.generateAesKey(256)         // 生成随机 AES-256 密钥
+val iv = EncryptUtil.generateIv()                     // 生成随机 16 字节 IV
 
 encrypt {
-    algorithm(Algorithm.AES_CBC_PKCS7)
-    secretKeyObj(aesKey)                             // 传入 SecretKey 对象
-    iv(iv)
-    encryptField("password")
+    algorithm(Algorithm.AES_CBC_PKCS7)               // AES-CBC 算法
+    secretKeyObj(aesKey)                               // 传入 SecretKey 对象
+    iv(iv)                                             // 传入随机 IV
+    encryptField("password")                           // 加密 password
 }
 ```
 
 **独立使用 EncryptUtil（不走拦截器）**：
 
 ```kotlin
-val key = "my-32-byte-secret-key!!123456".toByteArray()
-val iv = "1234567890abcdef".toByteArray()
+val key = "my-32-byte-secret-key!!123456".toByteArray() // 32 字节 AES-256 密钥
+val iv = "1234567890abcdef".toByteArray()                // 16 字节 IV 向量
 
-// 加密
+// 加密：明文 → Base64 密文
 val ciphertext = EncryptUtil.encrypt("13800138000", key, Algorithm.AES_CBC_PKCS7, iv)
-// ciphertext = "a8f5e2d9b3c7f1e0..."  (Base64)
+// ciphertext = "a8f5e2d9b3c7f1e0..." (Base64)
 
-// 解密
+// 解密：Base64 密文 → 明文
 val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_CBC_PKCS7, iv)
 // plaintext = "13800138000"
 ```
@@ -1385,7 +1485,7 @@ val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_CBC_PKCS7, iv
 
 ---
 
-### 25.3 AES/ECB/PKCS7（无 IV）
+### 25.7 AES/ECB/PKCS7（无 IV）
 
 **算法说明**：ECB 模式不需要 IV 向量，相同明文始终产生相同密文。**不推荐用于生产环境**，仅适用于对安全性要求不高的场景或需要确定性加密的特殊需求。
 
@@ -1395,22 +1495,21 @@ val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_CBC_PKCS7, iv
 
 ```kotlin
 encrypt {
-    algorithm(Algorithm.AES_ECB_PKCS7)
-    secretKey("my-32-byte-secret-key!!123456")   // 只需要密钥，不需要 IV
-    encryptField("password")
+    algorithm(Algorithm.AES_ECB_PKCS7)               // ECB 模式不需要 IV
+    secretKey("my-32-byte-secret-key!!123456")        // 32 字节密钥，不需要 IV
+    encryptField("password")                           // 加密 password
 }
 ```
 
 **独立使用**：
 
 ```kotlin
-val key = "my-32-byte-secret-key!!123456".toByteArray()
+val key = "my-32-byte-secret-key!!123456".toByteArray() // 密钥字节数组
 
-// 加密（不传 IV）
+// 加密（ECB 模式不需要 IV 参数）
 val ciphertext = EncryptUtil.encrypt("123456", key, Algorithm.AES_ECB_PKCS7)
-// ECB 模式下 iv 参数被忽略
 
-// 解密（不传 IV）
+// 解密（ECB 模式不需要 IV 参数）
 val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_ECB_PKCS7)
 ```
 
@@ -1426,7 +1525,7 @@ val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_ECB_PKCS7)
 
 ---
 
-### 25.4 AES/GCM/NoPadding（推荐，带认证）
+### 25.8 AES/GCM/NoPadding（推荐，带认证）
 
 **算法说明**：GCM 模式同时提供加密和完整性认证（AEAD），能检测密文是否被篡改。**推荐用于高安全需求的生产环境**。
 
@@ -1438,20 +1537,20 @@ val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_ECB_PKCS7)
 
 ```kotlin
 encrypt {
-    algorithm(Algorithm.AES_GCM_NO_PADDING)
-    secretKey("my-32-byte-secret-key!!123456")
-    iv(EncryptUtil.generateIv())                 // GCM 推荐随机生成 Nonce
-    encryptField("password")
-    encryptField("bankCard")
-    encryptField("cvv")
+    algorithm(Algorithm.AES_GCM_NO_PADDING)          // GCM 模式（加密+认证一体化）
+    secretKey("my-32-byte-secret-key!!123456")        // 32 字节密钥 = AES-256
+    iv(EncryptUtil.generateIv())                       // GCM Nonce（每次必须不同）
+    encryptField("password")                           // 加密 password
+    encryptField("bankCard")                           // 加密银行卡号
+    encryptField("cvv")                                // 加密 CVV
 }
 ```
 
 **独立使用**：
 
 ```kotlin
-val key = EncryptUtil.generateAesKey(256).encoded
-val iv = EncryptUtil.generateIv()               // GCM Nonce
+val key = EncryptUtil.generateAesKey(256).encoded     // 随机 AES-256 密钥
+val iv = EncryptUtil.generateIv()                      // GCM Nonce（12 字节推荐）
 
 // 加密
 val ciphertext = EncryptUtil.encrypt(
@@ -1476,7 +1575,7 @@ val plaintext = EncryptUtil.decrypt(
 
 ---
 
-### 25.5 RSA/ECB/PKCS1（非对称加密）
+### 25.9 RSA/ECB/PKCS1（非对称加密）
 
 **算法说明**：RSA 是非对称加密，使用公钥加密、私钥解密。适合加密小数据（如 AES 密钥传输），**不适合加密大段文本**。RSA-2048 最多加密 245 字节，RSA-4096 最多加密 501 字节。
 
@@ -1510,12 +1609,13 @@ val privateKey: PrivateKey = keyFactory.generatePrivate(
 
 // 混合加密示例
 encrypt {
-    // 先用 RSA 加密 AES 密钥传给服务端（通常在登录时完成）
-    // 登录成功后，使用协商的 AES 密钥进行字段加密
-    algorithm(Algorithm.AES_GCM_NO_PADDING)
-    secretKey(sessionAesKey)                       // 服务端返回的 SessionKey
-    iv(sessionIv)
-    encryptField("phone")
+    // 步骤 1：登录时用 RSA 公钥加密 AES 密钥传给服务端（略）
+    // 步骤 2：服务端用 RSA 私钥解密，返回 AES SessionKey
+    // 步骤 3：后续通信使用协商的 AES SessionKey
+    algorithm(Algorithm.AES_GCM_NO_PADDING)          // 用 AES-GCM 加密业务数据
+    secretKey(sessionAesKey)                           // 服务端返回的 SessionKey
+    iv(sessionIv)                                      // 服务端返回的 IV
+    encryptField("phone")                              // 加密手机号
 }
 ```
 
@@ -1530,44 +1630,19 @@ encrypt {
 
 ---
 
-### 25.6 按请求路径差异化加密
-
-不同接口需要加密不同的字段，使用 `encryptPath` + `encryptField` 组合：
-
-```kotlin
-encrypt {
-    algorithm(Algorithm.AES_CBC_PKCS7)
-    secretKey("my-32-byte-secret-key!!123456")
-    iv("1234567890abcdef")
-
-    // 全局规则：所有接口加密 password
-    encryptField("password")
-
-    // /user/* 接口额外加密手机号和邮箱
-    encryptPath(Regex("/user/.*"), listOf("phone", "email"))
-
-    // /payment/* 接口额外加密银行卡和 CVV
-    encryptPath(Regex("/payment/.*"), listOf("bankCard", "cvv", "idCard"))
-
-    // 正则匹配：所有以 Secret 结尾的字段
-    encryptPattern(Regex(".*[Ss]ecret"))
-
-    // 响应才解密的字段（请求不加密）
-    decryptField("realName")
-    decryptField("idCard")
-}
-```
-
-### 25.7 独立使用 EncryptUtil
+### 25.10 独立使用 EncryptUtil
 
 不依赖拦截器，在业务代码中直接调用加解密：
 
 ```kotlin
 // 场景：本地存储敏感数据前加密
-val key = "my-32-byte-secret-key!!123456".toByteArray()
-val iv = "1234567890abcdef".toByteArray()
+val key = "my-32-byte-secret-key!!123456".toByteArray() // 32 字节 AES-256 密钥
+val iv = "1234567890abcdef".toByteArray()                // 16 字节 IV 向量
 
-val encryptedPhone = EncryptUtil.encrypt("13800138000", key, Algorithm.AES_CBC_PKCS7, iv)
+// 加密后存入 SharedPreferences
+val encryptedPhone = EncryptUtil.encrypt(
+    "13800138000", key, Algorithm.AES_CBC_PKCS7, iv
+)
 preferences.edit().putString("phone_encrypted", encryptedPhone).apply()
 
 // 读取时解密
@@ -1587,7 +1662,46 @@ val phone = EncryptUtil.decrypt(
 | `generateAesKeyFromString(keyStr, keySize)` | 从字符串构造 AES 密钥 |
 | `generateIv()` | 生成随机 16 字节 IV |
 
-### 25.8 密钥管理建议
+### 25.11 API 速查表
+
+#### EncryptConfig DSL 方法
+
+| 方法 | 说明 |
+|---|---|
+| `encryptMode(mode)` | 设置加密模式（`OPT_OUT` / `OPT_IN`） |
+| `algorithm(algorithm)` | 设置加密算法 |
+| `secretKey(key)` | 设置密钥（字节数组） |
+| `secretKey(keyStr)` | 设置密钥（字符串，UTF-8→字节） |
+| `secretKeyObj(key)` | 设置密钥（SecretKey 对象） |
+| `iv(iv)` | 设置 IV 向量（字节数组） |
+| `iv(ivStr)` | 设置 IV 向量（字符串） |
+| `encryptField(name)` | 按字段名精确匹配（双向加解密） |
+| `decryptField(name)` | 按字段名精确匹配（仅响应解密） |
+| `encryptPattern(regex)` | 按正则匹配字段（双向） |
+| `encryptPath(pathRegex, fields)` | 按路径+字段列表匹配（双向） |
+| `skipPath(regex)` | 跳过路径（OPT_OUT 模式生效） |
+| `requestEncrypt(bool)` | 启用/禁用请求加密（默认 true） |
+| `responseDecrypt(bool)` | 启用/禁用响应解密（默认 true） |
+| `skipGetRequest(bool)` | 是否跳过 GET 请求（默认 true） |
+
+#### 单请求方法（ParamsBuilder）
+
+| 方法 | 说明 |
+|---|---|
+| `.encrypt()` | 强制加密当前请求（优先级最高） |
+| `.skipEncrypt()` | 强制跳过当前请求（优先级最高） |
+
+#### EncryptUtil 工具方法
+
+| 方法 | 说明 |
+|---|---|
+| `encrypt(plaintext, key, algo, iv?)` | 加密明文，返回 Base64 密文 |
+| `decrypt(ciphertext, key, algo, iv?)` | 解密 Base64 密文，返回明文 |
+| `generateAesKey(size)` | 生成随机 AES 密钥（128/192/256） |
+| `generateAesKeyFromString(str, size)` | 从字符串构造 AES 密钥 |
+| `generateIv()` | 生成随机 16 字节 IV |
+
+### 25.12 密钥管理建议
 
 | 方案 | 安全等级 | 实现复杂度 | 适用场景 |
 |---|---|---|---|
