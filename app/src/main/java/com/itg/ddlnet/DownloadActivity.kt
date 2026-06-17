@@ -5,7 +5,6 @@ import android.util.Log
 import android.widget.Button
 
 import androidx.appcompat.app.AppCompatActivity
-import com.itg.net.Download
 import com.itg.net.download.data.Task
 
 import java.io.File
@@ -55,14 +54,14 @@ class DownloadActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_download)
 
-        Download.instance.setGlobalProgressListener(progress)
+        Net.instance.addGlobalDownloadListener(progress)
         findViewById<Button>(R.id.download).setOnClickListener {
             Thread(){
                 downloadUrlList.forEach {
                     val fileName = StrTools.extractUrlFileName(it,"default")
                     val path = "${filesDir}/$fileName"
-                    Download.instance
-                        .taskBuilder()
+                    Net.instance
+                        .newDownload()
                         .savePath(path)
                         .url(it)
                         .retryCount(1)
@@ -146,7 +145,7 @@ class DownloadActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Download.instance.remoteGlobalProgressListener(progress)
+        Net.instance.removeGlobalDownloadListener(progress)
     }
 
 

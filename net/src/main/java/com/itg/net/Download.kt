@@ -7,7 +7,7 @@ import com.itg.net.download.TaskBuilder
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.operations.HoldActivityCallbackMap
 
-class Download {
+internal class Download {
     companion object {
         @JvmStatic
         val instance: Download by lazy { Download() }
@@ -33,35 +33,22 @@ class Download {
     }
 
     /**
-     * 和setGlobalProgressListener配套使用
-     * @param progressBack IProgressCallback
-     */
-    @Deprecated(
-        message = "Use removeGlobalProgressListener instead.",
-        replaceWith = ReplaceWith("removeGlobalProgressListener(progressBack)")
-    )
-    fun remoteGlobalProgressListener(progressBack: IProgressCallback) {
-        removeGlobalProgressListener(progressBack)
-    }
-
-    /**
-     * 启动下载请求时，没有调用autoCancel()方法且不取消下载任务后台继续保持下载时， 必须手动取消内部下载监听器，否则会导致内存泄露
-     * 或者调用DdNet.instance.download.cancel(task),取消任务同时会释放下载器
-     * @param task Task?
+     * 启动下载请求时，没有调用bindActivity()方法且不取消下载任务且后台继续保持下载时，
+     * 必须手动取消内部下载监听器，否则会导致内存泄露。
+     * 或者调用 [cancel] 取消任务，同时会释放下载器。
+     * @param task 下载任务
      */
     fun removeAllProgressListener(task: Task) {
         HoldActivityCallbackMap.removeProgressCallback(task)
     }
 
     /**
-     * 移动指定Task对于监听器列表中指定的监听器
+     * 移除指定Task对应的监听器列表中指定的监听器
+     * @param task 下载任务
+     * @param progressCallback 要移除的监听器
      */
     fun removeProgressListener(task: Task, progressCallback: IProgressCallback) {
         HoldActivityCallbackMap.removeProgressCallback(task, progressCallback)
-    }
-
-    fun isQueue(url: String): Boolean {
-        return isQueued(url)
     }
 
     fun isQueued(url: String): Boolean {

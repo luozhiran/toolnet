@@ -10,6 +10,8 @@ import com.itg.net.request.post.content.PostContent
 import com.itg.net.request.post.file.PostFile
 import com.itg.net.request.post.form.PostForm
 import com.itg.net.request.post.json.PostJson
+import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.download.data.Task
 import com.itg.net.util.PrintLog
 
 /**
@@ -68,6 +70,19 @@ enum class ModeType { PostFile, PostForm, PostJson, PostMul, Get, PostResume, Po
  *
  * // 取消请求
  * Net.instance.cancel("myTag")
+ *
+ * // 下载文件
+ * Net.instance.newDownload()
+ *     .savePath("/sdcard/file.zip")
+ *     .url("https://example.com/file.zip")
+ *     .listener(progressCallback)
+ *     .start()
+ *
+ * // 注册全局下载监听
+ * Net.instance.addGlobalDownloadListener(progressCallback)
+ *
+ * // 取消下载
+ * Net.instance.cancelDownload("https://example.com/file.zip")
  * ```
  */
 class Net {
@@ -92,9 +107,9 @@ class Net {
     val okhttpManager: OkHttpManager by lazy { OkHttpManager(ddNetConfig) }
 
     /**
-     * 下载管理器单例，用于创建和管理下载任务
+     * 下载管理器单例，用于创建和管理下载任务（模块内部使用）
      */
-    val download: Download by lazy { Download.instance }
+    private val download: Download by lazy { Download.instance }
 
     /**
      * DSL 方式配置网络库参数
@@ -159,6 +174,83 @@ class Net {
      * @return [TaskBuilder] 实例，用于配置并启动下载任务
      */
     fun newDownload() = download.taskBuilder()
+
+    // ==================== 下载相关 API ====================
+
+    /**
+     * 注册全局下载进度监听器，监听所有下载任务的连接、进度、失败事件
+     *
+     * @param listener 下载进度回调
+     */
+    fun addGlobalDownloadListener(listener: IProgressCallback) {
+        download.setGlobalProgressListener(listener)
+    }
+
+    /**
+     * 移除全局下载进度监听器
+     *
+     * @param listener 下载进度回调
+     */
+    fun removeGlobalDownloadListener(listener: IProgressCallback) {
+        download.removeGlobalProgressListener(listener)
+    }
+
+    /**
+     * 移除指定下载任务的所有进度监听器
+     *
+     * 启动下载请求时如果未调用 autoCancel() 方法，且不取消下载任务后台继续保持下载时，
+     * 必须手动调用此方法释放内部下载监听器，否则会导致内存泄露。
+     * 取消任务时（[cancelDownload]）会同时释放监听器。
+     *
+     * @param task 下载任务
+     */
+    fun removeDownloadListeners(task: Task) {
+        download.removeAllProgressListener(task)
+    }
+
+    /**
+     * 移除指定下载任务中某个特定的进度监听器
+     *
+     * @param task     下载任务
+     * @param listener 要移除的监听器
+     */
+    fun removeDownloadListener(task: Task, listener: IProgressCallback) {
+        download.removeProgressListener(task, listener)
+    }
+
+    /**
+     * 判断指定 URL 是否正在下载或排队等待下载
+     *
+     * @param url 下载地址
+     * @return true 表示正在下载或排队中
+     */
+    fun isDownloadQueued(url: String): Boolean {
+        return download.isQueued(url)
+    }
+
+    /**
+     * 根据 URL 取消下载任务
+     *
+     * 优先取消正在执行的下载，其次从等待队列中移除。
+     *
+     * @param url 下载地址，为 null 则无操作
+     */
+    fun cancelDownload(url: String?) {
+        download.cancel(url)
+    }
+
+    /**
+     * 根据 [Task] 取消下载任务
+     *
+     * 优先取消正在执行的下载，其次从等待队列中移除。
+     *
+     * @param task 下载任务，为 null 则无操作
+     */
+    fun cancelDownload(task: Task?) {
+        download.cancel(task)
+    }
+
+    // ==================== 普通请求取消 API ====================
 
     /**
      * 取消所有正在排队和正在执行的 OkHttp 请求
