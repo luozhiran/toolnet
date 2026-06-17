@@ -111,29 +111,29 @@ class DownloadActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.get).setOnClickListener {
-//            Net.instance.get()
-//                .url(ip)
-//                .path("api/data")
-//                .autoCancel(this)
-//                .send(object : DdCallback{
-//                    override fun onFailure(er: String?) {
-//                        Log.e("luozhiran", er + "")
-//                    }
-//
-//                    override fun onResponse(result: String?, code: Int) {
-//                        Log.e("luozhiran", result + "")
-//                    }
-//                })
+            Net.instance.get()
+                .url(ip)
+                .path("api/data")
+                .autoCancel(this)
+                .send(object : DdCallback{
+                    override fun onFailure(er: String?) {
+                        Log.e("luozhiran", er + "")
+                    }
 
-            lifecycleScope.launch {
-                Net.instance
-                    .get()
-                    .url(ip)
-                    .path("api/data")
-                    .flowString()
-                    .catch {e -> Log.e("TAG", "请求失败: ${e.message}")  }
-                    .collect { body-> Log.d("TAG", "响应体: $body") }
-            }
+                    override fun onResponse(result: String?, code: Int) {
+                        Log.e("luozhiran", result + "")
+                    }
+                })
+
+//            lifecycleScope.launch {
+//                Net.instance
+//                    .get()
+//                    .url(ip)
+//                    .path("api/data")
+//                    .flowString()
+//                    .catch {e -> Log.e("TAG", "请求失败: ${e.message}")  }
+//                    .collect { body-> Log.d("TAG", "响应体: $body") }
+//            }
 
         }
 
