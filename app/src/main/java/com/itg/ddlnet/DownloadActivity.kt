@@ -43,7 +43,7 @@ class DownloadActivity : AppCompatActivity() {
 
 
     private val downloadUrlList= mutableListOf<String>(
-        "http://10.100.219.242:3000/download/big.zip",
+        "http://10.100.219.242:3000/download/small.zip",
         "${ip}/download/1781446430194-921360704-bg.jpg",
         "${ip}/download/1781451464361-210732640-fasdf.jpg")
 

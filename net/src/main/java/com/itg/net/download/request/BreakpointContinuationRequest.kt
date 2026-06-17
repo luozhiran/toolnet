@@ -4,9 +4,8 @@ package com.itg.net.download.request
 import com.itg.net.Net
 import com.itg.net.ModeType
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
-import com.itg.net.download.data.ERROR_RANGE_NOT_SUPPORTED
+import com.itg.net.download.data.ERROR_UN_FOUND_RESOURCE
 import com.itg.net.download.data.Task
-import com.itg.net.download.request.DownloadRequestCallback
 import com.itg.net.download.operations.TaskState
 import com.itg.net.request.base.ParamsBuilder
 import java.io.*
@@ -39,7 +38,7 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
                 response.code == 200 && start == 0L -> handleResponse(response)
                 else -> {
                     response.use { response ->
-                        failureCallback?.invoke(task, ERROR_RANGE_NOT_SUPPORTED)
+                        failureCallback?.invoke(task, ERROR_UN_FOUND_RESOURCE)
                     }
                 }
             }
