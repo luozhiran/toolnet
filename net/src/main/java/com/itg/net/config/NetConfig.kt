@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
+import com.itg.net.encrypt.EncryptConfig
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -48,6 +49,13 @@ class NetConfig {
 
     @Volatile
     private var okhttpCache: Cache? = null
+
+    /**
+     * 字段加解密配置，通过 [encrypt] DSL 方法设置
+     */
+    @Volatile
+    var encryptConfig: EncryptConfig? = null
+        private set
 
     fun app(application: Application): NetConfig {
         this.application = application
@@ -164,6 +172,30 @@ class NetConfig {
 
     fun getCache(): Cache? {
         return this.okhttpCache
+    }
+
+    /**
+     * DSL 方式配置字段加解密
+     *
+     * ## 使用示例
+     * ```
+     * Net.instance.configure {
+     *     encrypt {
+     *         algorithm(Algorithm.AES_CBC_PKCS7)
+     *         secretKey("my-secret-key")
+     *         iv("1234567890abcdef")
+     *         encryptField("password")
+     *         encryptField("phone")
+     *     }
+     * }
+     * ```
+     *
+     * @param block 配置闭包，接收 [EncryptConfig] 作为接收者
+     */
+    fun encrypt(block: EncryptConfig.() -> Unit): NetConfig {
+        val config = encryptConfig ?: EncryptConfig().also { encryptConfig = it }
+        config.block()
+        return this
     }
 
     private fun defaultLogFile(fileName: String): File {

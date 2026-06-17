@@ -45,6 +45,18 @@ Net 是一款基于 OkHttp 封装的 Android 网络请求库，包含三个模�
 23. [自定义 Converter](#23-自定义-converter)
 24. [API 速查表](#24-api-速查表)
 
+**字段加密**
+
+25. [字段加密](#25-字段加密)
+   - 25.1 [快速开始](#25.1-快速开始)
+   - 25.2 [AES/CBC/PKCS7（最常用）](#252-aescbcpkcs7最常用)
+   - 25.3 [AES/ECB/PKCS7（无 IV）](#253-aesecbpkcs7无-iv)
+   - 25.4 [AES/GCM/NoPadding（推荐，带认证）](#254-aesgcmnopadding推荐带认证)
+   - 25.5 [RSA/ECB/PKCS1（非对称加密）](#255-rsaecbpkcs1非对称加密)
+   - 25.6 [按请求路径差异化加密](#256-按请求路径差异化加密)
+   - 25.7 [独立使用 EncryptUtil](#257-独立使用-encryptutil)
+   - 25.8 [密钥管理建议](#258-密钥管理建议)
+
 ---
 
 # net 核心库
@@ -645,6 +657,7 @@ if (Net.instance.isDownloadQueued("https://example.com/file.zip")) {
 | `addInterceptor(interceptor)` | 可选 | - | 添加 OkHttp 拦截器 |
 | `getInterceptors()` | 只读 | - | 获取所有已注册拦截器 |
 | `useCacheControl(cache)` | 可选 | null | 设置 OkHttp 缓存 |
+| `encrypt { }` | 可选 | - | 字段级加解密配置（见第 25 节） |
 
 ### 12.2 完整配置示例
 
@@ -1275,3 +1288,329 @@ app
     │   └── kotlinx-coroutines 1.7.3 + Gson
     └── Retrofit 2.9.0 + converter-gson + converter-scalars
 ```
+
+---
+
+## 25. 字段加密
+
+`EncryptInterceptor` 在 OkHttp 层对 JSON/Form 请求体中的指定字段自动加密、响应体自动解密。一次配置，全局生效，对 net / net-flow / net-retrofit 三个模块均透明。
+
+### 25.1 快速开始
+
+```kotlin
+Net.instance.configure {
+    app(this@MyApp)
+    url("https://api.example.com")
+
+    encrypt {
+        algorithm(Algorithm.AES_CBC_PKCS7)       // 选择算法
+        secretKey("my-32-byte-secret-key!!")      // 设置密钥
+        iv("1234567890abcdef")                    // 设置 IV 向量
+        encryptField("password")                  // 加密 password 字段
+        encryptField("phone")                     // 加密 phone 字段
+    }
+}
+
+// 业务代码无感 —— “123456” 自动加密为 Base64 密文
+Net.instance.postJson()
+    .url("https://api.example.com/login")
+    .addParam("username", "admin")
+    .addParam("password", "123456")
+    .send(callback)
+// 实际发送 body: {"username":"admin","password":"a8f5e2d9b3c7f1..."}
+```
+
+### 25.2 AES/CBC/PKCS7（最常用）
+
+**算法说明**：AES 对称加密，CBC 模式需要 IV 向量（16 字节），PKCS7 填充。密钥长度支持 128/192/256 位（对应 16/24/32 字节）。
+
+**密钥要求**：
+
+| 密钥长度 | 字节数 | 示例 |
+|---|---|---|
+| AES-128 | 16 字节 | `"1234567890abcdef"` |
+| AES-192 | 24 字节 | `"1234567890abcdef12345678"` |
+| AES-256 | 32 字节 | `"my-32-byte-secret-key!!123456"` |
+
+**IV 要求**：固定 16 字节，每次加密应使用不同的 IV（生产环境建议每次请求更换）。
+
+**配置方式**：
+
+```kotlin
+// 方式一：字符串密钥 + 字符串 IV（自动转 UTF-8 字节）
+encrypt {
+    algorithm(Algorithm.AES_CBC_PKCS7)
+    secretKey("my-32-byte-secret-key!!123456")  // 32 字节 = AES-256
+    iv("1234567890abcdef")                       // 16 字节
+    encryptField("password")
+    encryptField("phone")
+}
+
+// 方式二：字节数组密钥 + 字节数组 IV
+encrypt {
+    algorithm(Algorithm.AES_CBC_PKCS7)
+    secretKey(byteArrayOf(0x01, 0x02, ...))      // 精确控制字节
+    iv(byteArrayOf(0x0a, 0x0b, ...))
+    encryptField("password")
+}
+
+// 方式三：使用 EncryptUtil 生成随机密钥和 IV
+val aesKey = EncryptUtil.generateAesKey(256)       // 生成 AES-256 密钥
+val iv = EncryptUtil.generateIv()                   // 生成随机 IV
+
+encrypt {
+    algorithm(Algorithm.AES_CBC_PKCS7)
+    secretKeyObj(aesKey)                             // 传入 SecretKey 对象
+    iv(iv)
+    encryptField("password")
+}
+```
+
+**独立使用 EncryptUtil（不走拦截器）**：
+
+```kotlin
+val key = "my-32-byte-secret-key!!123456".toByteArray()
+val iv = "1234567890abcdef".toByteArray()
+
+// 加密
+val ciphertext = EncryptUtil.encrypt("13800138000", key, Algorithm.AES_CBC_PKCS7, iv)
+// ciphertext = "a8f5e2d9b3c7f1e0..."  (Base64)
+
+// 解密
+val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_CBC_PKCS7, iv)
+// plaintext = "13800138000"
+```
+
+> **注意**：CBC 模式下，同一密钥 + 同一 IV + 同一明文会产生相同的密文，这在安全上不够理想。生产环境建议使用 GCM 模式或每次加密更换 IV。
+
+---
+
+### 25.3 AES/ECB/PKCS7（无 IV）
+
+**算法说明**：ECB 模式不需要 IV 向量，相同明文始终产生相同密文。**不推荐用于生产环境**，仅适用于对安全性要求不高的场景或需要确定性加密的特殊需求。
+
+**与 CBC 的关键区别**：不需要设置 IV。
+
+**配置方式**：
+
+```kotlin
+encrypt {
+    algorithm(Algorithm.AES_ECB_PKCS7)
+    secretKey("my-32-byte-secret-key!!123456")   // 只需要密钥，不需要 IV
+    encryptField("password")
+}
+```
+
+**独立使用**：
+
+```kotlin
+val key = "my-32-byte-secret-key!!123456".toByteArray()
+
+// 加密（不传 IV）
+val ciphertext = EncryptUtil.encrypt("123456", key, Algorithm.AES_ECB_PKCS7)
+// ECB 模式下 iv 参数被忽略
+
+// 解密（不传 IV）
+val plaintext = EncryptUtil.decrypt(ciphertext, key, Algorithm.AES_ECB_PKCS7)
+```
+
+**ECB 与 CBC 对比**：
+
+| 特性 | AES_ECB_PKCS7 | AES_CBC_PKCS7 |
+|---|---|---|
+| 需要 IV | ❌ 不需要 | ✅ 需要 16 字节 |
+| 相同明文 → 相同密文 | ✅ 是（固定） | ❌ 否（依赖 IV） |
+| 安全性 | 较低 | 较高 |
+| 适用场景 | 简单混淆 / 非敏感数据 | 生产环境常规加密 |
+| 并行加密 | ✅ 支持 | ❌ 不支持（串行） |
+
+---
+
+### 25.4 AES/GCM/NoPadding（推荐，带认证）
+
+**算法说明**：GCM 模式同时提供加密和完整性认证（AEAD），能检测密文是否被篡改。**推荐用于高安全需求的生产环境**。
+
+**IV 要求**：GCM 推荐 12 字节 IV，最大支持 2^32-1 字节。每次加密必须使用不同的 IV（Nonce），重复使用会严重破坏安全性。
+
+**密钥要求**：与 CBC 相同，16/24/32 字节。
+
+**配置方式**：
+
+```kotlin
+encrypt {
+    algorithm(Algorithm.AES_GCM_NO_PADDING)
+    secretKey("my-32-byte-secret-key!!123456")
+    iv(EncryptUtil.generateIv())                 // GCM 推荐随机生成 Nonce
+    encryptField("password")
+    encryptField("bankCard")
+    encryptField("cvv")
+}
+```
+
+**独立使用**：
+
+```kotlin
+val key = EncryptUtil.generateAesKey(256).encoded
+val iv = EncryptUtil.generateIv()               // GCM Nonce
+
+// 加密
+val ciphertext = EncryptUtil.encrypt(
+    "6222021234567890", key, Algorithm.AES_GCM_NO_PADDING, iv
+)
+
+// 解密
+val plaintext = EncryptUtil.decrypt(
+    ciphertext, key, Algorithm.AES_GCM_NO_PADDING, iv
+)
+```
+
+**GCM 与 CBC 对比**：
+
+| 特性 | AES_GCM_NO_PADDING | AES_CBC_PKCS7 |
+|---|---|---|
+| 加密+认证 | ✅ 一体化 AEAD | ❌ 仅加密，需额外 HMAC |
+| 防篡改 | ✅ 自动检测 | ❌ 需自行实现 |
+| 性能 | 更快（硬件加速） | 较慢 |
+| IV 要求 | 12 字节推荐，必须唯一 | 16 字节，应随机 |
+| 推荐度 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+
+---
+
+### 25.5 RSA/ECB/PKCS1（非对称加密）
+
+**算法说明**：RSA 是非对称加密，使用公钥加密、私钥解密。适合加密小数据（如 AES 密钥传输），**不适合加密大段文本**。RSA-2048 最多加密 245 字节，RSA-4096 最多加密 501 字节。
+
+> **注意**：当前 `EncryptUtil` 对 RSA 使用 `SecretKeySpec`（AES 密钥规范）。完整 RSA 支持需要 `KeyFactory` 加载公私钥对。以下展示的是与 AES 统一的接口用法。生产环境中，推荐用 RSA 加密传输 AES 密钥，然后用 AES 加密业务数据。
+
+**RSA 密钥对生成**（通过命令行或代码）：
+
+```bash
+# 生成 RSA-2048 私钥
+openssl genrsa -out private_key.pem 2048
+# 提取公钥
+openssl rsa -in private_key.pem -pubout -out public_key.pem
+```
+
+**配置方式**：
+
+```kotlin
+// 加载 RSA 密钥对
+val keyFactory = KeyFactory.getInstance("RSA")
+val publicKey: PublicKey = keyFactory.generatePublic(
+    X509EncodedKeySpec(Base64.decode(publicKeyBase64, Base64.DEFAULT))
+)
+val privateKey: PrivateKey = keyFactory.generatePrivate(
+    PKCS8EncodedKeySpec(Base64.decode(privateKeyBase64, Base64.DEFAULT))
+)
+
+// RSA 通常用于场景：
+// 1. 客户端用 RSA 公钥加密 AES 密钥，发给服务端
+// 2. 服务端用 RSA 私钥解密得到 AES 密钥
+// 3. 后续通信使用 AES 加密
+
+// 混合加密示例
+encrypt {
+    // 先用 RSA 加密 AES 密钥传给服务端（通常在登录时完成）
+    // 登录成功后，使用协商的 AES 密钥进行字段加密
+    algorithm(Algorithm.AES_GCM_NO_PADDING)
+    secretKey(sessionAesKey)                       // 服务端返回的 SessionKey
+    iv(sessionIv)
+    encryptField("phone")
+}
+```
+
+**RSA 算法选择建议**：
+
+| 场景 | 推荐 |
+|---|---|
+| 加密大量业务数据 | ❌ 不适合，用 AES |
+| 加密 AES 密钥传输 | ✅ 最佳实践（混合加密） |
+| 加密短 Token / 签名 | ✅ 适合 |
+| 加密身份证号等短字段 | 可用（注意长度限制） |
+
+---
+
+### 25.6 按请求路径差异化加密
+
+不同接口需要加密不同的字段，使用 `encryptPath` + `encryptField` 组合：
+
+```kotlin
+encrypt {
+    algorithm(Algorithm.AES_CBC_PKCS7)
+    secretKey("my-32-byte-secret-key!!123456")
+    iv("1234567890abcdef")
+
+    // 全局规则：所有接口加密 password
+    encryptField("password")
+
+    // /user/* 接口额外加密手机号和邮箱
+    encryptPath(Regex("/user/.*"), listOf("phone", "email"))
+
+    // /payment/* 接口额外加密银行卡和 CVV
+    encryptPath(Regex("/payment/.*"), listOf("bankCard", "cvv", "idCard"))
+
+    // 正则匹配：所有以 Secret 结尾的字段
+    encryptPattern(Regex(".*[Ss]ecret"))
+
+    // 响应才解密的字段（请求不加密）
+    decryptField("realName")
+    decryptField("idCard")
+}
+```
+
+### 25.7 独立使用 EncryptUtil
+
+不依赖拦截器，在业务代码中直接调用加解密：
+
+```kotlin
+// 场景：本地存储敏感数据前加密
+val key = "my-32-byte-secret-key!!123456".toByteArray()
+val iv = "1234567890abcdef".toByteArray()
+
+val encryptedPhone = EncryptUtil.encrypt("13800138000", key, Algorithm.AES_CBC_PKCS7, iv)
+preferences.edit().putString("phone_encrypted", encryptedPhone).apply()
+
+// 读取时解密
+val phone = EncryptUtil.decrypt(
+    preferences.getString("phone_encrypted", "")!!,
+    key, Algorithm.AES_CBC_PKCS7, iv
+)
+```
+
+**EncryptUtil 完整 API**：
+
+| 方法 | 说明 |
+|---|---|
+| `encrypt(plaintext, key, algorithm, iv?)` | 加密明文字符串，返回 Base64 密文 |
+| `decrypt(ciphertext, key, algorithm, iv?)` | 解密 Base64 密文，返回明文字符串 |
+| `generateAesKey(keySize)` | 生成随机 AES 密钥（128/192/256） |
+| `generateAesKeyFromString(keyStr, keySize)` | 从字符串构造 AES 密钥 |
+| `generateIv()` | 生成随机 16 字节 IV |
+
+### 25.8 密钥管理建议
+
+| 方案 | 安全等级 | 实现复杂度 | 适用场景 |
+|---|---|---|---|
+| 本地固定密钥 | ⭐ | 极低 | 开发/测试 |
+| 本地固定密钥 + 代码混淆 | ⭐⭐ | 低 | 非敏感数据 |
+| 服务端下发 SessionKey（登录后返回） | ⭐⭐⭐ | 中 | **生产环境推荐** |
+| RSA 加密 AES 密钥（混合加密） | ⭐⭐⭐⭐ | 中高 | 高安全需求 |
+| Android Keystore 硬件保护 | ⭐⭐⭐⭐⭐ | 高 | 金融/支付 |
+
+**推荐生产方案**：
+
+```
+1. App 启动 → 生成 RSA 密钥对（或预置公钥）
+2. 登录请求 → 服务端用 RSA 公钥加密 AES SessionKey 返回
+3. 后续请求 → 使用 AES SessionKey + GCM 模式进行字段加解密
+4. SessionKey 定期轮换（如每 30 分钟）
+```
+
+**算法推荐排序**：
+
+| 优先级 | 算法 | 理由 |
+|---|---|---|
+| 1️⃣ | `AES_GCM_NO_PADDING` | 加密+认证一体化，性能最优，推荐首选 |
+| 2️⃣ | `AES_CBC_PKCS7` | 兼容性最广，后端对接无压力 |
+| 3️⃣ | `AES_ECB_PKCS7` | 仅限非敏感数据简单混淆 |
+| 4️⃣ | `RSA_ECB_PKCS1` | 仅用于加密 AES 密钥传输，不加密业务数据 |

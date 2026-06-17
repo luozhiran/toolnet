@@ -1,6 +1,7 @@
 package com.itg.net.client
 
 import com.itg.net.config.NetConfig
+import com.itg.net.encrypt.EncryptInterceptor
 import com.itg.net.logging.HttpLogger
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -19,6 +20,12 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         ddNetConfig.getInterceptors().forEach { builder.addInterceptor(it) }
         ddNetConfig.getCache()?.let {
             builder.cache(it)
+        }
+        // 字段加解密拦截器（在日志拦截器之前注册，日志中显示密文）
+        ddNetConfig.encryptConfig?.let { encryptConfig ->
+            if (encryptConfig.hasValidConfig()) {
+                builder.addInterceptor(EncryptInterceptor(encryptConfig))
+            }
         }
         if (ddNetConfig.useHttpLog()) {
             val logInterceptor = HttpLoggingInterceptor(HttpLogger())
