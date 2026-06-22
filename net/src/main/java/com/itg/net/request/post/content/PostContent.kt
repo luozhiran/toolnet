@@ -15,12 +15,12 @@ class PostContent: PostContentGenerator() {
     }
 
     override fun send(callback: DdCallback?) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(),cacheControl)
+        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(),cacheControl, encryptFlag)
         sendTool.send(callback, call)
     }
 
     override fun send(handler: Handler?, what: Int, errorWhat: Int) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(),cacheControl)
+        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(),cacheControl, encryptFlag)
         sendTool.send(handler,what,errorWhat,call)
     }
 
