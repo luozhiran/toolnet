@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Message
 import com.itg.net.Net
 import com.itg.net.encrypt.EncryptMarker
+import com.itg.net.monitor.MonitorMarker
 import com.itg.net.request.base.DdCallback
 import com.itg.net.download.operations.PrincipalLife
 import com.itg.net.util.PrintLog
@@ -26,6 +27,7 @@ class SendTool {
         body: RequestBody?,
         cacheControl: CacheControl?,
         encryptFlag: String? = null,
+        monitorFlag: String? = null,
         endCallback:((Request.Builder)->Unit)? = null
     ): Call? {
         val builder = Request.Builder()
@@ -41,6 +43,10 @@ class SendTool {
         // 加密标记：通过 OkHttp Typed Tag 传递，不占用通用的 tag(Any)
         EncryptMarker.fromFlag(encryptFlag)?.let {
             builder.tag(EncryptMarker::class.java, it)
+        }
+        // 监控标记：通过 OkHttp Typed Tag 传递，不占用通用的 tag(Any)
+        MonitorMarker.fromFlag(monitorFlag)?.let {
+            builder.tag(MonitorMarker::class.java, it)
         }
         if (url.orEmpty().isBlank()) {
             return null

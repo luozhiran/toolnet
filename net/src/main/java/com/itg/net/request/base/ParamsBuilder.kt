@@ -49,6 +49,15 @@ abstract class ParamsBuilder : Builder, SentBuilder {
     @Volatile
     var encryptFlag: String? = null
 
+    /**
+     * 监控标记：null=使用全局配置，"__monitor_force__"=强制监控，"__monitor_skip__"=强制跳过
+     *
+     * 通过 OkHttp Typed Tag 传递到 [com.itg.net.monitor.MonitorInterceptor]，
+     * 不占用 [tag] 变量（tag 用于请求取消等功能）。
+     */
+    @Volatile
+    var monitorFlag: String? = null
+
     override fun addHeader(key: String?, value: String?): ParamsBuilder {
         if (key.isNullOrBlank() || value.isNullOrBlank()) return this
         UrlTools.appendUrlParamsToStr(headerStringBuilder,key,value)
@@ -132,6 +141,22 @@ abstract class ParamsBuilder : Builder, SentBuilder {
      */
     fun skipEncrypt(): ParamsBuilder {
         this.encryptFlag = "__encrypt_skip__"
+        return this
+    }
+
+    /**
+     * 强制对本请求开启监控上报，优先级最高
+     */
+    fun monitor(): ParamsBuilder {
+        this.monitorFlag = "__monitor_force__"
+        return this
+    }
+
+    /**
+     * 强制跳过本请求的监控上报，优先级最高
+     */
+    fun skipMonitor(): ParamsBuilder {
+        this.monitorFlag = "__monitor_skip__"
         return this
     }
 

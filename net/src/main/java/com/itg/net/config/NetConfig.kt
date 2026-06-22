@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Log
 import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.encrypt.EncryptConfig
+import com.itg.net.monitor.MonitorConfig
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -55,6 +56,13 @@ class NetConfig {
      */
     @Volatile
     var encryptConfig: EncryptConfig? = null
+        private set
+
+    /**
+     * 网络监控配置，通过 [monitor] DSL 方法设置
+     */
+    @Volatile
+    var monitorConfig: MonitorConfig? = null
         private set
 
     fun app(application: Application): NetConfig {
@@ -194,6 +202,28 @@ class NetConfig {
      */
     fun encrypt(block: EncryptConfig.() -> Unit): NetConfig {
         val config = encryptConfig ?: EncryptConfig().also { encryptConfig = it }
+        config.block()
+        return this
+    }
+
+    /**
+     * DSL 方式配置网络监控
+     *
+     * ## 使用示例
+     * ```
+     * Net.instance.configure {
+     *     monitor {
+     *         enabled(true)
+     *         reportUrl("https://monitor.example.com/api/report")
+     *         reportMode(ReportMode.FAILURE_ONLY)
+     *     }
+     * }
+     * ```
+     *
+     * @param block 配置闭包，接收 [MonitorConfig] 作为接收者
+     */
+    fun monitor(block: MonitorConfig.() -> Unit): NetConfig {
+        val config = monitorConfig ?: MonitorConfig().also { monitorConfig = it }
         config.block()
         return this
     }

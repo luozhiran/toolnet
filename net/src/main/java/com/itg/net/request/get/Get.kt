@@ -24,7 +24,7 @@ class Get : GetGenerator() {
             getUrl(),
             tag,
             null,
-            cacheControl, encryptFlag
+            cacheControl, encryptFlag, monitorFlag
         ) { builder -> builder.get() }
         sendTool.send(callback, call)
     }
@@ -35,7 +35,7 @@ class Get : GetGenerator() {
             getUrl(),
             tag,
             null,
-            cacheControl, encryptFlag
+            cacheControl, encryptFlag, monitorFlag
         ) { builder -> builder.get() }
         sendTool.send(handler,what,errorWhat, call)
 
@@ -47,7 +47,7 @@ class Get : GetGenerator() {
             getUrl(),
             tag,
             null,
-            cacheControl, encryptFlag
+            cacheControl, encryptFlag, monitorFlag
         ) { builder -> builder.get() }
         sendTool.send(response, call)
     }
@@ -58,7 +58,7 @@ class Get : GetGenerator() {
             getUrl(),
             tag,
             null,
-            cacheControl, encryptFlag
+            cacheControl, encryptFlag, monitorFlag
         ) { builder -> builder.get() }
     }
 
