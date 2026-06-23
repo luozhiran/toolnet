@@ -1,8 +1,12 @@
 package com.itg.ddlnet
 
 import android.app.Application
+import android.util.Log
 import com.itg.net.Net
 import com.itg.net.logging.HttpLogger
+import com.itg.net.monitor.IMonitorReportHandler
+import com.itg.net.monitor.MonitorEvent
+import com.itg.net.monitor.ReportMode
 import com.itg.net.retrofit.retrofit
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -23,6 +27,25 @@ class App:Application() {
             .okHttpClient(getOkhppt())
             .useHttpLog(true)
             .url("http://47.76.59.147:8000/")
+            .monitor {
+                enabled = false
+                reportMode= ReportMode.FAILURE_ONLY
+                reportHandler = object : IMonitorReportHandler {
+                    override val isAsync: Boolean get() = true
+                    override fun onEvent(event: MonitorEvent) {
+                        Log.e("Monitor", " ${event.isSuccess} ${event.errorType} ${event.url} ${event.totalCostMs}ms")
+                    }
+
+                    override fun flush() {
+
+                    }
+
+                    override fun shutdown() {
+
+                    }
+
+                }
+            }
 
         val retrofit = Net.instance.retrofit
             .baseUrl("https://api.example.com/")
