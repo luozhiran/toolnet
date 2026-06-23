@@ -45,7 +45,10 @@ data class MonitorEvent(
     val isAppend: Boolean = false,      // 是否断点续传
     val retryCount: Int = 0,            // 当前重试次数
     val downloadSpeed: Long = 0,        // 平均下载速度 (bytes/s)，totalCostMs>0 时计算
-    val downloadError: ErrorType = ErrorType.NONE  // 下载阶段独立错误类型
+    val downloadError: ErrorType = ErrorType.NONE,  // 下载阶段独立错误类型
+
+    // ===== 业务自定义字段 =====
+    val extra: String? = null           // 用户附加的业务数据（如 "orderId=123"），透传到后端
 ) {
     enum class ErrorType {
         /** 成功 */
@@ -104,5 +107,6 @@ data class MonitorEvent(
         if (retryCount > 0) put("retryCount", retryCount)
         if (downloadSpeed > 0) put("downloadSpeed", downloadSpeed)
         if (downloadError != ErrorType.NONE) put("downloadError", downloadError.name)
+        if (!extra.isNullOrBlank()) put("extra", extra)
     }
 }

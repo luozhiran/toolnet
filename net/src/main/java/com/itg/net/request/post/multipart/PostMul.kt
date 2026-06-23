@@ -15,17 +15,17 @@ class PostMul : PostMulGenerator() {
     }
 
     override fun send(callback: DdCallback?) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl, encryptFlag, monitorFlag)
+        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl, encryptFlag, monitorFlag, monitorExtra)
         sendTool.send(callback, call)
     }
 
     override fun send(handler: Handler?, what: Int, errorWhat: Int) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl, encryptFlag, monitorFlag)
+        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl, encryptFlag, monitorFlag, monitorExtra)
         sendTool.send(handler,what,errorWhat,call)
     }
 
     override fun buildCall(): Call? {
-        return sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, getRequestBody(), cacheControl, encryptFlag, monitorFlag)
+        return sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, getRequestBody(), cacheControl, encryptFlag, monitorFlag, monitorExtra)
     }
 
 }

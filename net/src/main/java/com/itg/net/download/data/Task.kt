@@ -44,4 +44,6 @@ class Task {
     var startTime: Long = 0
     // 下载结束时间戳（毫秒）
     var endTime: Long = 0
+    // 监控业务附加字段
+    var monitorExtra: String? = null
 }

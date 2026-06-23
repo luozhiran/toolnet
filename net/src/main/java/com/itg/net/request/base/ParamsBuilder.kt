@@ -58,6 +58,13 @@ abstract class ParamsBuilder : Builder, SentBuilder {
     @Volatile
     var monitorFlag: String? = null
 
+    /**
+     * 业务自定义字段，透传到监控事件的 extra 字段上报给后端。
+     * 不占用 [tag] 变量（tag 用于请求取消等功能）。
+     */
+    @Volatile
+    var monitorExtra: String? = null
+
     override fun addHeader(key: String?, value: String?): ParamsBuilder {
         if (key.isNullOrBlank() || value.isNullOrBlank()) return this
         UrlTools.appendUrlParamsToStr(headerStringBuilder,key,value)
@@ -157,6 +164,16 @@ abstract class ParamsBuilder : Builder, SentBuilder {
      */
     fun skipMonitor(): ParamsBuilder {
         this.monitorFlag = "__monitor_skip__"
+        return this
+    }
+
+    /**
+     * 设置监控业务附加字段，原样透传到 MonitorEvent.extra 上报后端
+     *
+     * @param extra 业务自定义字符串（如 "orderId=123"、JSON 片段），传 null 清除
+     */
+    fun monitorExtra(extra: String?): ParamsBuilder {
+        this.monitorExtra = extra
         return this
     }
 

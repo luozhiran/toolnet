@@ -42,6 +42,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         }
         // 透传监控控制标志到 OkHttp 层（MonitorInterceptor 通过 Typed Tag 读取）
         task.monitorFlag?.let { builder.monitorFlag = it }
+        builder.monitorExtra = task.monitorExtra
         return builder
     }
 
@@ -293,7 +294,8 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
             isAppend = task.append,
             retryCount = task.tryAgainCount,
             downloadSpeed = speed,
-            downloadError = if (isSuccess) MonitorEvent.ErrorType.NONE else errorType
+            downloadError = if (isSuccess) MonitorEvent.ErrorType.NONE else errorType,
+            extra = task.monitorExtra
         )
         okHttpManager.dispatchMonitorEvent(event)
     }

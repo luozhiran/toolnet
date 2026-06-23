@@ -76,6 +76,7 @@ class DownloadActivity : AppCompatActivity() {
                         .retryCount(1)
                         .monitor()
                         .bindActivity(this)
+                        .monitorExtra("你好你发来的")
                         .supportCheckpoint()
                         .listener(object : AbstractProgressCallback() {
                             override fun onConnecting(task: Task) {
@@ -114,9 +115,10 @@ class DownloadActivity : AppCompatActivity() {
         findViewById<Button>(R.id.get).setOnClickListener {
             Net.instance.get()
                 .url(ip)
-                .path("api/data")
+                .path("api/data4")
                 .monitor()
                 .autoCancel(this)
+                .monitorExtra("哈哈哈")
                 .send(object : DdCallback{
                     override fun onFailure(er: String?) {
                         Log.e("luozhiran", er + "")

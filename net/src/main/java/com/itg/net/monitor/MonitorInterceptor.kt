@@ -203,6 +203,9 @@ class MonitorInterceptor(
         val tag = request.tag(String::class.java)
             ?: request.tag(Any::class.java)?.toString()
 
+        // 提取业务附加字段（用户通过 ParamsBuilder.monitorExtra() 设置）
+        val extra = request.tag(MonitorExtra::class.java)?.value
+
         return MonitorEvent(
             requestId = requestId,
             url = sanitizedUrl,
@@ -223,7 +226,8 @@ class MonitorInterceptor(
             exceptionClass = exception?.javaClass?.simpleName,
 
             networkType = networkTypeCache?.getNetworkType(),
-            carrierName = null
+            carrierName = null,
+            extra = extra
         )
     }
 

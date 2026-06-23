@@ -302,6 +302,17 @@ class TaskBuilder {
     }
 
     /**
+     * 设置下载监控业务附加字段，原样透传到 MonitorEvent.extra 上报后端
+     *
+     * @param extra 业务自定义字符串（如 "scene=preload;version=2.3.1"），传 null 清除
+     * @return 返回自身，支持链式调用
+     */
+    fun monitorExtra(extra: String?): TaskBuilder {
+        this.task.monitorExtra = extra
+        return this
+    }
+
+    /**
      * 启动下载任务
      *
      * 执行前会进行一系列校验，任一条件不满足则通过回调通知失败并返回：
