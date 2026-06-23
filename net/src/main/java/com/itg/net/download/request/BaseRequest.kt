@@ -256,8 +256,8 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
     ) {
         val config = Net.instance.ddNetConfig.monitorConfig ?: return
         if (!shouldReportDownloadEvent(config, errorType)) return
-
-        val handler = Net.instance.okhttpManager.monitorReportHandler ?: return
+        val okHttpManager = Net.instance.okhttpManager
+        if (okHttpManager.monitorReportHandler == null) return
 
         task.endTime = System.currentTimeMillis()
         val totalCostMs = if (task.startTime > 0) task.endTime - task.startTime else 0
@@ -295,11 +295,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
             downloadSpeed = speed,
             downloadError = if (isSuccess) MonitorEvent.ErrorType.NONE else errorType
         )
-        try {
-            handler.onEvent(event)
-        } catch (_: Exception) {
-            // 监控自身异常静默吞掉，不影响下载流程
-        }
+        okHttpManager.dispatchMonitorEvent(event)
     }
 
     private fun shouldReportDownloadEvent(

@@ -8,6 +8,7 @@ import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -65,7 +66,7 @@ class MonitorInterceptor(
 
     /** 后台线程池，仅当 Handler 不是异步时（isAsync=false）才创建。
      * Handler 已异步时（如 DefaultMonitorReportHandler / Firebase），框架内联调用，省去线程开销 */
-    private val executor: ExecutorService? by lazy {
+    private val executorLazy = lazy<ExecutorService?> {
         if (!reportHandler.isAsync) {
             Executors.newSingleThreadExecutor { r ->
                 Thread(r, "monitor-event").apply {
@@ -75,6 +76,14 @@ class MonitorInterceptor(
                 }
             }
         } else null
+    }
+    private val executor: ExecutorService?
+        get() = executorLazy.value
+
+    internal fun shutdown() {
+        if (executorLazy.isInitialized()) {
+            executorLazy.value?.shutdown()
+        }
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -144,15 +153,26 @@ class MonitorInterceptor(
      * 判断是否需要对本次请求进行监控
      *
      * 优先级链：
-     * 1. 请求级 MONITOR → true
-     * 2. 请求级 SKIP    → false
-     * 3. 全局 enabled    → 兜底
+     * 1. 请求级 SKIP    → false
+     * 2. 请求级 MONITOR → true
+     * 3. 全局 enabled + sampleRate → 兜底
      */
     private fun shouldMonitor(request: Request): Boolean {
         val marker = request.tag(MonitorMarker::class.java)
-        if (marker?.value == MonitorMarker.MONITOR) return true
         if (marker?.value == MonitorMarker.SKIP) return false
-        return config.enabled
+        if (marker?.value == MonitorMarker.MONITOR) return true
+        if (!config.enabled) return false
+        return shouldSample()
+    }
+
+    private fun shouldSample(): Boolean {
+        val sampleRate = config.sampleRate
+        return when {
+            sampleRate.isNaN() -> true
+            sampleRate >= 1.0f -> true
+            sampleRate <= 0.0f -> false
+            else -> ThreadLocalRandom.current().nextFloat() < sampleRate
+        }
     }
 
     // ==================== 事件构建 ====================

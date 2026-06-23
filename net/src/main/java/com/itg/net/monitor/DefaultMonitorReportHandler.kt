@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.BlockingQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -287,10 +288,15 @@ class DefaultMonitorReportHandler(
             remaining.addAll(lateArrivals)
         }
         if (remaining.isNotEmpty()) {
-            doFlushAsync(remaining)
+            doFlushAsync(remaining, awaitCompletion = true)
         }
         // 释放 OkHttp 资源
         reportClient.dispatcher.executorService.shutdown()
+        try {
+            reportClient.dispatcher.executorService.awaitTermination(5000, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
         reportClient.connectionPool.evictAll()
     }
 
@@ -299,7 +305,10 @@ class DefaultMonitorReportHandler(
     /**
      * 异步批量 HTTP 上报 + 熔断保护
      */
-    private fun doFlushAsync(events: List<MonitorEvent>) {
+    private fun doFlushAsync(
+        events: List<MonitorEvent>,
+        awaitCompletion: Boolean = false
+    ) {
         if (events.isEmpty()) return
 
         // 熔断检查
@@ -325,24 +334,41 @@ class DefaultMonitorReportHandler(
                 .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .build()
 
+            val latch = if (awaitCompletion) CountDownLatch(1) else null
+
             // 异步上报，不阻塞消费者线程
             reportClient.newCall(request).enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    recordFailure("IO error: ${e.message}")
-                    endProbe()
+                    try {
+                        recordFailure("IO error: ${e.message}")
+                    } finally {
+                        endProbe()
+                        latch?.countDown()
+                    }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    if (response.isSuccessful) {
-                        recordSuccess()
-                    } else {
-                        // HTTP 4xx/5xx 也计入失败，触发熔断保护
-                        recordFailure("HTTP ${response.code}")
+                    try {
+                        if (response.isSuccessful) {
+                            recordSuccess()
+                        } else {
+                            // HTTP 4xx/5xx 也计入失败，触发熔断保护
+                            recordFailure("HTTP ${response.code}")
+                        }
+                    } finally {
+                        endProbe()
+                        response.close()
+                        latch?.countDown()
                     }
-                    endProbe()
-                    response.close()
                 }
             })
+            if (awaitCompletion) {
+                try {
+                    latch?.await(5000, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Report exception: ${e.message}")
             recordFailure("exception: ${e.message}")
