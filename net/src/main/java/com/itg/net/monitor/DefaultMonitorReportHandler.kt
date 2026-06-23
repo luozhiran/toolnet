@@ -61,6 +61,10 @@ class DefaultMonitorReportHandler(
     /** 是否正在运行 */
     private val running = AtomicBoolean(true)
 
+    /** 强制刷新标志：flush() 时设为 true，消费者线程检测后立即 flush 当前 batch */
+    @Volatile
+    private var forceFlush = false
+
     // ==================== 熔断器 ====================
     private val consecutiveFailures = AtomicInteger(0)
     private val circuitOpenUntil = AtomicLong(0)
@@ -68,12 +72,79 @@ class DefaultMonitorReportHandler(
     /** 连续失败多少次后熔断 */
     private val maxConsecutiveFailures = 5
 
-    /** 熔断冷却时间（毫秒） */
-    private val circuitCooldownMs = 30_000L
+    /** 熔断冷却时间初始值（毫秒），后续指数退避翻倍 */
+    private val initialCooldownMs = 30_000L
 
+    /** 熔断冷却时间最大值（毫秒） */
+    private val maxCooldownMs = 300_000L  // 5 分钟
+
+    /** 当前冷却时间（指数退避时动态调整） */
+    @Volatile
+    private var currentCooldownMs: Long = initialCooldownMs
+
+    /** 半开探测进行中：冷却到期后只放行一个请求探测，成功则关闭熔断，失败则重新熔断 */
+    @Volatile
+    private var probeInFlight = false
+
+    /**
+     * 熔断器检查，支持全开/半开/关闭三态：
+     * - 全开：连续失败达阈值且冷却时间未到 → 丢弃所有请求
+     * - 半开：冷却时间已到 → 放行一个探测请求：
+     *         已有探测进行中 → 其余请求阻塞等待探测结果
+     *         无探测 → 当前请求抢占探测机会，通过
+     * - 关闭：失败计数未达阈值 → 正常上报
+     */
     private fun isCircuitOpen(): Boolean {
-        return consecutiveFailures.get() >= maxConsecutiveFailures &&
-            System.currentTimeMillis() < circuitOpenUntil.get()
+        val failures = consecutiveFailures.get()
+        if (failures < maxConsecutiveFailures) {
+            return false  // 关闭
+        }
+        val now = System.currentTimeMillis()
+        val openUntil = circuitOpenUntil.get()
+        if (now < openUntil) {
+            return true   // 全开，冷却中
+        }
+        // 冷却到期 → 半开状态
+        if (probeInFlight) {
+            return true   // 已有探测进行中，其余请求等待
+        }
+        // 无探测 → 尝试抢占探测机会，抢到则通过（返回 false），未抢到则阻塞（返回 true）
+        return !tryStartProbe()
+    }
+
+    /** 尝试开始探测，返回 true 表示抢到探测机会 */
+    private fun tryStartProbe(): Boolean {
+        synchronized(this) {
+            if (probeInFlight) return false
+            probeInFlight = true
+            return true
+        }
+    }
+
+    /** 探测结束 */
+    private fun endProbe() {
+        probeInFlight = false
+    }
+
+    /** 上报成功：重置失败计数 + 冷却时间回归初始值 */
+    private fun recordSuccess() {
+        consecutiveFailures.set(0)
+        currentCooldownMs = initialCooldownMs
+    }
+
+    /** 上报失败：递增失败计数，达到阈值时触发熔断并指数退避冷却时间 */
+    private fun recordFailure(detail: String) {
+        val failures = consecutiveFailures.incrementAndGet()
+        if (failures >= maxConsecutiveFailures) {
+            // 指数退避：每次重新熔断冷却时间翻倍，上限 maxCooldownMs
+            val newCooldown = minOf(currentCooldownMs * 2, maxCooldownMs)
+            currentCooldownMs = newCooldown
+            circuitOpenUntil.set(System.currentTimeMillis() + newCooldown)
+            Log.w(TAG, "Circuit opened for ${newCooldown}ms " +
+                "after $failures consecutive failures ($detail)")
+        } else {
+            Log.w(TAG, "Report failed ($failures/$maxConsecutiveFailures): $detail")
+        }
     }
 
     /** 上报使用的 OkHttpClient（独立实例，避免与业务共用连接池） */
@@ -84,18 +155,32 @@ class DefaultMonitorReportHandler(
         .retryOnConnectionFailure(false)
         .build()
 
-    /** 消费者线程：使用动态超时的 poll()，batch 为空时无限阻塞（按需唤醒） */
+    /** 消费者线程：batch 为空时 take() 无限阻塞（零 CPU），非空时 poll 定期检查 flush 窗口 */
     private val consumerThread: Thread = Thread({
         val batch = mutableListOf<MonitorEvent>()
         var lastFlushTime = System.currentTimeMillis()
 
         while (running.get()) {
             try {
-                // 动态超时：batch 为空时使用 Long.MAX_VALUE（等价 take()），非空时定期检查 flush 窗口
-                val timeout = if (batch.isEmpty()) Long.MAX_VALUE
-                else minOf(flushIntervalMs, 1000L)
+                // batch 为空 → take() 无限阻塞，直到事件到达（零 CPU，不溢出）
+                // batch 非空 → poll(flushIntervalMs) 等待 flush 窗口到期，到期自动唤醒检查
+                // 不再用 minOf 封顶——forceFlush 不再依赖 interrupt，无需高频唤醒
+                val event = if (batch.isEmpty()) {
+                    queue.take()
+                } else {
+                    queue.poll(flushIntervalMs, TimeUnit.MILLISECONDS)
+                }
 
-                val event = queue.poll(timeout, TimeUnit.MILLISECONDS)
+                // 检测 forceFlush 标志：外部 flush() 要求立即排空当前 batch
+                if (forceFlush) {
+                    forceFlush = false
+                    if (batch.isNotEmpty()) {
+                        doFlushAsync(batch.toList())
+                        batch.clear()
+                        lastFlushTime = System.currentTimeMillis()
+                    }
+                }
+
                 if (event != null) {
                     batch.add(event)
                 }
@@ -158,11 +243,16 @@ class DefaultMonitorReportHandler(
      * 立即刷新队列中所有未上报的事件
      */
     override fun flush() {
+        // 排空队列中的事件（事件还在 queue 中，消费者尚未 take）
         val pending = mutableListOf<MonitorEvent>()
         queue.drainTo(pending)
         if (pending.isNotEmpty()) {
             doFlushAsync(pending)
         }
+        // 通知消费者线程立即 flush 当前 batch（事件已被 take 但尚未到 flush 窗口）
+        // 注意：不调用 interrupt()——interrupt 会杀死消费者线程。
+        // forceFlush 是 volatile，消费者在下次 take/poll 返回后立即检测到。
+        forceFlush = true
     }
 
     /**
@@ -176,9 +266,14 @@ class DefaultMonitorReportHandler(
         } catch (_: InterruptedException) {
             // ignore
         }
-        // 最后一次机会：排空队列
+        // 排空队列 + 二次排空（捕获 drainTo 之后竞态到达的事件）
         val remaining = mutableListOf<MonitorEvent>()
         queue.drainTo(remaining)
+        val lateArrivals = mutableListOf<MonitorEvent>()
+        queue.drainTo(lateArrivals)
+        if (lateArrivals.isNotEmpty()) {
+            remaining.addAll(lateArrivals)
+        }
         if (remaining.isNotEmpty()) {
             doFlushAsync(remaining)
         }
@@ -221,24 +316,18 @@ class DefaultMonitorReportHandler(
             // 异步上报，不阻塞消费者线程
             reportClient.newCall(request).enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    val failures = consecutiveFailures.incrementAndGet()
-                    if (failures >= maxConsecutiveFailures) {
-                        circuitOpenUntil.set(System.currentTimeMillis() + circuitCooldownMs)
-                        Log.w(TAG, "Circuit opened for ${circuitCooldownMs}ms after $failures consecutive failures")
-                    } else {
-                        Log.w(TAG, "Report failed (${failures}/$maxConsecutiveFailures): ${e.message}")
-                    }
+                    recordFailure("IO error: ${e.message}")
+                    endProbe()
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    consecutiveFailures.set(0)  // 成功时重置熔断计数
                     if (response.isSuccessful) {
-                        if (Log.isLoggable(TAG, Log.DEBUG)) {
-                            Log.d(TAG, "Reported ${events.size} events successfully")
-                        }
+                        recordSuccess()
                     } else {
-                        Log.w(TAG, "Report failed: HTTP ${response.code}")
+                        // HTTP 4xx/5xx 也计入失败，触发熔断保护
+                        recordFailure("HTTP ${response.code}")
                     }
+                    endProbe()
                     response.close()
                 }
             })

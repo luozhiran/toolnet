@@ -70,14 +70,15 @@ Net 是一款基于 OkHttp 封装的 Android 网络请求库，包含三个模�
    - 26.4 [单请求控制](#264-单请求控制)
    - 26.5 [自定义上报处理器](#265-自定义上报处理器)
    - 26.6 [URL 脱敏](#266-url-脱敏)
-   - 26.7 [崩溃安全上报](#267-崩溃安全上报 ResilientReportHandler)
-   - 26.8 [MonitorEvent 数据模型](#268-monitorevent-数据模型)
-   - 26.9 [错误分类详解](#269-错误分类详解)
-   - 26.10 [拦截器链位置](#2610-拦截器链位置)
-   - 26.11 [与 Flow / Retrofit 配合](#2611-与-flow--retrofit-配合)
-   - 26.12 [性能设计](#2612-性能设计)
-   - 26.13 [安全设计](#2613-安全设计)
-   - 26.14 [API 速查表](#2614-api-速查表)
+   - 26.7 [崩溃安全上报](#267-崩溃安全上报-resilientreporthandler)
+   - 26.8 [生命周期管理](#268-生命周期管理-flushmonitor--shutdownmonitor)
+   - 26.9 [MonitorEvent 数据模型](#269-monitorevent-数据模型)
+   - 26.10 [错误分类详解](#2610-错误分类详解)
+   - 26.11 [拦截器链位置](#2611-拦截器链位置)
+   - 26.12 [与 Flow / Retrofit 配合](#2612-与-flow--retrofit-配合)
+   - 26.13 [性能设计](#2613-性能设计)
+   - 26.14 [安全设计](#2614-安全设计)
+   - 26.15 [API 速查表](#2615-api-速查表)
 
 ---
 
@@ -1878,7 +1879,7 @@ Net.instance.get()
 
 上报逻辑是业务方最可能有定制需求的环节。实现 `IMonitorReportHandler` 接口即可完全接管上报行为。
 
-> **性能提示**：实现 `IMonitorReportHandler` 时，建议覆写 `isAsync` 属性。若 Handler 内部已异步处理（如使用队列/三方 SDK），设为 `true` 可让框架省去一层专用线程，减少不必要的线程切换开销。详见 [26.12 性能设计](#2612-性能设计)。
+> **性能提示**：实现 `IMonitorReportHandler` 时，建议覆写 `isAsync` 属性。若 Handler 内部已异步处理（如使用队列/三方 SDK），设为 `true` 可让框架省去一层专用线程，减少不必要的线程切换开销。详见 [26.13 性能设计](#2613-性能设计)。
 
 #### 场景一：接入 Firebase Crashlytics
 
@@ -2053,7 +2054,156 @@ monitor {
 - 兜底路径：每条事件同时追加到本地日志文件（环形缓冲区）
 - 进程被杀时：本地文件中保留最近 200 条事件，App 下次启动后可解析补报
 
-### 26.8 MonitorEvent 数据模型
+### 26.8 生命周期管理（flushMonitor / shutdownMonitor）
+
+`IMonitorReportHandler` 接口定义了 `flush()` 和 `shutdown()` 两个生命周期方法，供外部在关键时机主动调用，确保监控数据不丢失、资源正确释放。
+
+#### 26.8.1 flushMonitor() —— 主动刷新缓冲区
+
+**用途**：立即将 Handler 内部缓冲区中积压但尚未上报的事件推送出去。
+
+**为什么需要**：`DefaultMonitorReportHandler` 采用批量上报策略（攒够 batchSize 条或到达 flushIntervalMs 时间窗口才发 POST）。如果 App 在时间窗口内进入后台并被系统杀死，队列中未上报的事件将丢失。
+
+**调用示例**：
+
+```kotlin
+// Application 中注册 App 前后台监听
+class MyApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+
+        // 使用 ProcessLifecycleOwner 监听 App 前后台切换
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                // App 进入后台 → 立即刷新监控缓冲区
+                Net.instance.flushMonitor()
+            }
+        })
+    }
+}
+```
+
+**内部流程**：
+
+```
+Net.instance.flushMonitor()
+  └── okhttpManager.monitorReportHandler?.flush()
+        └── DefaultMonitorReportHandler.flush()
+              ├── queue.drainTo(pending)      // 一次性排空内存队列
+              └── doFlushAsync(pending)       // 立即异步 POST 到服务器
+```
+
+**API 签名**：
+
+```kotlin
+fun flushMonitor()
+```
+
+| 场景 | 调用时机 | 说明 |
+|------|---------|------|
+| App 进入后台 | `onStop` / `ProcessLifecycleOwner` | 防止进程被杀丢数据 |
+| 即将执行危险操作 | 操作前调用 | 如强制杀进程调试 |
+| 定时刷新 | 定时器 | 对于时间窗口较长的配置，可手动触发 |
+
+> **注意**：对实时上报的 Handler（如 Firebase），`flush()` 通常为空操作，调用无副作用。
+
+#### 26.8.2 shutdownMonitor() —— 优雅关闭，释放资源
+
+**用途**：关闭上报处理器，等待缓冲区排空后释放所有底层资源（线程池、连接池、文件句柄）。
+
+**为什么需要**：Handler 内部可能持有消费者线程、OkHttpClient 连接池、文件写入器等资源。不调用 `shutdown()` 直接丢弃 Handler 会导致资源泄漏。
+
+**调用示例**：
+
+```kotlin
+// 场景一：切换环境时重建 OkHttpClient
+fun switchEnvironment(newBaseUrl: String) {
+    Net.instance.shutdownMonitor()    // ① 关闭旧 Handler，排空队列
+    Net.instance.configure {
+        url(newBaseUrl)
+        monitor {
+            enabled(true)
+            reportUrl("https://new-env.example.com/api/report")
+            // 新 Handler 自动创建
+        }
+    }
+}
+
+// 场景二：Application.onTerminate()
+class MyApp : Application() {
+    override fun onTerminate() {
+        super.onTerminate()
+        Net.instance.shutdownMonitor()  // 进程终止前最后一次排空 + 释放资源
+    }
+}
+```
+
+**内部流程**：
+
+```
+Net.instance.shutdownMonitor()
+  └── okhttpManager.monitorReportHandler?.shutdown()
+        └── DefaultMonitorReportHandler.shutdown()
+              ├── running.set(false)           // ① 拒绝新事件
+              ├── consumerThread.interrupt()   // ② 中断消费者线程
+              ├── consumerThread.join(5000)    // ③ 等待线程结束（最多 5s）
+              ├── queue.drainTo(remaining)     // ④ 排空队列残留
+              ├── doFlushAsync(remaining)      // ⑤ 最后一次 POST
+              ├── dispatcher.executorService.shutdown()  // ⑥ 释放 OkHttp 线程池
+              └── connectionPool.evictAll()    // ⑦ 关闭连接池
+```
+
+**API 签名**：
+
+```kotlin
+fun shutdownMonitor()
+```
+
+| 场景 | 调用时机 | 说明 |
+|------|---------|------|
+| OkHttpClient 重建 | 重建前 | 切换环境、BaseURL 变更 |
+| 进程终止 | `onTerminate` | 最后一次上报 + 释放资源 |
+| 手动关闭监控 | 业务需要 | 如用户登出后停止监控 |
+
+#### 26.8.3 完整生命周期示例
+
+```kotlin
+class MyApp : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+
+        // 初始化网络库 + 监控
+        Net.instance.configure {
+            app(this@MyApp)
+            url("https://api.example.com")
+            monitor {
+                enabled(true)
+                reportUrl("https://monitor.example.com/api/report")
+                reportMode(ReportMode.FAILURE_ONLY)
+                batchSize(30)
+                flushIntervalMs(15_000L)
+            }
+        }
+
+        // 监听 App 前后台切换 → 后台时刷新缓冲区
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                Net.instance.flushMonitor()
+            }
+        })
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        Net.instance.shutdownMonitor()  // 最后一次排空 + 资源释放
+    }
+}
+```
+
+> **设计说明**：`flush()` 和 `shutdown()` 在 `IMonitorReportHandler` 接口中定义。`DefaultMonitorReportHandler` 的消费者线程在退出前会自动 flush 一次残留 batch，但主动调用 `flushMonitor()` 可以在进程被杀前主动推送，降低数据丢失风险。
+
+### 26.9 MonitorEvent 数据模型
 
 每条监控事件包含以下字段：
 
@@ -2100,7 +2250,7 @@ monitor {
 
 > **注意**：精确的 DNS/TCP/TLS 阶段耗时需配合 OkHttp EventListener 获取（后续版本支持）。当前拦截器层仅提供总耗时 `totalCostMs`。
 
-### 26.9 错误分类详解
+### 26.10 错误分类详解
 
 `MonitorInterceptor` 自动将 IOException 和 HTTP 状态码分类为以下错误类型：
 
@@ -2121,7 +2271,7 @@ monitor {
 
 > **设计说明**：拦截器层无法精确区分 SocketTimeoutException 的具体阶段（连接/读取/写入超时），因此统一归类为 `TIMEOUT`。精确区分需等待 EventListener 方案落地。
 
-### 26.10 拦截器链位置
+### 26.11 拦截器链位置
 
 ```
 Request
@@ -2146,7 +2296,7 @@ Server
 - MonitorInterceptor 在 EncryptInterceptor 之后：监控记录的是加密后的请求元信息，不会泄露明文敏感数据
 - MonitorInterceptor 在 HttpLoggingInterceptor 之前：日志模块仍能看到完整的请求/响应，不受监控影响
 
-### 26.11 与 Flow / Retrofit 配合
+### 26.12 与 Flow / Retrofit 配合
 
 监控在 OkHttp 拦截器层工作，对上层调用方式完全透明：
 
@@ -2170,7 +2320,7 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 // 失败时自动上报，无需额外配置
 ```
 
-### 26.12 性能设计
+### 26.13 性能设计
 
 监控拦截器对主请求路径的额外开销经过精心优化：
 
@@ -2193,7 +2343,7 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | 异步 HTTP 上报 | OkHttp `enqueue()` + 熔断器 | 消费者线程永不阻塞 |
 | 事件对象精简 | 16 个字段（移除拦截器层恒为 0 的 DNS/TCP/TLS 字段） | 对象大小减少 ~35% |
 
-### 26.13 安全设计
+### 26.14 安全设计
 
 | 安全措施 | 说明 |
 |---|---|
@@ -2204,7 +2354,7 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | Context 类型安全 | 构造函数接受 `Application?`，从类型层面杜绝 Activity 泄漏 |
 | 守护线程 | 监控线程 `isDaemon = true`，不阻止进程退出 |
 
-### 26.14 API 速查表
+### 26.15 API 速查表
 
 #### MonitorConfig DSL 方法
 
@@ -2267,8 +2417,15 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 |---|---|---|
 | `isAsync` | `Boolean` | 声明 onEvent() 是否为异步实现。`true` → 框架内联调用；`false`（默认）→ 框架创建专用线程隔离 |
 | `onEvent(event)` | 方法 | 接收单条监控事件，应尽快返回 |
-| `flush()` | 方法 | 主动刷新缓冲区 |
-| `shutdown()` | 方法 | 关闭处理器，释放资源 |
+| `flush()` | 方法 | 主动刷新缓冲区，排空队列并立即上报 |
+| `shutdown()` | 方法 | 关闭处理器，等待排空后释放线程/连接池/文件句柄 |
+
+#### Net 生命周期方法
+
+| 方法 | 说明 |
+|---|---|
+| `Net.instance.flushMonitor()` | 刷新监控缓冲区（App 进入后台时调用） |
+| `Net.instance.shutdownMonitor()` | 关闭监控并释放资源（进程终止 / 切换环境时调用） |
 
 #### 网络类型缓存
 

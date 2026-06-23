@@ -291,6 +291,51 @@ class Net {
      */
     fun cancel(tag: Any?) = cancelTag(tag)
 
+    // ==================== 网络监控生命周期 ====================
+
+    /**
+     * 刷新监控上报缓冲区
+     *
+     * 立即将当前内存队列中所有未上报的事件批量 POST 到监控服务器。
+     * 适用于批量上报模式（如 [DefaultMonitorReportHandler]），
+     * 对实时上报的实现（如 Firebase）为空操作。
+     *
+     * ## 调用时机
+     * - App 进入后台时（`onStop` / `ProcessLifecycleOwner`）
+     * - 即将执行可能触发进程终止的操作时
+     *
+     * ## 使用示例
+     * ```kotlin
+     * // Application 中注册生命周期监听
+     * ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+     *     override fun onStop(owner: LifecycleOwner) {
+     *         Net.instance.flushMonitor()
+     *     }
+     * })
+     * ```
+     */
+    fun flushMonitor() {
+        okhttpManager.monitorReportHandler?.flush()
+    }
+
+    /**
+     * 关闭监控上报，释放所有资源
+     *
+     * 实现方应在此方法中：
+     * - 等待缓冲区中的数据全部处理完成
+     * - 关闭线程池/文件句柄/网络连接等资源
+     * - 确保不丢失未上报的数据
+     *
+     * ## 调用时机
+     * - OkHttpClient 重建前（如切换环境 BaseURL）
+     * - 进程终止前
+     * - 手动释放监控资源时
+     */
+    fun shutdownMonitor() {
+        okhttpManager.monitorReportHandler?.shutdown()
+        okhttpManager.monitorReportHandler = null
+    }
+
     /**
      * 取消第一个匹配指定 tag 的请求（优先匹配排队中的请求）
      *

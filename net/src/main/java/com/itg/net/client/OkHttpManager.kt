@@ -4,6 +4,7 @@ import com.itg.net.config.NetConfig
 import com.itg.net.encrypt.EncryptInterceptor
 import com.itg.net.logging.HttpLogger
 import com.itg.net.monitor.DefaultMonitorReportHandler
+import com.itg.net.monitor.IMonitorReportHandler
 import com.itg.net.monitor.MonitorInterceptor
 import com.itg.net.monitor.NetworkTypeCache
 import okhttp3.OkHttpClient
@@ -19,6 +20,10 @@ class OkHttpManager(ddNetConfig: NetConfig) {
     private val networkTypeCache: NetworkTypeCache? by lazy {
         ddNetConfig.application?.let { NetworkTypeCache(it) }
     }
+
+    /** 监控上报处理器引用，供 [com.itg.net.Net.flushMonitor] / [com.itg.net.Net.shutdownMonitor] 调用 */
+    @Volatile
+    internal var monitorReportHandler: IMonitorReportHandler? = null
 
     private fun createDefaultClient(ddNetConfig: NetConfig): OkHttpClient {
         val builder = OkHttpClient.Builder()
@@ -45,6 +50,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
                         flushIntervalMs = monitorConfig.flushIntervalMs,
                         maxQueueSize = monitorConfig.maxQueueSize
                     )
+                monitorReportHandler = handler   // 存储引用，供 Net.flushMonitor() / shutdownMonitor()
                 builder.addInterceptor(MonitorInterceptor(
                     config = monitorConfig,
                     reportHandler = handler,
