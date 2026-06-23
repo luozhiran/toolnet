@@ -1751,6 +1751,7 @@ val phone = EncryptUtil.decrypt(
 
 ---
 
+
 ## 26. 网络监控
 
 `MonitorInterceptor` 在 OkHttp 拦截器层自动采集网络请求质量数据（请求耗时、失败率、错误类型分布等），通过可替换的上报处理器异步发送到监控服务器。对 net / net-flow / net-retrofit 三个模块均透明，业务代码零侵入。
@@ -1875,11 +1876,13 @@ Net.instance.get()
 3. MonitorConfig.enabled → 全局兜底
 ```
 
+**实现原理**：`ParamsBuilder.monitorFlag` 为 `@Volatile` 字段，通过 `SendTool.combineParamsAndRCall()` 以 OkHttp Typed Tag（`MonitorMarker`）设置在 `Request` 上。`MonitorInterceptor` 在拦截时读取 Tag 判断优先级。与 `EncryptMarker` 采用相同模式，不占用通用 `tag(Any)`。
+
 ### 26.5 自定义上报处理器
 
 上报逻辑是业务方最可能有定制需求的环节。实现 `IMonitorReportHandler` 接口即可完全接管上报行为。
 
-> **性能提示**：实现 `IMonitorReportHandler` 时，建议覆写 `isAsync` 属性。若 Handler 内部已异步处理（如使用队列/三方 SDK），设为 `true` 可让框架省去一层专用线程，减少不必要的线程切换开销。详见 [26.13 性能设计](#2613-性能设计)。
+> **性能提示**：实现 `IMonitorReportHandler` 时，覆写 `isAsync` 属性。若 Handler 内部已异步（如使用队列/三方 SDK），设为 `true` 可让框架省去一层专用线程。`DefaultMonitorReportHandler` 使用 `BlockingQueue` + 后台线程，`isAsync = true`；`ResilientReportHandler` 包含磁盘 I/O，`isAsync = false`。详见 [26.13 性能设计](#2613-性能设计)。
 
 #### 场景一：接入 Firebase Crashlytics
 
@@ -1905,38 +1908,27 @@ class FirebaseReportHandler : IMonitorReportHandler {
     override fun shutdown() {} // 无需额外清理
 }
 
-// 配置注入
-monitor {
-    enabled(true)
-    reportHandler(FirebaseReportHandler())  // ← 完全接管上报
-}
+monitor { enabled(true); reportHandler(FirebaseReportHandler()) }
 ```
 
-#### 场景二：写本地日志文件
+#### 场景二：写本地日志文件（含磁盘 I/O）
 
 ```kotlin
 class FileReportHandler(private val logFile: File) : IMonitorReportHandler {
-    // 使用默认 isAsync=false，框架自动创建专用线程隔离同步 I/O
+    // 保持默认 isAsync=false，框架自动创建专用线程隔离同步磁盘 I/O
     private val writer = logFile.bufferedWriter()
 
     override fun onEvent(event: MonitorEvent) {
         synchronized(writer) {
             writer.write(event.toJson().toString())
-            writer.newLine()
-            writer.flush()  // 每条都刷盘，防止丢失
+            writer.newLine(); writer.flush()
         }
     }
     override fun flush() {}
-    override fun shutdown() {
-        synchronized(writer) { writer.close() }
-    }
+    override fun shutdown() { synchronized(writer) { writer.close() } }
 }
 
-// 配置注入
-monitor {
-    enabled(true)
-    reportHandler(FileReportHandler(File(cacheDir, "network_monitor.log")))
-}
+monitor { enabled(true); reportHandler(FileReportHandler(File(cacheDir, "monitor.log"))) }
 ```
 
 #### 场景三：多通道同时上报（HTTP + 本地文件）
@@ -1946,33 +1938,15 @@ class MultiChannelReportHandler(
     private val httpHandler: DefaultMonitorReportHandler,
     private val fileHandler: FileReportHandler
 ) : IMonitorReportHandler {
-    // 所有子 Handler 都声明为异步时，组合体才算异步
+    // 有一个子 Handler 非异步，组合体即非异步
     override val isAsync: Boolean get() = httpHandler.isAsync && fileHandler.isAsync
 
     override fun onEvent(event: MonitorEvent) {
-        httpHandler.onEvent(event)   // HTTP 上报到服务器
-        fileHandler.onEvent(event)   // 同时写入本地文件备份
+        httpHandler.onEvent(event)
+        fileHandler.onEvent(event)
     }
-    override fun flush() {
-        httpHandler.flush()
-        fileHandler.flush()
-    }
-    override fun shutdown() {
-        httpHandler.shutdown()
-        fileHandler.shutdown()
-    }
-}
-
-monitor {
-    enabled(true)
-    reportHandler(MultiChannelReportHandler(
-        httpHandler = DefaultMonitorReportHandler(
-            reportUrl = "https://monitor.example.com/api/report",
-            batchSize = 30,
-            flushIntervalMs = 15_000L
-        ),
-        fileHandler = FileReportHandler(File(cacheDir, "network_monitor.log"))
-    ))
+    override fun flush() { httpHandler.flush(); fileHandler.flush() }
+    override fun shutdown() { httpHandler.shutdown(); fileHandler.shutdown() }
 }
 ```
 
@@ -1984,17 +1958,27 @@ monitor {
     reportHandler(object : IMonitorReportHandler {
         override val isAsync: Boolean get() = true   // 纯内存操作，极快返回
         override fun onEvent(event: MonitorEvent) {
-            if (!event.isSuccess) {
-                Log.e("NetworkMonitor",
-                    "请求失败: ${event.url} " +
-                    "错误类型=${event.errorType} " +
-                    "耗时=${event.totalCostMs}ms " +
-                    "异常=${event.errorMessage}")
-            }
+            if (!event.isSuccess) Log.e("Monitor", "${event.errorType} ${event.url} ${event.totalCostMs}ms")
         }
         override fun flush() {}
         override fun shutdown() {}
     })
+}
+```
+
+#### 场景五：组合内置 Handler（生产环境推荐）
+
+```kotlin
+monitor {
+    enabled(true)
+    reportHandler(ResilientReportHandler(
+        delegate = DefaultMonitorReportHandler(
+            reportUrl = "https://monitor.example.com/api/report",
+            batchSize = 30, flushIntervalMs = 15_000L, maxQueueSize = 1000
+        ),
+        localFile = File(cacheDir, "network_monitor_backup.log"),
+        maxLocalEvents = 200
+    ))
 }
 ```
 
@@ -2017,21 +2001,19 @@ monitor {
 
 // 自定义脱敏规则
 monitor {
-    urlSanitizer = { url ->
-        url.replace(Regex("([?&])(userId|customParam)=[^&]*",
-            RegexOption.IGNORE_CASE), "$1$2=***")
-    }
+    urlSanitizer = { url -> url.replace(Regex("([?&])(userId|customParam)=[^&]*",
+        RegexOption.IGNORE_CASE), "$1$2=***") }
 }
 
 // 完全禁用脱敏（不推荐）
-monitor {
-    urlSanitizer = { url -> url }
-}
+monitor { urlSanitizer = { url -> url } }
 ```
+
+> 脱敏发生在 `MonitorInterceptor.buildEvent()` 中，在 `MonitorEvent` 对象构造之前。脱敏函数异常时回退到原始 URL，确保监控自身不影响业务。
 
 ### 26.7 崩溃安全上报（ResilientReportHandler）
 
-内置的 `DefaultMonitorReportHandler` 使用内存队列，进程被杀会导致未上报事件丢失。`ResilientReportHandler` 增加本地文件兜底，确保崩溃前的事件不丢失：
+内置的 `DefaultMonitorReportHandler` 使用内存队列，进程被杀会导致未上报事件丢失。`ResilientReportHandler` 增加本地文件兜底：
 
 ```kotlin
 monitor {
@@ -2039,9 +2021,7 @@ monitor {
     reportHandler(ResilientReportHandler(
         delegate = DefaultMonitorReportHandler(
             reportUrl = "https://monitor.example.com/api/report",
-            batchSize = 30,
-            flushIntervalMs = 15_000L,
-            maxQueueSize = 1000
+            batchSize = 30, flushIntervalMs = 15_000L, maxQueueSize = 1000
         ),
         localFile = File(cacheDir, "network_monitor_backup.log"),
         maxLocalEvents = 200    // 本地最多保留 200 条（环形截断）
@@ -2050,13 +2030,23 @@ monitor {
 ```
 
 **工作机制**：
-- 正常路径：内存队列 → 批量 HTTP 上报
-- 兜底路径：每条事件同时追加到本地日志文件（环形缓冲区）
-- 进程被杀时：本地文件中保留最近 200 条事件，App 下次启动后可解析补报
+
+```
+onEvent(event)
+  ├── delegate.onEvent(event)       // 主路径：内存队列 → 批量 HTTP POST
+  └── appendToLocalFile(event)      // 兜底路径：追加到本地日志文件
+        ├── 文件行数 < 200：直接追加
+        └── 文件行数 ≥ 200：环形截断（移除最旧行，保留最近 199 行 + 新行）
+```
+
+**关键设计**：
+- `isAsync = false`：本地文件写入包含磁盘 I/O，MonitorInterceptor 会用专用线程隔离
+- 文件操作在 `synchronized(writer)` 下执行，线程安全
+- `shutdown()` 时关闭 `writer`，释放文件句柄
 
 ### 26.8 生命周期管理（flushMonitor / shutdownMonitor）
 
-`IMonitorReportHandler` 接口定义了 `flush()` 和 `shutdown()` 两个生命周期方法，供外部在关键时机主动调用，确保监控数据不丢失、资源正确释放。
+`IMonitorReportHandler` 接口定义了 `flush()` 和 `shutdown()` 两个生命周期方法。
 
 #### 26.8.1 flushMonitor() —— 主动刷新缓冲区
 
@@ -2064,144 +2054,78 @@ monitor {
 
 **为什么需要**：`DefaultMonitorReportHandler` 采用批量上报策略（攒够 batchSize 条或到达 flushIntervalMs 时间窗口才发 POST）。如果 App 在时间窗口内进入后台并被系统杀死，队列中未上报的事件将丢失。
 
-**调用示例**：
-
 ```kotlin
-// Application 中注册 App 前后台监听
-class MyApp : Application() {
-    override fun onCreate() {
-        super.onCreate()
-
-        // 使用 ProcessLifecycleOwner 监听 App 前后台切换
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) {
-                // App 进入后台 → 立即刷新监控缓冲区
-                Net.instance.flushMonitor()
-            }
-        })
+// Application 中监听前后台切换
+ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+    override fun onStop(owner: LifecycleOwner) {
+        Net.instance.flushMonitor()   // App 进入后台 → 立即刷新
     }
-}
+})
 ```
 
-**内部流程**：
+**内部流程（两段式排空）**：
 
 ```
-Net.instance.flushMonitor()
-  └── okhttpManager.monitorReportHandler?.flush()
-        └── DefaultMonitorReportHandler.flush()
-              ├── queue.drainTo(pending)      // 一次性排空内存队列
-              └── doFlushAsync(pending)       // 立即异步 POST 到服务器
+flush()
+  ├── ① queue.drainTo(pending)         // 排空队列（事件未被消费者 take）
+  │     └── doFlushAsync(pending)      // 立即异步 POST
+  ├── ② forceFlush = true              // 通知消费者 flush 当前 batch
+  └── ③ consumerThread.interrupt()    // 唤醒阻塞中的消费者线程
+        └── 消费者检测 forceFlush → 立即 doFlushAsync(batch)
+            （InterruptedException 中检查 running 仍为 true → 继续循环，不退出）
 ```
 
-**API 签名**：
-
-```kotlin
-fun flushMonitor()
-```
-
-| 场景 | 调用时机 | 说明 |
-|------|---------|------|
-| App 进入后台 | `onStop` / `ProcessLifecycleOwner` | 防止进程被杀丢数据 |
-| 即将执行危险操作 | 操作前调用 | 如强制杀进程调试 |
-| 定时刷新 | 定时器 | 对于时间窗口较长的配置，可手动触发 |
-
-> **注意**：对实时上报的 Handler（如 Firebase），`flush()` 通常为空操作，调用无副作用。
+> **关键设计**：`flush()` 使用 `interrupt()` 唤醒消费者线程，但消费者的 `InterruptedException` 处理中检查 `running`——仅当 `running=false`（shutdown）时才 `break`，否则继续循环。这解决了"interrupt 会杀死线程"的问题。
 
 #### 26.8.2 shutdownMonitor() —— 优雅关闭，释放资源
 
-**用途**：关闭上报处理器，等待缓冲区排空后释放所有底层资源（线程池、连接池、文件句柄）。
-
-**为什么需要**：Handler 内部可能持有消费者线程、OkHttpClient 连接池、文件写入器等资源。不调用 `shutdown()` 直接丢弃 Handler 会导致资源泄漏。
-
-**调用示例**：
+**用途**：关闭上报处理器，等待缓冲区排空后释放所有底层资源。
 
 ```kotlin
-// 场景一：切换环境时重建 OkHttpClient
-fun switchEnvironment(newBaseUrl: String) {
-    Net.instance.shutdownMonitor()    // ① 关闭旧 Handler，排空队列
-    Net.instance.configure {
-        url(newBaseUrl)
-        monitor {
-            enabled(true)
-            reportUrl("https://new-env.example.com/api/report")
-            // 新 Handler 自动创建
-        }
-    }
+// 切换环境
+fun switchEnvironment(baseUrl: String) {
+    Net.instance.shutdownMonitor()    // 关闭旧 Handler，排空队列
+    Net.instance.configure { url(baseUrl); monitor { ... } }
 }
 
-// 场景二：Application.onTerminate()
-class MyApp : Application() {
-    override fun onTerminate() {
-        super.onTerminate()
-        Net.instance.shutdownMonitor()  // 进程终止前最后一次排空 + 释放资源
-    }
-}
+// 进程终止
+override fun onTerminate() { super.onTerminate(); Net.instance.shutdownMonitor() }
 ```
 
 **内部流程**：
 
 ```
-Net.instance.shutdownMonitor()
-  └── okhttpManager.monitorReportHandler?.shutdown()
-        └── DefaultMonitorReportHandler.shutdown()
-              ├── running.set(false)           // ① 拒绝新事件
-              ├── consumerThread.interrupt()   // ② 中断消费者线程
-              ├── consumerThread.join(5000)    // ③ 等待线程结束（最多 5s）
-              ├── queue.drainTo(remaining)     // ④ 排空队列残留
-              ├── doFlushAsync(remaining)      // ⑤ 最后一次 POST
-              ├── dispatcher.executorService.shutdown()  // ⑥ 释放 OkHttp 线程池
-              └── connectionPool.evictAll()    // ⑦ 关闭连接池
+shutdown()
+  ├── ① running.set(false)            // 拒绝新事件
+  ├── ② consumerThread.interrupt()    // 中断消费者 → InterruptedException → running=false → break
+  ├── ③ consumerThread.join(5000)     // 等待线程退出（最多 5s）
+  ├── ④ queue.drainTo(remaining)      // 第一次排空
+  ├── ⑤ queue.drainTo(lateArrivals)   // 第二次排空（捕获 ④ 之后竞态到达的事件）
+  ├── ⑥ doFlushAsync(remaining)       // 最后一次 POST
+  ├── ⑦ dispatcher.executorService.shutdown()  // 释放 OkHttp 线程池
+  └── ⑧ connectionPool.evictAll()     // 关闭连接池
 ```
-
-**API 签名**：
-
-```kotlin
-fun shutdownMonitor()
-```
-
-| 场景 | 调用时机 | 说明 |
-|------|---------|------|
-| OkHttpClient 重建 | 重建前 | 切换环境、BaseURL 变更 |
-| 进程终止 | `onTerminate` | 最后一次上报 + 释放资源 |
-| 手动关闭监控 | 业务需要 | 如用户登出后停止监控 |
 
 #### 26.8.3 完整生命周期示例
 
 ```kotlin
 class MyApp : Application() {
-
     override fun onCreate() {
         super.onCreate()
-
-        // 初始化网络库 + 监控
         Net.instance.configure {
-            app(this@MyApp)
-            url("https://api.example.com")
+            app(this@MyApp); url("https://api.example.com")
             monitor {
-                enabled(true)
-                reportUrl("https://monitor.example.com/api/report")
-                reportMode(ReportMode.FAILURE_ONLY)
-                batchSize(30)
-                flushIntervalMs(15_000L)
+                enabled(true); reportUrl("https://monitor.example.com/api/report")
+                reportMode(ReportMode.FAILURE_ONLY); batchSize(30); flushIntervalMs(15_000L)
             }
         }
-
-        // 监听 App 前后台切换 → 后台时刷新缓冲区
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) {
-                Net.instance.flushMonitor()
-            }
+            override fun onStop(owner: LifecycleOwner) { Net.instance.flushMonitor() }
         })
     }
-
-    override fun onTerminate() {
-        super.onTerminate()
-        Net.instance.shutdownMonitor()  // 最后一次排空 + 资源释放
-    }
+    override fun onTerminate() { super.onTerminate(); Net.instance.shutdownMonitor() }
 }
 ```
-
-> **设计说明**：`flush()` 和 `shutdown()` 在 `IMonitorReportHandler` 接口中定义。`DefaultMonitorReportHandler` 的消费者线程在退出前会自动 flush 一次残留 batch，但主动调用 `flushMonitor()` 可以在进程被杀前主动推送，降低数据丢失风险。
 
 ### 26.9 MonitorEvent 数据模型
 
@@ -2209,10 +2133,10 @@ class MyApp : Application() {
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `requestId` | `String` | 唯一标识（设备ID_时间戳_自增序号） |
-| `url` | `String` | 脱敏后的请求 URL |
+| `requestId` | `String` | 唯一标识（`设备ID_时间戳_自增序号`），非加密级 |
+| `url` | `String` | 经 `urlSanitizer` 脱敏后的请求 URL |
 | `method` | `String` | GET / POST / PUT / DELETE |
-| `tag` | `String?` | 请求 tag（业务标识） |
+| `tag` | `String?` | 请求 tag（业务标识，来自 `SendTool`） |
 | `requestStartMs` | `Long` | 请求开始时间戳（epochMillis） |
 | `requestEndMs` | `Long` | 请求结束时间戳 |
 | `totalCostMs` | `Long` | 总耗时（毫秒） |
@@ -2222,8 +2146,8 @@ class MyApp : Application() {
 | `isSuccess` | `Boolean` | 是否成功（无异常且 HTTP 2xx） |
 | `errorType` | `ErrorType` | 错误分类枚举（见下节） |
 | `errorMessage` | `String?` | 异常消息 |
-| `exceptionClass` | `String?` | 异常类名（如 SocketTimeoutException） |
-| `networkType` | `String?` | WIFI / CELLULAR / ETHERNET / NONE |
+| `exceptionClass` | `String?` | 异常类名（如 `SocketTimeoutException`） |
+| `networkType` | `String?` | WIFI / CELLULAR / ETHERNET / NONE（取自 `NetworkTypeCache`） |
 | `carrierName` | `String?` | 运营商名称（预留，当前为 null） |
 
 **序列化示例**（`toJson()` 输出）：
@@ -2232,18 +2156,12 @@ class MyApp : Application() {
 {
   "requestId": "a1b2c3d4_1719000000000_42",
   "url": "https://api.example.com/login",
-  "method": "POST",
-  "tag": "loginTask",
-  "totalCostMs": 5200,
-  "httpCode": 500,
-  "responseBodySize": 256,
-  "contentType": "application/json; charset=utf-8",
-  "isSuccess": false,
-  "errorType": "HTTP_SERVER_ERROR",
-  "errorMessage": null,
-  "exceptionClass": null,
-  "networkType": "WIFI",
-  "carrierName": "",
+  "method": "POST", "tag": "loginTask",
+  "totalCostMs": 5200, "httpCode": 500,
+  "responseBodySize": 256, "contentType": "application/json; charset=utf-8",
+  "isSuccess": false, "errorType": "HTTP_SERVER_ERROR",
+  "errorMessage": null, "exceptionClass": null,
+  "networkType": "WIFI", "carrierName": "",
   "timestamp": 1719000000000
 }
 ```
@@ -2252,24 +2170,24 @@ class MyApp : Application() {
 
 ### 26.10 错误分类详解
 
-`MonitorInterceptor` 自动将 IOException 和 HTTP 状态码分类为以下错误类型：
+`MonitorInterceptor.classifyError()` 自动将 IOException 和 HTTP 状态码分类：
 
 | ErrorType | 触发条件 | 排查方向 |
 |---|---|---|
 | `NONE` | 无异常且 HTTP 2xx | 正常 |
-| `DNS_ERROR` | `UnknownHostException` | DNS 服务器故障、域名拼写错误、网络断开 |
-| `CONNECT_TIMEOUT` | `ConnectException`（非 refused） | 服务器不可达、防火墙屏蔽、代理问题 |
-| `CONNECT_REFUSED` | `ConnectException`（消息含 "refused"） | 服务端端口未监听、服务器拒绝连接 |
-| `SSL_ERROR` | `SSLException` | 证书过期、证书不匹配、TLS 版本不兼容 |
+| `DNS_ERROR` | `UnknownHostException` | DNS 故障、域名拼写错误、网络断开 |
+| `CONNECT_TIMEOUT` | `ConnectException`（消息不含 "refused"） | 服务器不可达、防火墙屏蔽 |
+| `CONNECT_REFUSED` | `ConnectException`（消息含 "refused"） | 端口未监听、服务拒绝连接 |
+| `SSL_ERROR` | `SSLException` | 证书过期/不匹配、TLS 版本不兼容 |
 | `TIMEOUT` | `SocketTimeoutException` | 网络延迟过高、服务端处理超时 |
 | `NO_ROUTE` | 连接池耗尽或无可用路由 | 代理配置错误、网络切换中 |
-| `HTTP_CLIENT_ERROR` | HTTP 4xx | 参数错误(400)、未授权(401)、无权限(403)、不存在(404) |
-| `HTTP_SERVER_ERROR` | HTTP 5xx | 服务端内部错误(500)、网关超时(502/504) |
+| `HTTP_CLIENT_ERROR` | HTTP 4xx | 参数错误(400)、未授权(401)、无权限(403) |
+| `HTTP_SERVER_ERROR` | HTTP 5xx | 服务端错误(500)、网关超时(502/504) |
 | `PARSE_ERROR` | 响应解析失败 | JSON 格式错误、数据模型不匹配 |
-| `CANCELLED` | 请求被取消（`Call.cancel()`） | Activity 销毁、手动取消、超时自动取消 |
-| `UNKNOWN` | 其他未分类异常 | 需要人工排查 |
+| `CANCELLED` | 请求被取消 | Activity 销毁、手动取消 |
+| `UNKNOWN` | 其他未分类异常 | 需人工排查 |
 
-> **设计说明**：拦截器层无法精确区分 SocketTimeoutException 的具体阶段（连接/读取/写入超时），因此统一归类为 `TIMEOUT`。精确区分需等待 EventListener 方案落地。
+> `SocketTimeoutException` 在拦截器层无法精确区分子类型（连接/读/写），统一归为 `TIMEOUT`。精确区分需配合 EventListener。
 
 ### 26.11 拦截器链位置
 
@@ -2280,10 +2198,10 @@ Request
 [1. 用户自定义 Interceptor]     ← NetConfig.addInterceptor()
   │
   ▼
-[2. EncryptInterceptor]          ← 字段加解密（请求加密）
+[2. EncryptInterceptor]          ← 字段加解密（请求体加密）
   │
   ▼
-[3. MonitorInterceptor]          ← ★ 网络监控（新增）
+[3. MonitorInterceptor]          ← ★ 网络监控
   │
   ▼
 [4. HttpLoggingInterceptor]      ← HTTP 日志（NetworkInterceptor）
@@ -2292,9 +2210,17 @@ Request
 Server
 ```
 
-**位置设计理由**：
-- MonitorInterceptor 在 EncryptInterceptor 之后：监控记录的是加密后的请求元信息，不会泄露明文敏感数据
-- MonitorInterceptor 在 HttpLoggingInterceptor 之前：日志模块仍能看到完整的请求/响应，不受监控影响
+**注册代码**（`OkHttpManager.createDefaultClient()`）：
+
+```kotlin
+ddNetConfig.monitorConfig?.let { monitorConfig ->
+    if (monitorConfig.enabled) {
+        val handler = monitorConfig.reportHandler ?: DefaultMonitorReportHandler(...)
+        monitorReportHandler = handler  // 存引用，供 Net.flushMonitor() / shutdownMonitor()
+        builder.addInterceptor(MonitorInterceptor(monitorConfig, handler, application, networkTypeCache))
+    }
+}
+```
 
 ### 26.12 与 Flow / Retrofit 配合
 
@@ -2304,20 +2230,19 @@ Server
 // ✅ 普通回调 —— 自动监控
 Net.instance.postJson().url("...").send(callback)
 
-// ✅ Flow —— 自动监控
+// ✅ Flow —— 自动监控，同样支持单请求控制
 lifecycleScope.launch {
-    Net.instance.get()
-        .url("https://api.example.com/data")
-        .monitor()            // ← 同样支持单请求控制
+    Net.instance.get().url("https://api.example.com/data")
+        .monitor()         // ← 支持单请求控制
         .flowString()
-        .catch { e -> /* 异常已被监控拦截器记录 */ }
+        .catch { e -> /* 异常已被 MonitorInterceptor 记录 */ }
         .collect { body -> updateUI(body) }
 }
 
-// ✅ Retrofit —— 自动监控（共用同一个 OkHttpClient）
+// ✅ Retrofit —— 共用 OkHttpClient，自动监控
 @POST("payment/create")
 suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
-// 失败时自动上报，无需额外配置
+// 失败自动上报，无需额外配置
 ```
 
 ### 26.13 性能设计
@@ -2326,9 +2251,9 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 
 | 场景 | 额外开销 | 说明 |
 |---|---|---|
-| 跳过监控的请求（shouldMonitor=false） | **~0.01ms** | 两次 tag 读取 + boolean 判断 |
-| 成功请求 + FAILURE_ONLY 模式 | **~0.02ms** | 前置过滤跳过事件构建，仅记录时间戳 |
-| 失败请求 + FAILURE_ONLY 模式 | **~0.10ms** | 构建事件 + 入队（JSON 序列化在后台线程） |
+| 跳过监控的请求 | **~0.01ms** | 两次 tag 读取 + boolean 判断 |
+| 成功请求 + FAILURE_ONLY | **~0.02ms** | 前置过滤跳过事件构建，仅记录时间戳 |
+| 失败请求 + FAILURE_ONLY | **~0.10ms** | 构建事件 + 入队（JSON 序列化在后台线程） |
 | ALL 模式 | **~0.10ms** | 全部构建事件，序列化异步 |
 
 **核心性能优化**：
@@ -2336,23 +2261,24 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | 优化项 | 技术方案 | 效果 |
 |---|---|---|
 | 前置过滤 | 先判断 isSuccess + reportMode，再决定是否构建事件 | 成功请求减少 ~95% 监控开销 |
-| 网络状态缓存 | `ConnectivityManager.registerDefaultNetworkCallback()` + TTL 兜底 | 从每次 0.1-0.5ms IPC 降至内存读取 |
-| 非加密级 ID | `AtomicLong` 自增 + 时间戳 + 设备标识 | 消除 `SecureRandom` 熵池阻塞风险 |
-| 智能线程隔离 | 根据 `IMonitorReportHandler.isAsync` 决定是否创建专用线程 | Handler 已异步时内联调用，省去线程切换开销 |
-| 按需唤醒消费者 | batch 为空时 `take()` 无限阻塞，非空时定期 poll | 空闲时零 CPU 消耗 |
-| 异步 HTTP 上报 | OkHttp `enqueue()` + 熔断器 | 消费者线程永不阻塞 |
-| 事件对象精简 | 16 个字段（移除拦截器层恒为 0 的 DNS/TCP/TLS 字段） | 对象大小减少 ~35% |
+| 网络状态缓存 | `NetworkTypeCache`：`registerDefaultNetworkCallback()` + TTL(30s) 兜底 | 从每次 0.1-0.5ms IPC 降至内存读取 |
+| 非加密级 ID | `AtomicLong` 自增 + 时间戳 + AndroidId 前缀 | 消除 `SecureRandom` 熵池阻塞风险 |
+| 智能线程隔离 | 根据 `IMonitorReportHandler.isAsync` 决定是否创建 executor | Handler 异步时内联调用，省线程 |
+| 按需唤醒消费者 | batch 为空 `take()` 阻塞，非空 `poll(flushIntervalMs)` 超时 | 空闲零 CPU，不溢出 |
+| 异步 HTTP 上报 | OkHttp `enqueue()` + 三态熔断器（全开/半开/关闭） | 消费者线程永不阻塞 |
+| 参数安全校验 | `batchSize`/`flushIntervalMs`/`maxQueueSize` 均 `coerceAtLeast(1)` | 防止非法参数导致异常 |
 
 ### 26.14 安全设计
 
 | 安全措施 | 说明 |
 |---|---|
 | URL 脱敏 | 默认遮蔽 token/sessionId/password 等 9 种敏感 query 参数 |
-| HTTPS 提醒 | `reportUrl` 设置为 HTTP 时输出 Log.w 警告 |
+| HTTPS 提醒 | `reportUrl` 设置为 HTTP 时输出 `Log.w` 警告 |
 | 请求体保护 | MonitorInterceptor 在 EncryptInterceptor 之后，URL 不含请求体明文 |
-| 监控异常隔离 | 监控自身异常静默吞掉，不影响业务请求/响应流程 |
-| Context 类型安全 | 构造函数接受 `Application?`，从类型层面杜绝 Activity 泄漏 |
-| 守护线程 | 监控线程 `isDaemon = true`，不阻止进程退出 |
+| 监控异常隔离 | `dispatchEvent()` 内 try/catch + `doFlushAsync()` 内 try/catch，监控异常不影响业务 |
+| Context 类型安全 | 构造函数接受 `Application?`，杜绝 Activity 泄漏 |
+| 守护线程 | 消费者线程 `isDaemon = true`，不阻止进程退出 |
+| 参数安全 | `batchSize`/`flushIntervalMs`/`maxQueueSize` 均 `coerceAtLeast(1)` 防止非法值 |
 
 ### 26.15 API 速查表
 
@@ -2361,22 +2287,45 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | 方法 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `enabled(bool)` | 必选 | `false` | 全局监控开关 |
-| `reportUrl(url)` | 可选 | `null` | 监控数据接收地址（默认上报器使用） |
-| `reportMode(mode)` | 可选 | `FAILURE_ONLY` | 上报模式（`FAILURE_ONLY` / `ALL` / `SLOW_ONLY`） |
-| `sampleRate(rate)` | 可选 | `1.0f` | 采样率 0.0 ~ 1.0 |
-| `batchSize(size)` | 可选 | `20` | 单次批量上报最大事件数 |
-| `flushIntervalMs(ms)` | 可选 | `10000` | 上报时间窗口（毫秒） |
-| `maxQueueSize(size)` | 可选 | `1000` | 内存队列最大容量 |
+| `reportUrl(url)` | 可选 | `null` | HTTP 批量上报地址（默认上报器使用） |
+| `reportMode(mode)` | 可选 | `FAILURE_ONLY` | 上报模式 |
+| `sampleRate(rate)` | 可选 | `1.0f` | 采样率 0.0~1.0 |
+| `batchSize(size)` | 可选 | `20` | 批量上报最大事件数（自动 `coerceAtLeast(1)`） |
+| `flushIntervalMs(ms)` | 可选 | `10000` | 上报时间窗口（自动 `coerceAtLeast(1)`） |
+| `maxQueueSize(size)` | 可选 | `1000` | 内存队列最大容量（自动 `coerceAtLeast(1)`） |
 | `slowRequestThresholdMs(ms)` | 可选 | `0` | 慢请求阈值（`SLOW_ONLY` 模式使用） |
 | `urlSanitizer(fn)` | 可选 | 内置脱敏 | URL 脱敏函数 |
-| `reportHandler(handler)` | 可选 | `null` | 自定义上报处理器 |
+| `reportHandler(handler)` | 可选 | `null` | 自定义上报处理器（null→自动创建 `DefaultMonitorReportHandler`） |
 
-#### 单请求方法（ParamsBuilder）
+#### ParamsBuilder 单请求方法
 
 | 方法 | 说明 |
 |---|---|
 | `.monitor()` | 强制对本请求开启监控（优先级最高） |
 | `.skipMonitor()` | 强制跳过本请求的监控（优先级最高） |
+
+#### MonitorMarker（OkHttp Typed Tag）
+
+| 常量 | 值 | 说明 |
+|---|---|---|
+| `MonitorMarker.MONITOR` | `"__monitor_force__"` | 强制开启 |
+| `MonitorMarker.SKIP` | `"__monitor_skip__"` | 强制跳过 |
+| `MonitorMarker.fromFlag(flag)` | — | 从 `ParamsBuilder.monitorFlag` 构造 Tag |
+
+#### Net 生命周期方法
+
+| 方法 | 说明 |
+|---|---|
+| `Net.instance.flushMonitor()` | 刷新缓冲区（App 进入后台时调用） |
+| `Net.instance.shutdownMonitor()` | 关闭并释放资源（进程终止/切换环境时调用） |
+
+#### ReportMode 枚举
+
+| 枚举值 | 说明 |
+|---|---|
+| `FAILURE_ONLY` | 仅上报失败（默认） |
+| `ALL` | 上报所有请求 |
+| `SLOW_ONLY` | 仅上报慢请求（配合 `slowRequestThresholdMs`） |
 
 #### MonitorEvent.ErrorType 枚举
 
@@ -2395,51 +2344,35 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | `CANCELLED` | 请求被取消 |
 | `UNKNOWN` | 未知错误 |
 
-#### ReportMode 枚举
+#### IMonitorReportHandler 接口
 
-| 枚举值 | 说明 |
-|---|---|
-| `FAILURE_ONLY` | 仅上报失败（默认） |
-| `ALL` | 上报所有请求 |
-| `SLOW_ONLY` | 仅上报慢请求 |
+| 成员 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `isAsync` | `Boolean` | `false` | `true`→框架内联调用；`false`→框架创建专用线程隔离 |
+| `onEvent(event)` | 方法 | — | 接收事件，应尽快返回 |
+| `flush()` | 方法 | — | 主动刷新缓冲区 |
+| `shutdown()` | 方法 | — | 关闭并释放资源 |
 
 #### 内置上报处理器
 
-| 类 | 说明 |
-|---|---|
-| `DefaultMonitorReportHandler` | HTTP 批量上报（内存队列 + 异步 + 熔断器），`isAsync = true` |
-| `ResilientReportHandler` | 带本地文件兜底的上报器（崩溃安全），`isAsync` 跟随内部 delegate |
-| `IMonitorReportHandler` | 接口，自定义上报实现此接口 |
-
-#### IMonitorReportHandler 接口
-
-| 成员 | 类型 | 说明 |
+| 类 | `isAsync` | 说明 |
 |---|---|---|
-| `isAsync` | `Boolean` | 声明 onEvent() 是否为异步实现。`true` → 框架内联调用；`false`（默认）→ 框架创建专用线程隔离 |
-| `onEvent(event)` | 方法 | 接收单条监控事件，应尽快返回 |
-| `flush()` | 方法 | 主动刷新缓冲区，排空队列并立即上报 |
-| `shutdown()` | 方法 | 关闭处理器，等待排空后释放线程/连接池/文件句柄 |
-
-#### Net 生命周期方法
-
-| 方法 | 说明 |
-|---|---|
-| `Net.instance.flushMonitor()` | 刷新监控缓冲区（App 进入后台时调用） |
-| `Net.instance.shutdownMonitor()` | 关闭监控并释放资源（进程终止 / 切换环境时调用） |
+| `DefaultMonitorReportHandler` | `true` | HTTP 批量上报（队列+后台线程+三态熔断器+指数退避） |
+| `ResilientReportHandler` | `false` | 本地文件兜底（含磁盘 I/O），`synchronized` 线程安全 |
+| `IMonitorReportHandler` | 接口 | 自定义上报实现此接口 |
 
 #### 网络类型缓存
 
 | 类 | 说明 |
 |---|---|
-| `NetworkTypeCache` | 网络状态缓存（`registerDefaultNetworkCallback` + TTL），由 OkHttpManager 自动管理 |
+| `NetworkTypeCache` | `registerDefaultNetworkCallback()` + TTL 30s 兜底，由 `OkHttpManager` 自动管理 |
 
-#### 完整配置示例
+#### 完整生产配置
 
 ```kotlin
 Net.instance.configure {
     app(this@MyApp)
     url("https://api.example.com")
-
     monitor {
         enabled(true)
         reportUrl("https://monitor.example.com/api/v1/report")
@@ -2449,19 +2382,14 @@ Net.instance.configure {
         flushIntervalMs(15_000L)
         maxQueueSize(1000)
         slowRequestThresholdMs(3000)
-
-        // 可选：自定义 URL 脱敏
-        urlSanitizer = { url ->
-            url.replace(Regex("([?&])(customSecret)=[^&]*",
-                RegexOption.IGNORE_CASE), "$1$2=***")
-        }
-
-        // 可选：崩溃安全双写（生产环境推荐）
+        // 自定义 URL 脱敏
+        urlSanitizer = { url -> url.replace(Regex("([?&])(customSecret)=[^&]*",
+            RegexOption.IGNORE_CASE), "$1$2=***") }
+        // 崩溃安全双写（生产推荐）
         reportHandler(ResilientReportHandler(
             delegate = DefaultMonitorReportHandler(
                 reportUrl = "https://monitor.example.com/api/v1/report",
-                batchSize = 30,
-                flushIntervalMs = 15_000L
+                batchSize = 30, flushIntervalMs = 15_000L, maxQueueSize = 1000
             ),
             localFile = File(cacheDir, "network_monitor_backup.log"),
             maxLocalEvents = 200
