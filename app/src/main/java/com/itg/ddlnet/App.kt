@@ -24,7 +24,6 @@ class App:Application() {
             .setGlobalParams("ab","bai")
             .setGlobalParams("43","af")
             .maxDownloadNum(1)
-            .okHttpClient(getOkhppt())
             .useHttpLog(true)
             .url("http://47.76.59.147:8000/")
             .monitor {
@@ -33,7 +32,7 @@ class App:Application() {
                 reportHandler = object : IMonitorReportHandler {
                     override val isAsync: Boolean get() = true
                     override fun onEvent(event: MonitorEvent) {
-                        Log.e("Monitor", " ${event.isSuccess} ${event.errorType} ${event.url} ${event.totalCostMs}ms")
+                        Log.e("Monitor", event.toJson().toString())
                     }
 
                     override fun flush() {

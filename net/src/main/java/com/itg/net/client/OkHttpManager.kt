@@ -21,10 +21,6 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         private const val TAG = "OkHttpManager"
     }
 
-    var okHttpClient: OkHttpClient = ddNetConfig.getOkHttpClient() ?: run {
-        createDefaultClient(ddNetConfig)
-    }
-
     /** 网络类型缓存，供 MonitorInterceptor 和其他组件复用 */
     private val networkTypeCacheLazy = lazy {
         ddNetConfig.application?.let { NetworkTypeCache(it) }
@@ -46,6 +42,10 @@ class OkHttpManager(ddNetConfig: NetConfig) {
                 priority = Thread.NORM_PRIORITY - 2
             }
         }
+    }
+
+    var okHttpClient: OkHttpClient = ddNetConfig.getOkHttpClient() ?: run {
+        createDefaultClient(ddNetConfig)
     }
 
     internal fun dispatchMonitorEvent(event: MonitorEvent) {
