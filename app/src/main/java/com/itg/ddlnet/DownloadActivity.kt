@@ -114,6 +114,7 @@ class DownloadActivity : AppCompatActivity() {
             Net.instance.get()
                 .url(ip)
                 .path("api/data")
+                .monitor()
                 .autoCancel(this)
                 .send(object : DdCallback{
                     override fun onFailure(er: String?) {
