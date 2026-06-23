@@ -17,13 +17,23 @@ class OkHttpManager(ddNetConfig: NetConfig) {
     }
 
     /** 网络类型缓存，供 MonitorInterceptor 和其他组件复用 */
-    private val networkTypeCache: NetworkTypeCache? by lazy {
+    private val networkTypeCacheLazy = lazy {
         ddNetConfig.application?.let { NetworkTypeCache(it) }
     }
+    private val networkTypeCache: NetworkTypeCache?
+        get() = networkTypeCacheLazy.value
 
     /** 监控上报处理器引用，供 [com.itg.net.Net.flushMonitor] / [com.itg.net.Net.shutdownMonitor] 调用 */
     @Volatile
     internal var monitorReportHandler: IMonitorReportHandler? = null
+
+    internal fun shutdownMonitor() {
+        monitorReportHandler?.shutdown()
+        monitorReportHandler = null
+        if (networkTypeCacheLazy.isInitialized()) {
+            networkTypeCacheLazy.value?.release()
+        }
+    }
 
     private fun createDefaultClient(ddNetConfig: NetConfig): OkHttpClient {
         val builder = OkHttpClient.Builder()

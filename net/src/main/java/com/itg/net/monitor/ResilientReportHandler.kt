@@ -48,13 +48,12 @@ class ResilientReportHandler(
     private var localEventCount = 0
 
     /**
-     * 异步性取决于内部 delegate：若 delegate 已异步（如 DefaultMonitorReportHandler），
-     * 则本地文件写入虽涉及磁盘 I/O 但只追加一行，整体可视为异步。
-     * 遵循 delegate 的声明以保持一致性。
+     * 本地兜底写入包含磁盘 I/O，需要由 MonitorInterceptor 放到独立线程执行。
      */
-    override val isAsync: Boolean get() = delegate.isAsync
+    override val isAsync: Boolean get() = false
 
     /** 本地文件写入器 */
+    @Volatile
     private var writer: RandomAccessFile? = null
 
     init {
@@ -85,10 +84,14 @@ class ResilientReportHandler(
 
     override fun shutdown() {
         delegate.shutdown()
-        try {
-            writer?.close()
-        } catch (_: Exception) { }
-        writer = null
+        writer?.let { w ->
+            synchronized(w) {
+                try {
+                    w.close()
+                } catch (_: Exception) { }
+                writer = null
+            }
+        }
     }
 
     private fun appendToLocalFile(event: MonitorEvent) {

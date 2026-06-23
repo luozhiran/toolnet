@@ -332,8 +332,7 @@ class Net {
      * - 手动释放监控资源时
      */
     fun shutdownMonitor() {
-        okhttpManager.monitorReportHandler?.shutdown()
-        okhttpManager.monitorReportHandler = null
+        okhttpManager.shutdownMonitor()
     }
 
     /**

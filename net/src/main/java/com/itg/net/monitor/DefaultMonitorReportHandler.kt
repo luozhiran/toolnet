@@ -55,8 +55,12 @@ class DefaultMonitorReportHandler(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 
+    private val safeBatchSize = batchSize.coerceAtLeast(1)
+    private val safeFlushIntervalMs = flushIntervalMs.coerceAtLeast(1L)
+    private val safeMaxQueueSize = maxQueueSize.coerceAtLeast(1)
+
     /** 事件缓冲队列（有界阻塞队列） */
-    private val queue: BlockingQueue<MonitorEvent> = LinkedBlockingQueue(maxQueueSize)
+    private val queue: BlockingQueue<MonitorEvent> = LinkedBlockingQueue(safeMaxQueueSize)
 
     /** 是否正在运行 */
     private val running = AtomicBoolean(true)
@@ -160,34 +164,40 @@ class DefaultMonitorReportHandler(
         val batch = mutableListOf<MonitorEvent>()
         var lastFlushTime = System.currentTimeMillis()
 
+        fun flushBatchIfRequested() {
+            if (!forceFlush) return
+            forceFlush = false
+            if (batch.isNotEmpty()) {
+                doFlushAsync(batch.toList())
+                batch.clear()
+                lastFlushTime = System.currentTimeMillis()
+            }
+        }
+
         while (running.get()) {
             try {
+                // flush() 会 interrupt 唤醒线程，先处理已取出的 batch，避免继续阻塞到时间窗口结束。
+                flushBatchIfRequested()
+
                 // batch 为空 → take() 无限阻塞，直到事件到达（零 CPU，不溢出）
                 // batch 非空 → poll(flushIntervalMs) 等待 flush 窗口到期，到期自动唤醒检查
-                // 不再用 minOf 封顶——forceFlush 不再依赖 interrupt，无需高频唤醒
+                // forceFlush 通过 interrupt 精准唤醒，避免高频轮询。
                 val event = if (batch.isEmpty()) {
                     queue.take()
                 } else {
-                    queue.poll(flushIntervalMs, TimeUnit.MILLISECONDS)
-                }
-
-                // 检测 forceFlush 标志：外部 flush() 要求立即排空当前 batch
-                if (forceFlush) {
-                    forceFlush = false
-                    if (batch.isNotEmpty()) {
-                        doFlushAsync(batch.toList())
-                        batch.clear()
-                        lastFlushTime = System.currentTimeMillis()
-                    }
+                    queue.poll(safeFlushIntervalMs, TimeUnit.MILLISECONDS)
                 }
 
                 if (event != null) {
                     batch.add(event)
                 }
 
-                val shouldFlush = batch.size >= batchSize ||
+                // 检测 forceFlush 标志：外部 flush() 要求立即排空当前 batch
+                flushBatchIfRequested()
+
+                val shouldFlush = batch.size >= safeBatchSize ||
                     (batch.isNotEmpty() &&
-                     System.currentTimeMillis() - lastFlushTime >= flushIntervalMs)
+                     System.currentTimeMillis() - lastFlushTime >= safeFlushIntervalMs)
 
                 if (shouldFlush) {
                     doFlushAsync(batch.toList())
@@ -195,8 +205,10 @@ class DefaultMonitorReportHandler(
                     lastFlushTime = System.currentTimeMillis()
                 }
             } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                break
+                if (!running.get()) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Consumer error", e)
             }
@@ -250,9 +262,9 @@ class DefaultMonitorReportHandler(
             doFlushAsync(pending)
         }
         // 通知消费者线程立即 flush 当前 batch（事件已被 take 但尚未到 flush 窗口）
-        // 注意：不调用 interrupt()——interrupt 会杀死消费者线程。
-        // forceFlush 是 volatile，消费者在下次 take/poll 返回后立即检测到。
+        // forceFlush 是 volatile，interrupt 只用于唤醒阻塞中的 take/poll。
         forceFlush = true
+        consumerThread.interrupt()
     }
 
     /**
@@ -333,6 +345,8 @@ class DefaultMonitorReportHandler(
             })
         } catch (e: Exception) {
             Log.w(TAG, "Report exception: ${e.message}")
+            recordFailure("exception: ${e.message}")
+            endProbe()
         }
     }
 }
