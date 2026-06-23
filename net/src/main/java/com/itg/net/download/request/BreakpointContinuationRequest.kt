@@ -1,12 +1,11 @@
 package com.itg.net.download.request
 
 
-import com.itg.net.Net
-import com.itg.net.ModeType
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_UN_FOUND_RESOURCE
 import com.itg.net.download.data.Task
 import com.itg.net.download.operations.TaskState
+import com.itg.net.monitor.MonitorEvent
 import com.itg.net.request.base.ParamsBuilder
 import java.io.*
 
@@ -16,12 +15,9 @@ import java.io.*
  */
 class BreakpointContinuationRequest(private val task: Task, taskStateInstance: TaskState) : BaseRequest(task,taskStateInstance) {
 
-    private fun getBreakpointContinuationBuilder(task: Task, range:String?) : ParamsBuilder {
-        val builder = Net.instance.builder(ModeType.Get).url(task.url)
+    private fun getBreakpointContinuationBuilder(range:String?) : ParamsBuilder {
+        val builder = getBuilder()
         builder.addHeader("Range", "bytes=${range}")
-        if (task.noGlobalParams) {
-            builder.noUseGlobalParams()
-        }
         return builder
     }
 
@@ -31,7 +27,9 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
     }
 
     private fun breakpointRequest(start: Long){
+        task.startTime = System.currentTimeMillis()
         if (isTaskCanceled()) {
+            reportDownloadEvent(0, MonitorEvent.ErrorType.CANCELLED, ERROR_DOWNLOAD_CANCELED, null)
             failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
             return
         }
@@ -40,12 +38,13 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
                 response.code == 206 -> handleResponse(response)
                 response.code == 200 && start == 0L -> handleResponse(response)
                 else -> {
-                    response.use { response ->
+                    response.use {
                         failureCallback?.invoke(task, ERROR_UN_FOUND_RESOURCE)
                     }
                 }
             }
         }, onFailure = { call, ioException ->
+            task.endTime = System.currentTimeMillis()
             val message = if (call.isCanceled() || isTaskCanceled()) {
                 ERROR_DOWNLOAD_CANCELED
             } else {
@@ -53,7 +52,7 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
             }
             failureCallback?.invoke(task, message)
         })
-        getBreakpointContinuationBuilder(task, "${start}-").send(okHttpCallback,task)
+        getBreakpointContinuationBuilder("${start}-").send(okHttpCallback,task)
     }
 
     override fun start(){

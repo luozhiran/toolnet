@@ -36,7 +36,16 @@ data class MonitorEvent(
 
     // ===== 网络环境（取自缓存） =====
     val networkType: String?,       // WIFI / CELLULAR / ETHERNET / NONE
-    val carrierName: String?        // 运营商名称（预留，当前为 null）
+    val carrierName: String?,       // 运营商名称（预留，当前为 null）
+    val eventStage: String = "HTTP",    // HTTP / DOWNLOAD
+
+    // ===== 下载专用字段（Phase 3 新增） =====
+    val downloadSize: Long = 0,         // 已下载字节数
+    val contentLength: Long = 0,        // 文件总大小（Content-Length）
+    val isAppend: Boolean = false,      // 是否断点续传
+    val retryCount: Int = 0,            // 当前重试次数
+    val downloadSpeed: Long = 0,        // 平均下载速度 (bytes/s)，totalCostMs>0 时计算
+    val downloadError: ErrorType = ErrorType.NONE  // 下载阶段独立错误类型
 ) {
     enum class ErrorType {
         /** 成功 */
@@ -61,6 +70,12 @@ data class MonitorEvent(
         PARSE_ERROR,
         /** 请求被取消 */
         CANCELLED,
+        /** 下载流读取中断（InputStream.read() 抛异常） */
+        DOWNLOAD_STREAM_ERROR,
+        /** 磁盘写入失败 */
+        DISK_WRITE_ERROR,
+        /** MD5 校验失败 */
+        MD5_MISMATCH,
         /** 未知错误 */
         UNKNOWN
     }
@@ -80,6 +95,14 @@ data class MonitorEvent(
         put("exceptionClass", exceptionClass ?: "")
         put("networkType", networkType ?: "")
         put("carrierName", carrierName ?: "")
+        put("eventStage", eventStage)
         put("timestamp", requestStartMs)
+        // 下载专用字段（普通请求为默认值 0/false/NONE）
+        if (downloadSize > 0) put("downloadSize", downloadSize)
+        if (contentLength > 0) put("contentLength", contentLength)
+        if (isAppend) put("isAppend", true)
+        if (retryCount > 0) put("retryCount", retryCount)
+        if (downloadSpeed > 0) put("downloadSpeed", downloadSpeed)
+        if (downloadError != ErrorType.NONE) put("downloadError", downloadError.name)
     }
 }

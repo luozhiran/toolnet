@@ -11,23 +11,37 @@ import com.itg.net.download.data.ERROR_RENAME_TEMP_FILE_FAILED
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
 import com.itg.net.download.operations.TaskState
+import com.itg.net.monitor.MonitorConfig
+import com.itg.net.monitor.MonitorEvent
+import com.itg.net.monitor.MonitorMarker
 import com.itg.net.request.base.ParamsBuilder
 import com.itg.net.util.CheckTools
 import com.itg.net.util.TaskTools
 import okhttp3.Response
 import java.io.*
+import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.atomic.AtomicLong
 
 abstract class BaseRequest(private val task: Task, private val taskStateInstance: TaskState) {
+
+    companion object {
+        /** 下载专用请求 ID 生成器 */
+        private val downloadIdCounter = AtomicLong(0)
+    }
 
     private var successCallback: ((Task, String) -> Unit)? = null
     protected var failureCallback: ((Task, String) -> Unit)? = null
 
+    /** 记录原始 URL（监控用，因为 task.url 可能在取消时变化） */
+    private var monitoredUrl: String? = null
 
     protected fun getBuilder(): ParamsBuilder {
         val builder = Net.instance.builder(ModeType.Get).url(task.url)
         if (task.noGlobalParams) {
             builder.noUseGlobalParams()
         }
+        // 透传监控控制标志到 OkHttp 层（MonitorInterceptor 通过 Typed Tag 读取）
+        task.monitorFlag?.let { builder.monitorFlag = it }
         return builder
     }
 
@@ -85,30 +99,30 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
     private fun lastOneCheck(
         file: File,
         successCallback: (String) -> Unit,
-        failCallback: (String) -> Unit
+        failCallback: (String, MonitorEvent.ErrorType) -> Unit
     ) {
         if (taskStateInstance.isCheckMd5(task) && !checkMd5(file.absolutePath, task)) {
-            failCallback.invoke(ERROR_MD5_CHECK_FAILED)
+            failCallback.invoke(ERROR_MD5_CHECK_FAILED, MonitorEvent.ErrorType.MD5_MISMATCH)
         } else {
             val distFile = File(file.absolutePath.removeSuffix(".tmp"))
             try {
                 if (distFile.exists()) {
                     if (!task.overwrite) {
-                        failCallback.invoke(ERROR_TARGET_FILE_EXISTS)
+                        failCallback.invoke(ERROR_TARGET_FILE_EXISTS, MonitorEvent.ErrorType.DISK_WRITE_ERROR)
                         return
                     }
                     if (!distFile.delete()) {
-                        failCallback.invoke(ERROR_RENAME_TEMP_FILE_FAILED)
+                        failCallback.invoke(ERROR_RENAME_TEMP_FILE_FAILED, MonitorEvent.ErrorType.DISK_WRITE_ERROR)
                         return
                     }
                 }
                 if (file.renameTo(distFile)) {
                     successCallback.invoke(DOWNLOAD_SUCCESS_MESSAGE)
                 } else {
-                    failCallback.invoke(ERROR_RENAME_TEMP_FILE_FAILED)
+                    failCallback.invoke(ERROR_RENAME_TEMP_FILE_FAILED, MonitorEvent.ErrorType.DISK_WRITE_ERROR)
                 }
             } catch (e: Exception) {
-                failCallback.invoke(e.message.toString())
+                failCallback.invoke(e.message.toString(), MonitorEvent.ErrorType.DISK_WRITE_ERROR)
             }
         }
     }
@@ -129,6 +143,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                 out.use { output ->
                     while (input.read(buffer).also { length = it } > 0) {
                         if (taskCancel(task)) {
+                            reportDownloadEvent(writtenSize, MonitorEvent.ErrorType.CANCELLED, ERROR_DOWNLOAD_CANCELED, null)
                             failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
                             return
                         }
@@ -140,14 +155,20 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                             if (cur == 100) {
                                 lastOneCheck(
                                     file,
-                                    { msg -> successCallback?.invoke(task, msg) },
-                                    { msg -> failureCallback?.invoke(task, msg) })
+                                    { msg ->
+                                        successCallback?.invoke(task, msg)
+                                    },
+                                    { msg, errType ->
+                                        reportDownloadEvent(writtenSize, errType, msg, null)
+                                        failureCallback?.invoke(task, msg)
+                                    })
                                 return
                             } else {
                                 task.progressCallback?.onProgress(task, cur == 100)
                             }
                         } else {
                             if (taskCancel(task)) {
+                                reportDownloadEvent(writtenSize, MonitorEvent.ErrorType.CANCELLED, ERROR_DOWNLOAD_CANCELED, null)
                                 failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
                                 return
                             }
@@ -160,14 +181,22 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
             if (task.contentLength <= 0L || writtenSize >= task.contentLength) {
                 lastOneCheck(
                     file,
-                    { msg -> successCallback?.invoke(task, msg) },
-                    { msg -> failureCallback?.invoke(task, msg) })
+                    { msg ->
+                        successCallback?.invoke(task, msg)
+                    },
+                    { msg, errType ->
+                        reportDownloadEvent(writtenSize, errType, msg, null)
+                        failureCallback?.invoke(task, msg)
+                    })
             } else {
+                reportDownloadEvent(writtenSize, MonitorEvent.ErrorType.DOWNLOAD_STREAM_ERROR, "Downloaded data is incomplete", null)
                 failureCallback?.invoke(task, "Downloaded data is incomplete")
             }
         } catch (e: FileNotFoundException) {
+            reportDownloadEvent(task.downloadSize, MonitorEvent.ErrorType.DISK_WRITE_ERROR, failureMessage(e), e)
             failureCallback?.invoke(task, failureMessage(e))
         } catch (e: IOException) {
+            reportDownloadEvent(task.downloadSize, MonitorEvent.ErrorType.DOWNLOAD_STREAM_ERROR, failureMessage(e), e)
             failureCallback?.invoke(task, failureMessage(e))
         }
     }
@@ -177,22 +206,138 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         val body = response.body
         val localSize = if (task.append && file.exists()) file.length() else 0L
         task.contentLength = localSize + (body?.contentLength() ?: 0)
+        // 记录 URL 供下载阶段事件使用
+        monitoredUrl = task.url
         try {
             if (taskCancel(task)) {
+                reportDownloadEvent(0, MonitorEvent.ErrorType.CANCELLED, ERROR_DOWNLOAD_CANCELED, null)
                 failureCallback?.invoke(task, ERROR_DOWNLOAD_CANCELED)
                 return
             }
             if (checkFileDir(file)) {
                 if (body == null) {
+                    reportDownloadEvent(0, MonitorEvent.ErrorType.DOWNLOAD_STREAM_ERROR, ERROR_EMPTY_RESPONSE_BODY, null)
                     failureCallback?.invoke(task, ERROR_EMPTY_RESPONSE_BODY)
                 } else {
                     saveNetStream(body.byteStream(), file)
                 }
             } else {
+                reportDownloadEvent(0, MonitorEvent.ErrorType.DISK_WRITE_ERROR, ERROR_CREATE_DOWNLOAD_DIR_FAILED, null)
                 failureCallback?.invoke(task, ERROR_CREATE_DOWNLOAD_DIR_FAILED)
             }
         } finally {
             response.close()
+        }
+    }
+
+    /**
+     * 上报下载阶段监控事件（与 MonitorInterceptor 的 HTTP 层事件互补）
+     *
+     * 调用时机：
+     * - 下载流读取中断（IOException）
+     * - 磁盘写入失败（FileNotFoundException / IOException）
+     * - MD5 校验失败
+     * - 下载被取消
+     *
+     * 注：MonitorInterceptor 已上报 HTTP 层结果（DNS/连接/HTTP 状态码），
+     * 本方法仅上报下载阶段（流读写）的结果。
+     *
+     * @param writtenSize 已写入磁盘的字节数
+     * @param errorType  下载阶段错误类型
+     * @param message    错误消息或成功消息
+     * @param exception  原始异常（可为 null）
+     */
+    protected fun reportDownloadEvent(
+        writtenSize: Long,
+        errorType: MonitorEvent.ErrorType,
+        message: String?,
+        exception: IOException?,
+        httpCode: Int = -1
+    ) {
+        val config = Net.instance.ddNetConfig.monitorConfig ?: return
+        if (!shouldReportDownloadEvent(config, errorType)) return
+
+        val handler = Net.instance.okhttpManager.monitorReportHandler ?: return
+
+        task.endTime = System.currentTimeMillis()
+        val totalCostMs = if (task.startTime > 0) task.endTime - task.startTime else 0
+        val isSuccess = errorType == MonitorEvent.ErrorType.NONE
+
+        // 计算平均下载速度（bytes/s），避免除零
+        val speed = if (totalCostMs > 0 && writtenSize > 0) {
+            writtenSize * 1000 / totalCostMs
+        } else 0L
+
+        val sanitizedUrl = sanitizeUrl(config, monitoredUrl ?: task.url ?: "")
+        val event = MonitorEvent(
+            requestId = "dl_${task.uniqueId.take(8)}_${downloadIdCounter.incrementAndGet()}",
+            url = sanitizedUrl,
+            method = "GET",
+            tag = sanitizedUrl,
+            requestStartMs = task.startTime,
+            requestEndMs = task.endTime,
+            totalCostMs = totalCostMs,
+            httpCode = httpCode,
+            responseBodySize = writtenSize,
+            contentType = null,
+            isSuccess = isSuccess,
+            errorType = errorType,
+            errorMessage = message,
+            exceptionClass = exception?.javaClass?.simpleName,
+            networkType = null,
+            carrierName = null,
+            eventStage = "DOWNLOAD",
+            // 下载专用字段
+            downloadSize = writtenSize,
+            contentLength = task.contentLength,
+            isAppend = task.append,
+            retryCount = task.tryAgainCount,
+            downloadSpeed = speed,
+            downloadError = if (isSuccess) MonitorEvent.ErrorType.NONE else errorType
+        )
+        try {
+            handler.onEvent(event)
+        } catch (_: Exception) {
+            // 监控自身异常静默吞掉，不影响下载流程
+        }
+    }
+
+    private fun shouldReportDownloadEvent(
+        config: MonitorConfig,
+        errorType: MonitorEvent.ErrorType
+    ): Boolean {
+        if (task.monitorFlag == MonitorMarker.SKIP) return false
+        if (errorType == MonitorEvent.ErrorType.NONE) return false
+
+        val forceMonitor = task.monitorFlag == MonitorMarker.MONITOR
+        if (!forceMonitor && !config.enabled) return false
+
+        val totalCostMs = if (task.startTime > 0) {
+            System.currentTimeMillis() - task.startTime
+        } else 0
+        if (!config.reportMode.shouldReport(false, totalCostMs, config.slowRequestThresholdMs)) {
+            return false
+        }
+
+        if (errorType != MonitorEvent.ErrorType.CANCELLED && task.tryAgainCount > 0) {
+            return false
+        }
+
+        if (forceMonitor) return true
+        val sampleRate = config.sampleRate
+        return when {
+            sampleRate.isNaN() -> true
+            sampleRate >= 1.0f -> true
+            sampleRate <= 0.0f -> false
+            else -> ThreadLocalRandom.current().nextFloat() < sampleRate
+        }
+    }
+
+    private fun sanitizeUrl(config: MonitorConfig, rawUrl: String): String {
+        return try {
+            config.urlSanitizer(rawUrl)
+        } catch (_: Exception) {
+            rawUrl
         }
     }
 

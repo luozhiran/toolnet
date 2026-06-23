@@ -52,7 +52,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         }
         // 网络监控拦截器（在加密拦截器之后注册，监控加密后的请求元信息）
         ddNetConfig.monitorConfig?.let { monitorConfig ->
-            if (monitorConfig.enabled) {
+            if (monitorConfig.enabled || monitorConfig.reportHandler != null || !monitorConfig.reportUrl.isNullOrBlank()) {
                 val handler = monitorConfig.reportHandler
                     ?: DefaultMonitorReportHandler(
                         reportUrl = monitorConfig.reportUrl ?: "",

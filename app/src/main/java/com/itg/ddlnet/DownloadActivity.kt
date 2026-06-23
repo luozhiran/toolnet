@@ -74,6 +74,7 @@ class DownloadActivity : AppCompatActivity() {
                         .savePath(path)
                         .url(it)
                         .retryCount(1)
+                        .monitor()
                         .bindActivity(this)
                         .supportCheckpoint()
                         .listener(object : AbstractProgressCallback() {

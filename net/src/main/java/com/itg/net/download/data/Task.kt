@@ -37,4 +37,11 @@ class Task {
     var noGlobalParams = false
     // 创建任务的唯一标识
     val uniqueId = UUID.randomUUID().toString()
+    // 单任务监控控制：null=使用全局配置，"__monitor_force__"=强制开启，"__monitor_skip__"=强制跳过
+    @Volatile
+    var monitorFlag: String? = null
+    // 下载开始时间戳（毫秒），用于计算下载总耗时和平均速度
+    var startTime: Long = 0
+    // 下载结束时间戳（毫秒）
+    var endTime: Long = 0
 }

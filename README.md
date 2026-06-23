@@ -79,6 +79,7 @@ Net 是一款基于 OkHttp 封装的 Android 网络请求库，包含三个模�
    - 26.13 [性能设计](#2613-性能设计)
    - 26.14 [安全设计](#2614-安全设计)
    - 26.15 [API 速查表](#2615-api-速查表)
+   - 26.16 [下载错误上报](#2616-下载错误上报)
 
 ---
 
@@ -1847,7 +1848,7 @@ monitor {
 }
 ```
 
-> `sampleRate` 当前由 `MonitorConfig` 记录但采样逻辑由调用方在 `IMonitorReportHandler` 中自行实现。内置 `DefaultMonitorReportHandler` 默认不采样（全量上报）。
+> `sampleRate` 由 `MonitorInterceptor` 和下载阶段上报共同执行。`.monitor()` 强制开启时不受采样影响；`.skipMonitor()` 始终跳过。
 
 ### 26.4 单请求控制
 
@@ -1877,6 +1878,26 @@ Net.instance.get()
 ```
 
 **实现原理**：`ParamsBuilder.monitorFlag` 为 `@Volatile` 字段，通过 `SendTool.combineParamsAndRCall()` 以 OkHttp Typed Tag（`MonitorMarker`）设置在 `Request` 上。`MonitorInterceptor` 在拦截时读取 Tag 判断优先级。与 `EncryptMarker` 采用相同模式，不占用通用 `tag(Any)`。
+
+下载任务也支持相同的控制语义：
+
+```kotlin
+// 强制监控某个下载任务。需要先在 monitor { } 中配置 reportUrl 或 reportHandler。
+Net.instance.newDownload()
+    .savePath("${filesDir}/patch.apk")
+    .url("https://cdn.example.com/patch.apk?token=secret")
+    .monitor()
+    .start()
+
+// 强制跳过某个下载任务的 HTTP 阶段和 DOWNLOAD 阶段监控。
+Net.instance.newDownload()
+    .savePath("${cacheDir}/temp.bin")
+    .url("https://cdn.example.com/temp.bin")
+    .skipMonitor()
+    .start()
+```
+
+> 下载任务的 `.monitor()` 会同时透传到 OkHttp 请求层和下载阶段上报层。即使全局 `enabled(false)`，只要配置了 `reportUrl` 或 `reportHandler`，单任务 `.monitor()` 仍可强制上报。
 
 ### 26.5 自定义上报处理器
 
@@ -2149,6 +2170,13 @@ class MyApp : Application() {
 | `exceptionClass` | `String?` | 异常类名（如 `SocketTimeoutException`） |
 | `networkType` | `String?` | WIFI / CELLULAR / ETHERNET / NONE（取自 `NetworkTypeCache`） |
 | `carrierName` | `String?` | 运营商名称（预留，当前为 null） |
+| `eventStage` | `String` | 事件阶段：`HTTP` 表示 OkHttp 拦截器阶段，`DOWNLOAD` 表示下载流/文件处理阶段 |
+| `downloadSize` | `Long` | 下载阶段已写入字节数；普通 HTTP 事件为 0 |
+| `contentLength` | `Long` | 下载文件总大小；普通 HTTP 事件为 0 |
+| `isAppend` | `Boolean` | 是否为断点续传下载事件 |
+| `retryCount` | `Int` | 当前剩余重试次数 |
+| `downloadSpeed` | `Long` | 平均下载速度，单位 bytes/s |
+| `downloadError` | `ErrorType` | 下载阶段独立错误类型；普通 HTTP 事件为 `NONE` |
 
 **序列化示例**（`toJson()` 输出）：
 
@@ -2168,7 +2196,34 @@ class MyApp : Application() {
   "exceptionClass": null,
   "networkType": "WIFI",
   "carrierName": "",
+  "eventStage": "HTTP",
   "timestamp": 1719000000000
+}
+```
+
+下载阶段错误事件示例：
+
+```json
+{
+  "requestId": "dl_a1b2c3d4_9",
+  "url": "https://cdn.example.com/patch.apk?token=***",
+  "method": "GET",
+  "tag": "https://cdn.example.com/patch.apk?token=***",
+  "totalCostMs": 12800,
+  "httpCode": -1,
+  "responseBodySize": 10485760,
+  "isSuccess": false,
+  "errorType": "MD5_MISMATCH",
+  "errorMessage": "md5 check failed",
+  "networkType": "",
+  "carrierName": "",
+  "eventStage": "DOWNLOAD",
+  "timestamp": 1719000000000,
+  "downloadSize": 10485760,
+  "contentLength": 10485760,
+  "isAppend": true,
+  "downloadSpeed": 819200,
+  "downloadError": "MD5_MISMATCH"
 }
 ```
 
@@ -2191,6 +2246,9 @@ class MyApp : Application() {
 | `HTTP_SERVER_ERROR` | HTTP 5xx | 服务端错误(500)、网关超时(502/504) |
 | `PARSE_ERROR` | 响应解析失败 | JSON 格式错误、数据模型不匹配 |
 | `CANCELLED` | 请求被取消 | Activity 销毁、手动取消 |
+| `DOWNLOAD_STREAM_ERROR` | 下载流读取/完整性异常 | 响应体为空、流读取中断、下载字节数不足 |
+| `DISK_WRITE_ERROR` | 磁盘写入/文件操作失败 | 目录创建失败、写文件失败、重命名失败、目标文件冲突 |
+| `MD5_MISMATCH` | 下载完成后 MD5 校验失败 | 文件损坏、服务端文件变化、断点续传内容不一致 |
 | `UNKNOWN` | 其他未分类异常 | 需人工排查 |
 
 > `SocketTimeoutException` 在拦截器层无法精确区分子类型（连接/读/写），统一归为 `TIMEOUT`。精确区分需配合 EventListener。
@@ -2310,6 +2368,13 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | `.monitor()` | 强制对本请求开启监控（优先级最高） |
 | `.skipMonitor()` | 强制跳过本请求的监控（优先级最高） |
 
+#### TaskBuilder 下载任务方法
+
+| 方法 | 说明 |
+|---|---|
+| `.monitor()` | 强制对本下载任务开启监控；同时影响 HTTP 阶段和 DOWNLOAD 阶段 |
+| `.skipMonitor()` | 强制跳过本下载任务监控；同时跳过 HTTP 阶段和 DOWNLOAD 阶段 |
+
 #### MonitorMarker（OkHttp Typed Tag）
 
 | 常量 | 值 | 说明 |
@@ -2348,6 +2413,9 @@ suspend fun createPayment(@Body body: PaymentRequest): PaymentResponse
 | `HTTP_SERVER_ERROR` | HTTP 5xx |
 | `PARSE_ERROR` | 响应解析失败 |
 | `CANCELLED` | 请求被取消 |
+| `DOWNLOAD_STREAM_ERROR` | 下载流读取中断、响应体为空或下载数据不完整 |
+| `DISK_WRITE_ERROR` | 下载目录、写文件、重命名或目标文件处理失败 |
+| `MD5_MISMATCH` | 下载完成后 MD5 校验失败 |
 | `UNKNOWN` | 未知错误 |
 
 #### IMonitorReportHandler 接口
@@ -2403,3 +2471,148 @@ Net.instance.configure {
     }
 }
 ```
+
+### 26.16 下载错误上报
+
+下载监控由两个阶段组成，二者共用同一个 `IMonitorReportHandler`，但通过 `eventStage` 字段区分，便于服务端日志检索和问题排查。
+
+| 阶段 | eventStage | 产生位置 | 负责问题 |
+|---|---|---|---|
+| HTTP 阶段 | `HTTP` | `MonitorInterceptor` | DNS、连接失败、超时、SSL、HTTP 4xx/5xx、请求层取消 |
+| 下载阶段 | `DOWNLOAD` | `BaseRequest` | 响应体为空、流读取中断、磁盘写入失败、目录创建失败、文件重命名失败、MD5 校验失败、文件不完整、下载过程中取消 |
+
+#### 26.16.1 快速启用
+
+下载错误上报复用 `monitor {}` 配置，不需要单独初始化：
+
+```kotlin
+Net.instance.configure {
+    app(this@MyApp)
+    monitor {
+        enabled(true)
+        reportUrl("https://monitor.example.com/api/v1/report")
+        reportMode(ReportMode.FAILURE_ONLY)
+        sampleRate(1.0f)
+    }
+}
+
+Net.instance.newDownload()
+    .savePath("${filesDir}/patch.apk")
+    .url("https://cdn.example.com/patch.apk")
+    .retryCount(3)
+    .supportCheckpoint()
+    .start()
+```
+
+默认 `FAILURE_ONLY` 下：
+
+- HTTP 404/500、DNS 失败、连接超时等由 `MonitorInterceptor` 上报，`eventStage=HTTP`。
+- HTTP 200/206 后，保存文件失败、MD5 校验失败、文件不完整等由下载阶段上报，`eventStage=DOWNLOAD`。
+- 正常下载成功不会额外产生 `DOWNLOAD` 成功事件，避免增加上报量。
+
+#### 26.16.2 单任务开启或跳过
+
+下载任务支持和普通请求一致的单任务控制：
+
+```kotlin
+// 强制上报该下载任务，即使全局 enabled(false)。
+// 注意：仍需配置 reportUrl 或 reportHandler，框架才能创建上报处理器。
+Net.instance.newDownload()
+    .savePath("${filesDir}/important.apk")
+    .url("https://cdn.example.com/important.apk")
+    .monitor()
+    .start()
+
+// 跳过该下载任务的所有监控事件，包括 HTTP 阶段和 DOWNLOAD 阶段。
+Net.instance.newDownload()
+    .savePath("${cacheDir}/temp.bin")
+    .url("https://cdn.example.com/temp.bin")
+    .skipMonitor()
+    .start()
+```
+
+控制规则：
+
+```
+1. 同一个 Task 只保存一个 monitorFlag，后调用的 .monitor() / .skipMonitor() 会覆盖前一次调用
+2. TaskBuilder.skipMonitor()  → 强制跳过
+3. TaskBuilder.monitor()      → 强制开启
+4. MonitorConfig.enabled      → 全局兜底
+5. MonitorConfig.sampleRate   → 非强制开启时按采样率过滤
+```
+
+#### 26.16.3 为什么可能出现两条事件
+
+同一次下载可能出现两条事件，但它们代表不同阶段，不是重复上报：
+
+```text
+HTTP 200/206 成功，并且 reportMode=ALL 或命中 SLOW_ONLY
+  → MonitorInterceptor 上报 eventStage=HTTP
+
+随后写文件失败 / MD5 校验失败 / 文件不完整
+  → BaseRequest 上报 eventStage=DOWNLOAD
+```
+
+排查建议：
+
+- 先按脱敏后的 `url`、时间窗口和 `eventStage` 聚合同一次下载。
+- 看到 `eventStage=HTTP`，优先排查网络、HTTP 状态码、服务端响应。
+- 看到 `eventStage=DOWNLOAD`，优先排查磁盘空间、目录权限、断点续传一致性、MD5、文件系统。
+- HTTP 404/500、DNS 失败、连接失败、超时等只由 `HTTP` 阶段上报；下载阶段不会再重复上报。
+
+#### 26.16.4 重试与最终失败
+
+下载调度器会在每次真正发起下载前递减 `Task.tryAgainCount`。下载阶段上报会过滤中间失败：
+
+```kotlin
+if (errorType != MonitorEvent.ErrorType.CANCELLED && task.tryAgainCount > 0) {
+    return
+}
+```
+
+含义：
+
+- 还有剩余重试次数时，磁盘/流/MD5 等中间失败不会被当作最终失败上报。
+- 最后一次重试失败时，`tryAgainCount == 0`，才会上报 `DOWNLOAD` 阶段错误。
+- 取消类错误 `CANCELLED` 会立即上报，便于排查用户取消、Activity 销毁或主动取消任务。
+
+#### 26.16.5 下载阶段字段
+
+`eventStage=DOWNLOAD` 时，会额外输出下载字段：
+
+| 字段 | 说明 |
+|---|---|
+| `downloadSize` | 当前已写入磁盘的字节数 |
+| `contentLength` | 期望下载总字节数，来自响应体 Content-Length 和本地断点文件大小 |
+| `isAppend` | 是否启用断点续传 |
+| `retryCount` | 当前剩余重试次数 |
+| `downloadSpeed` | 平均下载速度，单位 bytes/s |
+| `downloadError` | 下载阶段错误类型，通常与 `errorType` 一致 |
+
+#### 26.16.6 常见错误排查
+
+| ErrorType | 常见原因 | 排查方向 |
+|---|---|---|
+| `DOWNLOAD_STREAM_ERROR` | 响应体为空、读取流异常、实际字节数小于 Content-Length | 服务端是否提前断流、CDN 是否稳定、是否被取消导致流关闭 |
+| `DISK_WRITE_ERROR` | 目录创建失败、文件写入失败、目标文件已存在且未允许覆盖、重命名失败 | 存储权限、磁盘空间、路径合法性、目标文件占用 |
+| `MD5_MISMATCH` | 下载完成但校验不一致 | 服务端文件是否变化、断点续传文件是否污染、MD5 配置是否正确 |
+| `CANCELLED` | 下载过程中被取消 | Activity 销毁、手动 `cancelDownload()`、任务 URL 被标记取消 |
+
+#### 26.16.7 服务端接收建议
+
+服务端建议按 `eventStage` 分开看板：
+
+```text
+eventStage = HTTP
+  关注：失败率、HTTP 状态码、DNS/SSL/超时、接口耗时
+
+eventStage = DOWNLOAD
+  关注：磁盘错误、MD5 错误、文件不完整、下载速度、断点续传失败
+```
+
+如果要串联同一次下载，推荐使用：
+
+- `url`：已脱敏后的下载地址。
+- `tag`：下载事件当前写入脱敏后的 URL，便于和 HTTP 事件关联。
+- `requestStartMs/requestEndMs`：阶段耗时窗口。
+- `eventStage`：区分网络层还是下载处理层。

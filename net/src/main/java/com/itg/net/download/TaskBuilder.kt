@@ -10,6 +10,7 @@ import com.itg.net.download.data.Task
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.operations.DownloadEndNotify
 import com.itg.net.download.operations.HoldActivityCallbackMap
+import com.itg.net.monitor.MonitorMarker
 import com.itg.net.util.PrintLog
 import com.itg.net.util.ThreadTool
 import java.io.File
@@ -272,6 +273,31 @@ class TaskBuilder {
      */
     fun noUseGlobalParams(): TaskBuilder {
         this.task.noGlobalParams = true
+        return this
+    }
+
+    /**
+     * 强制对本下载任务开启监控上报，优先级最高
+     *
+     * 无视全局 [com.itg.net.monitor.MonitorConfig.enabled] 配置。
+     *
+     * @return 返回自身，支持链式调用
+     */
+    fun monitor(): TaskBuilder {
+        this.task.monitorFlag = MonitorMarker.MONITOR
+        return this
+    }
+
+    /**
+     * 强制跳过本下载任务的监控上报，优先级最高
+     *
+     * 无视全局 [com.itg.net.monitor.MonitorConfig.enabled] 配置。
+     * 适用于心跳/轮询等高频下载任务。
+     *
+     * @return 返回自身，支持链式调用
+     */
+    fun skipMonitor(): TaskBuilder {
+        this.task.monitorFlag = MonitorMarker.SKIP
         return this
     }
 
