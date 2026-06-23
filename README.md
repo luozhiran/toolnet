@@ -2156,12 +2156,18 @@ class MyApp : Application() {
 {
   "requestId": "a1b2c3d4_1719000000000_42",
   "url": "https://api.example.com/login",
-  "method": "POST", "tag": "loginTask",
-  "totalCostMs": 5200, "httpCode": 500,
-  "responseBodySize": 256, "contentType": "application/json; charset=utf-8",
-  "isSuccess": false, "errorType": "HTTP_SERVER_ERROR",
-  "errorMessage": null, "exceptionClass": null,
-  "networkType": "WIFI", "carrierName": "",
+  "method": "POST",
+  "tag": "loginTask",
+  "totalCostMs": 5200,
+  "httpCode": 500,
+  "responseBodySize": 256,
+  "contentType": "application/json; charset=utf-8",
+  "isSuccess": false,
+  "errorType": "HTTP_SERVER_ERROR",
+  "errorMessage": null,
+  "exceptionClass": null,
+  "networkType": "WIFI",
+  "carrierName": "",
   "timestamp": 1719000000000
 }
 ```
