@@ -1,5 +1,2 @@
-before_install:
-  - sdk install java 11.0.21-open
-  - sdk use java 11.0.21-open
-install:
-  - ./gradlew clean :net:publishToMavenLocal :net-flow:publishToMavenLocal :net-retrofit:publishToMavenLocal
+jdk:
+  - openjdk11
