@@ -1,4 +1,4 @@
 ﻿jdk:
   - openjdk11
 install:
-  - ./gradlew clean publishToMavenLocal
+  - ./gradlew clean :net:publishToMavenLocal :net-flow:publishToMavenLocal :net-retrofit:publishToMavenLocal
