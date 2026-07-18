@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace 'com.itg.net.retrofit'
-    compileSdk 31
+    compileSdk 34
 
     defaultConfig {
         minSdk 21
@@ -23,6 +23,9 @@ android {
     }
     publishing {
         singleVariant('release')
+    }
+    lintOptions {
+        disable 'GradleDependency'
     }
 }
 
