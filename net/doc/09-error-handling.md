@@ -228,6 +228,88 @@ Net.instance.get()
     })
 ```
 
+### ApiEnvelopeParser 的作用
+
+`ApiEnvelopeParser` 是业务协议适配层。它负责把后端原始响应字符串解析成统一的 `ApiEnvelope`，后面的 `BusinessResultInterceptor` 只需要读取 `chain.envelope.code`、`message`、`dataRaw` 和 `success`，不需要关心后端字段到底叫 `code`、`status`、`bizCode` 还是别的。
+
+处理流程：
+
+```text
+HTTP 200 原始 body
+  -> ApiEnvelopeParser 解析业务协议
+  -> ApiEnvelope(code/message/dataRaw/success)
+  -> BusinessResultInterceptor 责任链
+  -> onSuccess/onBusinessError/onConsumed
+```
+
+`ApiEnvelope` 字段含义：
+
+| 字段 | 含义 | 谁会使用 |
+|---|---|---|
+| `code` | 后端业务码，例如 `0`、`200`、`401001`、`TOKEN_EXPIRED` | 责任链和业务错误判断 |
+| `message` | 后端提示文案，例如 `ok`、`登录已过期` | `onBusinessError` 或全局提示 |
+| `dataRaw` | `data` / `result` 等数据字段的原始字符串 | 页面成功后继续反序列化或展示 |
+| `rawBody` | 完整原始响应体 | 日志、排查、兜底解析 |
+| `success` | 当前业务响应是否成功 | 决定进入 `onSuccess` 还是 `onBusinessError` |
+
+例如默认解析器读取这个响应：
+
+```json
+{
+  "code": "0",
+  "message": "ok",
+  "data": {
+    "name": "Tom"
+  }
+}
+```
+
+会得到：
+
+```kotlin
+ApiEnvelope(
+    code = "0",
+    message = "ok",
+    dataRaw = """{"name":"Tom"}""",
+    rawBody = 原始完整响应,
+    success = true
+)
+```
+
+如果响应是：
+
+```json
+{
+  "code": "401001",
+  "message": "登录已过期",
+  "data": null
+}
+```
+
+会得到：
+
+```kotlin
+ApiEnvelope(
+    code = "401001",
+    message = "登录已过期",
+    dataRaw = null,
+    rawBody = 原始完整响应,
+    success = false
+)
+```
+
+然后登录失效拦截器就可以统一判断：
+
+```kotlin
+override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
+    if (chain.envelope.code == "401001") {
+        // 清 token、跳登录页、发全局事件等。
+        return BusinessResult.Consumed(reason = "login expired")
+    }
+    return chain.proceed()
+}
+```
+
 默认解析器会读取常见字段：
 
 | 字段类型 | 默认字段名 |
