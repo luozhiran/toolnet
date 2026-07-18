@@ -28,6 +28,8 @@ export async function request<T = unknown>(
 // GET /api/data
 export const getApiData = <T = unknown>() => request<T>('/api/data');
 
+export const getNetworkInfo = <T = unknown>() => request<T>('/api/network-info');
+
 // GET /api/echo (query params)
 export const getEcho = (params: URLSearchParams) =>
   request(`/api/echo?${params.toString()}`);
@@ -56,6 +58,41 @@ export const postForm = (formData: URLSearchParams) =>
     body: formData.toString(),
   });
 
+export const saveMockConfig = (config: unknown) =>
+  request('/api/mock-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+
+export interface CustomRequestResult<T = unknown> extends ApiResponse<T> {
+  headers: Record<string, string>;
+}
+
+export async function customRequest<T = unknown>(
+  url: string,
+  options?: RequestInit
+): Promise<CustomRequestResult<T>> {
+  try {
+    const response = await fetch(url, options);
+    const headers = Object.fromEntries(response.headers.entries());
+    let data: T;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = (await response.text()) as unknown as T;
+    }
+    return { ok: response.ok, status: response.status, headers, data };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      headers: {},
+      data: (err as Error).message,
+    } as unknown as CustomRequestResult<T>;
+  }
+}
 // 单文件上传
 export const uploadSingle = (file: File, extraFields: Record<string, string> = {}) => {
   const fd = new FormData();
@@ -96,3 +133,4 @@ export const getDownloadUrl = (filename: string): string =>
 // 删除文件
 export const deleteFile = (filename: string) =>
   request(`/download/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+

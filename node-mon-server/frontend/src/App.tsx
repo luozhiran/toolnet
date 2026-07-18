@@ -33,6 +33,7 @@ const TABS: Tab[] = [
       { key: 'api-user',  icon: '👤', label: '用户信息',   desc: 'GET /api/user/:id',   component: 'api', mode: 'user' },
       { key: 'api-json',  icon: '📩', label: '提交 JSON',  desc: 'POST /api/json',      component: 'api', mode: 'json' },
       { key: 'api-form',  icon: '📋', label: '提交表单',   desc: 'POST /api/form',      component: 'api', mode: 'form' },
+      { key: 'api-custom', icon: '🛠️', label: '自定义请求', desc: 'GET/POST 自定义',     component: 'api', mode: 'custom' },
     ]
   },
   { key: 'upload-single', icon: '📤', label: '单文件上传',   desc: '/upload/single',      component: 'upload-single' },

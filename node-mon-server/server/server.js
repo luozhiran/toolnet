@@ -3,6 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const debug = require('debug');
 
 // 创建不同模块的调试器
@@ -107,6 +108,140 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: ['text/*', 'application/xml'] }));
+
+const mockRules = new Map();
+
+function normalizeForCompare(value) {
+    if (typeof value === 'string') return value;
+    return JSON.stringify(value);
+}
+
+function parseExpectedBody(rule) {
+    if (!rule.body || rule.bodyType === 'none') return undefined;
+    if (rule.bodyType === 'json') return JSON.parse(rule.body);
+    if (rule.bodyType === 'form') return Object.fromEntries(new URLSearchParams(rule.body));
+    return rule.body;
+}
+
+function collectMockMismatches(rule, req) {
+    const mismatches = [];
+
+    Object.entries(rule.query || {}).forEach(([key, expected]) => {
+        const actual = req.query[key];
+        if (String(actual ?? '') !== String(expected)) {
+            mismatches.push({
+                field: `query.${key}`,
+                expected,
+                actual: actual ?? null
+            });
+        }
+    });
+
+    Object.entries(rule.headers || {}).forEach(([key, expected]) => {
+        const actual = req.get(key);
+        if (String(actual ?? '') !== String(expected)) {
+            mismatches.push({
+                field: `headers.${key}`,
+                expected,
+                actual: actual ?? null
+            });
+        }
+    });
+
+    if (rule.bodyType && rule.bodyType !== 'none') {
+        try {
+            const expectedBody = parseExpectedBody(rule);
+            const actualBody = req.body;
+            if (normalizeForCompare(actualBody) !== normalizeForCompare(expectedBody)) {
+                mismatches.push({
+                    field: 'body',
+                    expected: expectedBody,
+                    actual: actualBody
+                });
+            }
+        } catch (err) {
+            mismatches.push({
+                field: 'body',
+                expected: rule.body,
+                actual: req.body,
+                message: `Mock Body 配置解析失败: ${err.message}`
+            });
+        }
+    }
+
+    return mismatches;
+}
+
+function sendMockResponse(rule, res) {
+    const status = Number(rule.responseStatus) || 200;
+    res.status(status);
+    if (rule.responseContentType === 'text') {
+        return res.type('text/plain').send(rule.responseBody || '');
+    }
+
+    try {
+        return res.json(JSON.parse(rule.responseBody || '{}'));
+    } catch {
+        return res.status(500).json({
+            code: 500,
+            message: 'Mock 响应 JSON 配置无效',
+            responseBody: rule.responseBody
+        });
+    }
+}
+
+app.post('/api/mock-config', (req, res) => {
+    const rule = req.body || {};
+    const method = String(rule.method || '').toUpperCase();
+    const pathname = String(rule.path || '').trim();
+
+    if (!method || !pathname.startsWith('/')) {
+        return res.status(400).json({
+            code: 400,
+            message: 'Mock 配置需要 method 和以 / 开头的 path'
+        });
+    }
+
+    const key = `${method} ${pathname}`;
+    mockRules.set(key, {
+        ...rule,
+        method,
+        path: pathname
+    });
+
+    res.json({
+        code: 200,
+        message: 'Mock 接口已保存',
+        data: {
+            key,
+            path: pathname,
+            method
+        }
+    });
+});
+
+app.use((req, res, next) => {
+    if (req.path === '/api/mock-config') return next();
+
+    const rule = mockRules.get(`${req.method.toUpperCase()} ${req.path}`);
+    if (!rule) return next();
+
+    const mismatches = collectMockMismatches(rule, req);
+    if (mismatches.length > 0) {
+        return res.status(400).json({
+            code: 400,
+            message: '请求不符合 Mock 配置',
+            data: {
+                method: rule.method,
+                path: rule.path,
+                mismatches
+            }
+        });
+    }
+
+    return sendMockResponse(rule, res);
+});
 
 // ============= Multer 配置 =============
 const storage = multer.diskStorage({
@@ -164,6 +299,24 @@ app.get('/api/data', (req, res) => {
             id: 1,
             name: 'Test Data',
             timestamp: Date.now()
+        }
+    });
+});
+
+app.get('/api/network-info', (req, res) => {
+    const addresses = Object.entries(os.networkInterfaces())
+        .flatMap(([name, infos]) => (infos || [])
+            .filter(info => info.family === 'IPv4' && !info.internal)
+            .map(info => ({ name, address: info.address })));
+    const preferred = addresses[0]?.address || req.hostname;
+
+    res.json({
+        code: 200,
+        data: {
+            host: preferred,
+            port: PORT,
+            baseUrl: `http://${preferred}:${PORT}`,
+            addresses
         }
     });
 });
