@@ -1,0 +1,240 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: #f5f7fb;
+  margin: 0;
+  padding: 20px;
+  color: #1e293b;
+}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+h1 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+.sub {
+  color: #475569;
+  margin-bottom: 2rem;
+  border-left: 3px solid #3b82f6;
+  padding-left: 1rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 10px 20px -5px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+.card-header {
+  background: #f8fafc;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.badge {
+  background: #e2e8f0;
+  color: #1e293b;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-weight: normal;
+}
+.card-body {
+  padding: 1.25rem;
+}
+.form-group {
+  margin-bottom: 1rem;
+}
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: #334155;
+}
+input, select, textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+button {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+button:hover {
+  background: #2563eb;
+}
+button.secondary {
+  background: #64748b;
+}
+button.secondary:hover {
+  background: #475569;
+}
+.response-area {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  font-family: monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow: auto;
+  margin-top: 1rem;
+}
+.file-list {
+  background: #f1f5f9;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  max-height: 250px;
+  overflow-y: auto;
+}
+.file-item {
+  padding: 0.5rem;
+  border-bottom: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.download-link {
+  background: #22c55e;
+  color: white;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.7rem;
+}
+.inline-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.sub-card {
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  border: 1px solid #e2e8f0;
+  position: relative;
+}
+.param-row {
+  margin-bottom: 0.5rem;
+}
+.progress-bar {
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  height: 8px;
+  margin: 0.5rem 0;
+}
+.progress-fill {
+  background: #3b82f6;
+  width: 0%;
+  height: 100%;
+  transition: width 0.2s;
+}
+hr {
+  margin: 1rem 0;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+}
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 模态框样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.modal-container {
+  background: white;
+  border-radius: 1rem;
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  overflow: auto;
+  position: relative;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.modal-close {
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: #64748b;
+}
+.modal-body {
+  padding: 1.5rem;
+}
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  text-align: right;
+}
+.code-block {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-family: monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+.example-btn {
+  background: #10b981;
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  margin-left: 0.5rem;
+}
+.example-btn:hover {
+  background: #059669;
+}

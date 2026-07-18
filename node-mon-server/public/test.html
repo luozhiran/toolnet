@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试服务器 - 功能面板</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f5f7fb;
+            margin: 0;
+            padding: 20px;
+            color: #1e293b;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #0f172a;
+        }
+        .sub {
+            color: #475569;
+            margin-bottom: 2rem;
+            border-left: 3px solid #3b82f6;
+            padding-left: 1rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 10px 20px -5px rgba(0,0,0,0.05);
+            overflow: hidden;
+            transition: all 0.2s;
+            border: 1px solid #e2e8f0;
+        }
+        .card-header {
+            background: #f8fafc;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .card-header .badge {
+            background: #e2e8f0;
+            color: #1e293b;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            font-weight: normal;
+        }
+        .card-body {
+            padding: 1.25rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.4rem;
+            color: #334155;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            transition: 0.2s;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button.secondary {
+            background: #64748b;
+        }
+        button.secondary:hover {
+            background: #475569;
+        }
+        button.small {
+            padding: 0.3rem 0.8rem;
+            font-size: 0.8rem;
+        }
+        .response-area {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 300px;
+            overflow: auto;
+            margin-top: 1rem;
+        }
+        .file-list {
+            background: #f1f5f9;
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            font-size: 0.85rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .file-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid #cbd5e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-name {
+            font-weight: 500;
+            word-break: break-all;
+        }
+        .file-size {
+            color: #475569;
+            font-size: 0.75rem;
+        }
+        .download-link {
+            background: #22c55e;
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 0.7rem;
+        }
+        .inline-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .inline-group input {
+            flex: 1;
+        }
+        hr {
+            margin: 1rem 0;
+            border: none;
+            border-top: 1px solid #e2e8f0;
+        }
+        .sub-card {
+            background: #f8fafc;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            border: 1px solid #e2e8f0;
+        }
+        .param-row {
+            margin-bottom: 0.5rem;
+        }
+        .progress-bar {
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+            height: 8px;
+            margin: 0.5rem 0;
+        }
+        .progress-fill {
+            background: #3b82f6;
+            width: 0%;
+            height: 100%;
+            transition: width 0.2s;
+        }
+        @media (max-width: 640px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .card-body {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🧪 测试服务器控制台</h1>
+    <div class="sub">支持 JSON API · 单/多文件上传 · 混合上传 · 文件列表与下载 · 断点续传演示</div>
+
+    <div class="grid">
+        <!-- 卡片1: API 测试 -->
+        <div class="card">
+            <div class="card-header">
+                📡 API 测试
+                <span class="badge">REST</span>
+            </div>
+            <div class="card-body">
+                <!-- GET /api/data -->
+                <div class="form-group">
+                    <label>GET /api/data（无参数）</label>
+                    <button id="getDataBtn">获取数据</button>
+                </div>
+
+                <!-- GET /api/echo 动态参数 -->
+                <div class="sub-card">
+                    <label>GET /api/echo?（Query 参数，可多组）</label>
+                    <div id="echoParamsContainer">
+                        <div class="param-row inline-group">
+                            <input type="text" placeholder="参数名 (如: name)" style="width: 45%;">
+                            <input type="text" placeholder="参数值 (如: 张三)" style="width: 45%;">
+                            <button type="button" class="small remove-param" style="background: #ef4444; padding: 0.3rem 0.6rem;">删除</button>
+                        </div>
+                    </div>
+                    <div class="inline-group" style="justify-content: space-between; margin-top: 0.5rem;">
+                        <button id="addEchoParamBtn" class="secondary small" style="background: #3b82f6;">➕ 添加参数</button>
+                        <button id="sendEchoBtn">发送 Echo 请求</button>
+                    </div>
+                </div>
+
+                <!-- GET /api/user/:id 动态参数 -->
+                <div class="sub-card">
+                    <label>GET /api/user/:id（路径参数 + 多组 Query 参数）</label>
+                    <div class="form-group">
+                        <label>用户ID (路径参数)</label>
+                        <input type="text" id="userId" placeholder="例如: 123">
+                    </div>
+                    <div id="userQueryParamsContainer">
+                        <div class="param-row inline-group">
+                            <input type="text" placeholder="参数名 (如: name)" style="width: 45%;">
+                            <input type="text" placeholder="参数值 (如: 张三)" style="width: 45%;">
+                            <button type="button" class="small remove-param" style="background: #ef4444; padding: 0.3rem 0.6rem;">删除</button>
+                        </div>
+                    </div>
+                    <div class="inline-group" style="justify-content: space-between; margin-top: 0.5rem;">
+                        <button id="addUserParamBtn" class="secondary small" style="background: #3b82f6;">➕ 添加参数</button>
+                        <button id="getUserBtn">获取用户信息</button>
+                    </div>
+                </div>
+
+                <!-- POST /api/json -->
+                <div class="sub-card">
+                    <label>POST /api/json (发送 JSON)</label>
+                    <textarea id="postJsonData" rows="2" placeholder='{"name": "测试", "value": 123}' style="font-family: monospace;">{"message": "Hello Server", "timestamp": "now"}</textarea>
+                    <button id="postJsonBtn">提交 JSON</button>
+                </div>
+
+                <!-- POST /api/form 动态表单字段 -->
+                <div class="sub-card">
+                    <label>POST /api/form (发送表单, application/x-www-form-urlencoded)</label>
+                    <div id="formParamsContainer">
+                        <div class="param-row inline-group">
+                            <input type="text" placeholder="字段名" style="width: 45%;">
+                            <input type="text" placeholder="字段值" style="width: 45%;">
+                            <button type="button" class="small remove-param" style="background: #ef4444; padding: 0.3rem 0.6rem;">删除</button>
+                        </div>
+                    </div>
+                    <div class="inline-group" style="justify-content: space-between; margin-top: 0.5rem;">
+                        <button id="addFormParamBtn" class="secondary small" style="background: #3b82f6;">➕ 添加字段</button>
+                        <button id="postFormBtn">提交表单</button>
+                    </div>
+                </div>
+
+                <div id="apiResponse" class="response-area">等待请求...</div>
+            </div>
+        </div>
+
+        <!-- 卡片2: 单文件上传 -->
+        <div class="card">
+            <div class="card-header">
+                📤 单文件上传 (multipart)
+                <span class="badge">/upload/single</span>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>选择文件 (png/zip/任意)</label>
+                    <input type="file" id="singleFileInput">
+                </div>
+                <div class="form-group">
+                    <label>额外字段 (可选)</label>
+                    <input type="text" id="extraField" placeholder="例如: description=测试文件">
+                </div>
+                <button id="uploadSingleBtn">⬆️ 上传文件</button>
+                <div id="singleUploadResponse" class="response-area">等待上传...</div>
+            </div>
+        </div>
+
+        <!-- 卡片3: 多文件上传 -->
+        <div class="card">
+            <div class="card-header">
+                📚 多文件上传 (最多5个)
+                <span class="badge">/upload/multiple</span>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>选择多个文件</label>
+                    <input type="file" id="multiFileInput" multiple>
+                </div>
+                <button id="uploadMultipleBtn">⬆️ 上传多文件</button>
+                <div id="multiUploadResponse" class="response-area">等待上传...</div>
+            </div>
+        </div>
+
+        <!-- 卡片4: 混合上传 -->
+        <div class="card">
+            <div class="card-header">
+                🧬 混合上传 (文件+文本+JSON+表单)
+                <span class="badge">/upload/mixed</span>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>选择多个文件</label>
+                    <input type="file" id="mixedFilesInput" multiple>
+                </div>
+                <div class="form-group">
+                    <label>文本内容 (content)</label>
+                    <input type="text" id="mixedContent" placeholder="例如: Hello World">
+                </div>
+                <div class="form-group">
+                    <label>JSON 数据 (jsonData)</label>
+                    <textarea id="mixedJson" rows="2" placeholder='{"userId": 123, "action": "upload"}' style="font-family: monospace;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>普通表单字段 (任意 key/value)</label>
+                    <div class="inline-group">
+                        <input type="text" id="extraFieldKey" placeholder="字段名">
+                        <input type="text" id="extraFieldValue" placeholder="字段值">
+                    </div>
+                </div>
+                <button id="uploadMixedBtn">⬆️ 混合上传</button>
+                <div id="mixedUploadResponse" class="response-area">等待上传...</div>
+            </div>
+        </div>
+
+        <!-- 卡片5: 文件管理 + 断点续传 -->
+        <div class="card">
+            <div class="card-header">
+                📁 文件管理 & 断点续传
+                <span class="badge">/download/*</span>
+            </div>
+            <div class="card-body">
+                <button id="refreshFilesBtn" class="secondary">🔄 刷新文件列表</button>
+                <div id="fileListArea" class="file-list">
+                    <div style="color: #64748b; text-align: center;">点击刷新按钮加载文件</div>
+                </div>
+                <hr>
+                <div class="form-group">
+                    <label>直接下载 (输入文件名)</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="downloadFilename" placeholder="例如: 1705314600000-123-test.png" style="flex:1;">
+                        <button id="downloadBtn">下载</button>
+                    </div>
+                    <small style="color: #64748b;">文件名可从上方列表中复制</small>
+                </div>
+
+                <div class="sub-card">
+                    <label>🔁 断点续传演示（分片下载合并）</label>
+                    <div class="form-group">
+                        <label>选择要测试的文件</label>
+                        <select id="rangeFileSelect" style="width: 100%;">
+                            <option value="">-- 请先刷新文件列表 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>分片数量（默认 3 片）</label>
+                        <input type="number" id="chunkCount" value="3" min="1" max="10">
+                    </div>
+                    <button id="chunkDownloadBtn">📥 分片下载并合并</button>
+                    <div id="chunkProgress" style="font-size: 0.85rem; margin-top: 0.5rem;"></div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="chunkProgressFill"></div>
+                    </div>
+                    <div id="chunkResult" class="response-area" style="margin-top: 0.5rem;">等待操作...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 附加说明 -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header">
+            ℹ️ 使用说明
+        </div>
+        <div class="card-body">
+            <ul style="margin: 0; padding-left: 1.2rem;">
+                <li>静态文件测试：将 .zip/.png 放入 <code>public/</code> 目录，访问 <code>/download/static/文件名</code></li>
+                <li>上传的文件保存在 <code>uploads/</code> 目录，可通过文件列表查看和下载。</li>
+                <li>混合上传支持同时发送多个文件、文本内容、JSON 字符串和任意表单字段。</li>
+                <li><strong>断点续传演示</strong>：选择已上传的文件，点击“分片下载并合并”，前端会自动将文件分成多个 Range 请求下载，最后合并成完整文件并提示结果。</li>
+                <li>所有响应均包含调试信息，可在控制台查看网络请求详情。</li>
+                <li>服务器支持跨域 (CORS)，可从其他设备访问本页面进行测试。</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 基础配置
+    const API_BASE = '';
+    const UPLOAD_SINGLE_URL = '/upload/single';
+    const UPLOAD_MULTIPLE_URL = '/upload/multiple';
+    const UPLOAD_MIXED_URL = '/upload/mixed';
+    const FILES_LIST_URL = '/download/files';
+    const DOWNLOAD_BASE_URL = '/download';
+
+    // DOM 元素
+    const getDataBtn = document.getElementById('getDataBtn');
+    const sendEchoBtn = document.getElementById('sendEchoBtn');
+    const getUserBtn = document.getElementById('getUserBtn');
+    const postJsonBtn = document.getElementById('postJsonBtn');
+    const postFormBtn = document.getElementById('postFormBtn');
+    const apiResponseDiv = document.getElementById('apiResponse');
+    const singleFileInput = document.getElementById('singleFileInput');
+    const extraField = document.getElementById('extraField');
+    const uploadSingleBtn = document.getElementById('uploadSingleBtn');
+    const singleUploadResponse = document.getElementById('singleUploadResponse');
+    const multiFileInput = document.getElementById('multiFileInput');
+    const uploadMultipleBtn = document.getElementById('uploadMultipleBtn');
+    const multiUploadResponse = document.getElementById('multiUploadResponse');
+    const mixedFilesInput = document.getElementById('mixedFilesInput');
+    const mixedContent = document.getElementById('mixedContent');
+    const mixedJson = document.getElementById('mixedJson');
+    const extraFieldKey = document.getElementById('extraFieldKey');
+    const extraFieldValue = document.getElementById('extraFieldValue');
+    const uploadMixedBtn = document.getElementById('uploadMixedBtn');
+    const mixedUploadResponse = document.getElementById('mixedUploadResponse');
+    const refreshFilesBtn = document.getElementById('refreshFilesBtn');
+    const fileListArea = document.getElementById('fileListArea');
+    const downloadFilenameInput = document.getElementById('downloadFilename');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const rangeFileSelect = document.getElementById('rangeFileSelect');
+    const chunkCountInput = document.getElementById('chunkCount');
+    const chunkDownloadBtn = document.getElementById('chunkDownloadBtn');
+    const chunkProgressDiv = document.getElementById('chunkProgress');
+    const chunkProgressFill = document.getElementById('chunkProgressFill');
+    const chunkResultDiv = document.getElementById('chunkResult');
+
+    // 动态参数容器
+    const echoParamsContainer = document.getElementById('echoParamsContainer');
+    const userQueryParamsContainer = document.getElementById('userQueryParamsContainer');
+    const formParamsContainer = document.getElementById('formParamsContainer');
+
+    // 辅助函数
+    function showResponse(container, data, isError = false) {
+        let text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+        container.innerHTML = `<div style="color: ${isError ? '#f87171' : '#86efac'};">${isError ? '❌ 错误' : '✅ 响应'}</div><pre style="margin-top: 8px;">${escapeHtml(text)}</pre>`;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m] || m));
+    }
+
+    async function request(url, options = {}) {
+        try {
+            const response = await fetch(url, options);
+            let data;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+            } else {
+                data = await response.text();
+            }
+            return { ok: response.ok, status: response.status, data };
+        } catch (err) {
+            return { ok: false, status: 0, data: err.message };
+        }
+    }
+
+    // 通用动态添加/删除行函数
+    function addParamRow(container, keyVal = '', valueVal = '') {
+        const row = document.createElement('div');
+        row.className = 'param-row inline-group';
+        row.style.marginBottom = '0.5rem';
+        const keyInput = document.createElement('input');
+        keyInput.type = 'text';
+        keyInput.placeholder = '参数名';
+        keyInput.style.width = '45%';
+        keyInput.value = keyVal;
+        const valueInput = document.createElement('input');
+        valueInput.type = 'text';
+        valueInput.placeholder = '参数值';
+        valueInput.style.width = '45%';
+        valueInput.value = valueVal;
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'small remove-param';
+        delBtn.style.background = '#ef4444';
+        delBtn.style.padding = '0.3rem 0.6rem';
+        delBtn.textContent = '删除';
+        delBtn.onclick = () => row.remove();
+        row.appendChild(keyInput);
+        row.appendChild(valueInput);
+        row.appendChild(delBtn);
+        container.appendChild(row);
+    }
+
+    // 收集容器内所有参数键值对
+    function collectParams(container) {
+        const params = new URLSearchParams();
+        const rows = container.querySelectorAll('.param-row');
+        rows.forEach(row => {
+            const inputs = row.querySelectorAll('input');
+            if (inputs.length >= 2) {
+                const key = inputs[0].value.trim();
+                const val = inputs[1].value.trim();
+                if (key && val) params.append(key, val);
+            }
+        });
+        return params;
+    }
+
+    // 1. GET /api/data
+    getDataBtn.onclick = async () => {
+        apiResponseDiv.innerHTML = '请求中...';
+        const result = await request('/api/data');
+        showResponse(apiResponseDiv, result.ok ? result.data : `状态: ${result.status}\n${result.data}`, !result.ok);
+    };
+
+    // 2. GET /api/echo 动态参数
+    document.getElementById('addEchoParamBtn').onclick = () => addParamRow(echoParamsContainer);
+    sendEchoBtn.onclick = async () => {
+        const params = collectParams(echoParamsContainer);
+        if (params.toString() === '') {
+            showResponse(apiResponseDiv, '请至少添加一对参数名/值', true);
+            return;
+        }
+        const url = `/api/echo?${params.toString()}`;
+        apiResponseDiv.innerHTML = '请求中...';
+        const result = await request(url);
+        showResponse(apiResponseDiv, result.ok ? result.data : `错误: ${result.data}`, !result.ok);
+    };
+
+    // 3. GET /api/user/:id 动态参数
+    document.getElementById('addUserParamBtn').onclick = () => addParamRow(userQueryParamsContainer);
+    getUserBtn.onclick = async () => {
+        const userId = document.getElementById('userId').value.trim();
+        if (!userId) {
+            showResponse(apiResponseDiv, '请输入用户ID (路径参数)', true);
+            return;
+        }
+        const params = collectParams(userQueryParamsContainer);
+        let url = `/api/user/${encodeURIComponent(userId)}`;
+        const queryString = params.toString();
+        if (queryString) url += `?${queryString}`;
+        apiResponseDiv.innerHTML = '请求中...';
+        const result = await request(url);
+        showResponse(apiResponseDiv, result.ok ? result.data : `错误: ${result.data}`, !result.ok);
+    };
+
+    // 4. POST /api/json
+    postJsonBtn.onclick = async () => {
+        const jsonStr = document.getElementById('postJsonData').value.trim();
+        let body;
+        try { body = JSON.parse(jsonStr); } catch(e) { showResponse(apiResponseDiv, '无效的 JSON 格式', true); return; }
+        apiResponseDiv.innerHTML = '提交中...';
+        const result = await request('/api/json', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        showResponse(apiResponseDiv, result.ok ? result.data : `错误: ${result.data}`, !result.ok);
+    };
+
+    // 5. POST /api/form 动态表单字段
+    document.getElementById('addFormParamBtn').onclick = () => addParamRow(formParamsContainer);
+    postFormBtn.onclick = async () => {
+        const params = collectParams(formParamsContainer);
+        if (params.toString() === '') {
+            showResponse(apiResponseDiv, '请至少添加一对表单字段', true);
+            return;
+        }
+        apiResponseDiv.innerHTML = '提交中...';
+        const result = await request('/api/form', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() });
+        showResponse(apiResponseDiv, result.ok ? result.data : `错误: ${result.data}`, !result.ok);
+    };
+
+    // 6. 单文件上传
+    uploadSingleBtn.onclick = async () => {
+        const file = singleFileInput.files[0];
+        if (!file) { alert('请选择一个文件'); return; }
+        const formData = new FormData();
+        formData.append('file', file);
+        const extra = extraField.value.trim();
+        if (extra) {
+            if (extra.includes('=')) { const [k, v] = extra.split('='); formData.append(k, v); }
+            else formData.append('description', extra);
+        }
+        singleUploadResponse.innerHTML = '上传中...';
+        const result = await request(UPLOAD_SINGLE_URL, { method: 'POST', body: formData });
+        if (result.ok) { showResponse(singleUploadResponse, result.data); refreshFiles(); }
+        else showResponse(singleUploadResponse, `上传失败: ${result.data}`, true);
+    };
+
+    // 7. 多文件上传
+    uploadMultipleBtn.onclick = async () => {
+        const files = multiFileInput.files;
+        if (!files.length) { alert('请至少选择一个文件'); return; }
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
+        multiUploadResponse.innerHTML = '上传中...';
+        const result = await request(UPLOAD_MULTIPLE_URL, { method: 'POST', body: formData });
+        if (result.ok) { showResponse(multiUploadResponse, result.data); refreshFiles(); }
+        else showResponse(multiUploadResponse, `上传失败: ${result.data}`, true);
+    };
+
+    // 8. 混合上传
+    uploadMixedBtn.onclick = async () => {
+        const files = mixedFilesInput.files;
+        if (files.length === 0) { alert('请至少选择一个文件'); return; }
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
+        if (mixedContent.value.trim()) formData.append('content', mixedContent.value.trim());
+        if (mixedJson.value.trim()) formData.append('jsonData', mixedJson.value.trim());
+        if (extraFieldKey.value.trim() && extraFieldValue.value.trim()) formData.append(extraFieldKey.value.trim(), extraFieldValue.value.trim());
+        mixedUploadResponse.innerHTML = '上传中...';
+        const result = await request(UPLOAD_MIXED_URL, { method: 'POST', body: formData });
+        if (result.ok) { showResponse(mixedUploadResponse, result.data); refreshFiles(); }
+        else showResponse(mixedUploadResponse, `上传失败: ${result.data}`, true);
+    };
+
+    // 9. 刷新文件列表
+    let currentFileList = [];
+    async function refreshFiles() {
+        fileListArea.innerHTML = '加载中...';
+        const result = await request(FILES_LIST_URL);
+        if (result.ok && result.data.files) {
+            currentFileList = result.data.files;
+            if (currentFileList.length === 0) {
+                fileListArea.innerHTML = '<div style="text-align: center; color: #64748b;">暂无文件，请先上传</div>';
+                rangeFileSelect.innerHTML = '<option value="">-- 无文件 --</option>';
+                return;
+            }
+            let html = '', selectHtml = '<option value="">-- 请选择文件 --</option>';
+            currentFileList.forEach(file => {
+                const sizeKB = (file.size / 1024).toFixed(1);
+                html += `<div class="file-item"><div><div class="file-name">${escapeHtml(file.name)}</div><div class="file-size">${sizeKB} KB · ${new Date(file.modified).toLocaleString()}</div></div><a href="${DOWNLOAD_BASE_URL}/${encodeURIComponent(file.name)}" class="download-link" target="_blank">下载</a></div>`;
+                selectHtml += `<option value="${escapeHtml(file.name)}">${escapeHtml(file.name)} (${sizeKB} KB)</option>`;
+            });
+            fileListArea.innerHTML = html;
+            rangeFileSelect.innerHTML = selectHtml;
+        } else {
+            fileListArea.innerHTML = `<div style="color: #ef4444;">加载失败: ${result.data}</div>`;
+            rangeFileSelect.innerHTML = '<option value="">-- 加载失败 --</option>';
+        }
+    }
+    refreshFilesBtn.onclick = refreshFiles;
+
+    // 10. 直接下载
+    downloadBtn.onclick = () => {
+        const filename = downloadFilenameInput.value.trim();
+        if (!filename) { alert('请输入文件名'); return; }
+        window.open(`${DOWNLOAD_BASE_URL}/${encodeURIComponent(filename)}`, '_blank');
+    };
+
+    // 11. 断点续传分片下载
+    async function downloadChunk(url, start, end, index, total) {
+        const response = await fetch(url, { headers: { 'Range': `bytes=${start}-${end}` } });
+        if (!response.ok && response.status !== 206) throw new Error(`分片 ${index} 下载失败: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const percent = ((index + 1) / total) * 100;
+        chunkProgressFill.style.width = `${percent}%`;
+        chunkProgressDiv.innerText = `已下载 ${index + 1}/${total} 分片...`;
+        return arrayBuffer;
+    }
+
+    chunkDownloadBtn.onclick = async () => {
+        const filename = rangeFileSelect.value;
+        if (!filename) { alert('请选择一个文件'); return; }
+        const fileInfo = currentFileList.find(f => f.name === filename);
+        if (!fileInfo) { alert('文件信息不存在，请刷新列表'); return; }
+        const fileSize = fileInfo.size;
+        const chunkCount = parseInt(chunkCountInput.value, 10);
+        if (isNaN(chunkCount) || chunkCount < 1) { alert('分片数量必须大于0'); return; }
+        const chunkSize = Math.ceil(fileSize / chunkCount);
+        const promises = [], chunks = new Array(chunkCount);
+        chunkProgressDiv.innerText = '开始分片下载...';
+        chunkProgressFill.style.width = '0%';
+        chunkResultDiv.innerHTML = '下载中，请稍候...';
+        try {
+            for (let i = 0; i < chunkCount; i++) {
+                const start = i * chunkSize;
+                const end = (i === chunkCount - 1) ? fileSize - 1 : (start + chunkSize - 1);
+                promises.push(downloadChunk(`${DOWNLOAD_BASE_URL}/${encodeURIComponent(filename)}`, start, end, i, chunkCount).then(buf => { chunks[i] = buf; }));
+            }
+            await Promise.all(promises);
+            const totalLength = chunks.reduce((s, b) => s + b.byteLength, 0);
+            const merged = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const buf of chunks) { merged.set(new Uint8Array(buf), offset); offset += buf.byteLength; }
+            const blob = new Blob([merged], { type: 'application/octet-stream' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl; a.download = `merged_${filename}`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(downloadUrl);
+            chunkResultDiv.innerHTML = `✅ 下载合并成功！文件大小: ${(totalLength / 1024).toFixed(2)} KB (原始大小: ${(fileSize / 1024).toFixed(2)} KB)`;
+            chunkProgressDiv.innerText = '下载完成！';
+        } catch (err) {
+            chunkResultDiv.innerHTML = `❌ 错误: ${err.message}`;
+            chunkProgressDiv.innerText = '下载失败';
+            console.error(err);
+        }
+    };
+
+    // 初始化默认各有一行
+    // 为 echo 添加一个默认示例行（可选）
+    // 为 user 添加一个默认示例行
+    // 为 form 添加一个默认示例行（可选，但为了演示可保留一个空行）
+    // 注意：初始已经有一个空行，不用额外添加，否则会重复
+    // 但为了用户友好，我们清空再添加一个示例行？不需要，已有的一行是空的，用户可直接填写。
+    // 若想提供示例，可以添加预设值，但为了简洁就不做了。
+    // 初始化文件列表
+    refreshFiles();
+</script>
+</body>
+</html>
