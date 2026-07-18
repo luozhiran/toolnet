@@ -65,6 +65,12 @@ export const saveMockConfig = (config: unknown) =>
     body: JSON.stringify(config),
   });
 
+export const getRequestLogs = (limit = 100) =>
+  request(`/api/request-logs?limit=${encodeURIComponent(String(limit))}`);
+
+export const clearRequestLogs = () =>
+  request('/api/request-logs', { method: 'DELETE' });
+
 export interface CustomRequestResult<T = unknown> extends ApiResponse<T> {
   headers: Record<string, string>;
 }

@@ -5,6 +5,7 @@ import FileUpload from './components/FileUpload';
 import MixedUpload from './components/MixedUpload';
 import FileManager from './components/FileManager';
 import ChunkDownload from './components/ChunkDownload';
+import RequestLogs from './components/RequestLogs';
 
 interface TabChild {
   key: string;
@@ -41,6 +42,7 @@ const TABS: Tab[] = [
   { key: 'upload-mixed',  icon: '🧬', label: '混合上传',     desc: '/upload/mixed',       component: 'upload-mixed' },
   { key: 'files',         icon: '📁', label: '文件管理',     desc: '/download/*',         component: 'files' },
   { key: 'chunk',         icon: '🔁', label: '断点续传',     desc: '分片下载合并',         component: 'chunk' },
+  { key: 'logs',          icon: '🧾', label: '请求日志',     desc: '访问与错误日志',       component: 'logs' },
 ];
 
 // 递归查找所有叶子节点的 key
@@ -136,6 +138,7 @@ function App() {
     { key: 'upload-mixed',  node: <MixedUpload /> },
     { key: 'files',         node: <FileManager /> },
     { key: 'chunk',         node: <ChunkDownload /> },
+    { key: 'logs',          node: <RequestLogs /> },
   ];
 
   return (

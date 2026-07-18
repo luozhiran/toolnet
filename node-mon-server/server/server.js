@@ -16,6 +16,8 @@ const perfDebug = debug('app:perf');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+const requestLogs = [];
+const MAX_REQUEST_LOGS = 300;
 
 // ============= 配置 =============
 const config = {
@@ -38,6 +40,28 @@ if (!fs.existsSync(config.upload.dest)) {
     fs.mkdirSync(config.upload.dest, { recursive: true });
 }
 
+function compactValue(value, maxLength = 4000) {
+    if (value === undefined || value === null) return value;
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    if (text.length <= maxLength) return value;
+    return `${text.substring(0, maxLength)}...`;
+}
+
+function addRequestLog(entry) {
+    requestLogs.unshift({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        time: new Date().toISOString(),
+        ...entry
+    });
+    if (requestLogs.length > MAX_REQUEST_LOGS) {
+        requestLogs.length = MAX_REQUEST_LOGS;
+    }
+}
+
+function shouldSkipRequestLog(req) {
+    return req.path === '/api/request-logs';
+}
+
 // ============= 响应拦截中间件 =============
 app.use((req, res, next) => {
     const originalJson = res.json;
@@ -45,12 +69,14 @@ app.use((req, res, next) => {
     const originalDownload = res.download;
 
     res.json = function (data) {
+        res.locals.responseBody = data;
         responseDebug(`📤 响应状态: ${res.statusCode}`);
         responseDebug(`📦 响应体 (JSON): ${JSON.stringify(data, null, 2)}`);
         return originalJson.call(this, data);
     };
 
     res.send = function (body) {
+        res.locals.responseBody = body;
         let logBody = body;
         if (typeof body === 'string') {
             try {
@@ -109,6 +135,49 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: ['text/*', 'application/xml'] }));
+
+app.use((req, res, next) => {
+    if (shouldSkipRequestLog(req)) return next();
+
+    const startedAt = Date.now();
+    res.on('finish', () => {
+        if (res.locals.errorLogged) return;
+        const isError = res.statusCode >= 400;
+        addRequestLog({
+            level: isError ? 'error' : 'info',
+            method: req.method,
+            url: req.originalUrl,
+            path: req.path,
+            status: res.statusCode,
+            durationMs: Date.now() - startedAt,
+            clientIp: req.ip || req.socket.remoteAddress,
+            userAgent: req.get('user-agent') || '',
+            contentType: req.get('content-type') || '',
+            range: req.get('range') || '',
+            query: compactValue(req.query),
+            body: compactValue(req.body),
+            response: isError ? compactValue(res.locals.responseBody) : undefined
+        });
+    });
+
+    next();
+});
+
+app.get('/api/request-logs', (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 100, MAX_REQUEST_LOGS);
+    res.json({
+        code: 200,
+        data: {
+            total: requestLogs.length,
+            logs: requestLogs.slice(0, limit)
+        }
+    });
+});
+
+app.delete('/api/request-logs', (req, res) => {
+    requestLogs.length = 0;
+    res.json({ code: 200, message: '请求日志已清空' });
+});
 
 const mockRules = new Map();
 
@@ -547,6 +616,27 @@ if (process.env.NODE_ENV === 'production') {
 // ============= 错误处理中间件 =============
 app.use((err, req, res, next) => {
     console.error(`💥 错误发生:`, err);
+    res.locals.errorLogged = true;
+    if (!shouldSkipRequestLog(req)) {
+        addRequestLog({
+            level: 'error',
+            method: req.method,
+            url: req.originalUrl,
+            path: req.path,
+            status: err.status || 500,
+            durationMs: req.startTime ? Date.now() - req.startTime : undefined,
+            clientIp: req.ip || req.socket.remoteAddress,
+            userAgent: req.get('user-agent') || '',
+            contentType: req.get('content-type') || '',
+            query: compactValue(req.query),
+            body: compactValue(req.body),
+            error: {
+                name: err.name,
+                message: err.message,
+                code: err.code
+            }
+        });
+    }
     if (err instanceof multer.MulterError) {
         return res.status(400).json({
             code: 400,

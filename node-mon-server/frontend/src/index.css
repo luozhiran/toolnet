@@ -831,6 +831,130 @@ button.secondary:hover {
   height: 100%;
   transition: width 0.2s;
 }
+
+/* ========== 请求日志 ========== */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: #475569;
+}
+.log-toggle input {
+  width: auto;
+}
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.log-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+.log-item.error {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+.log-item summary {
+  display: grid;
+  grid-template-columns: 70px 56px minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.7rem 0.85rem;
+  list-style: none;
+}
+.log-item summary::-webkit-details-marker {
+  display: none;
+}
+.log-method,
+.log-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.log-method {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.method-post,
+.method-put,
+.method-patch {
+  background: #dcfce7;
+  color: #15803d;
+}
+.method-delete {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.log-status {
+  background: #e2e8f0;
+  color: #334155;
+}
+.log-status.error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.log-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 0.82rem;
+}
+.log-meta {
+  color: #64748b;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+.log-detail-grid,
+.log-payload-grid {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 0.85rem 0.85rem;
+}
+.log-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.log-payload-grid {
+  grid-template-columns: 1fr;
+}
+.log-detail-grid label,
+.log-payload-grid label {
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.log-detail-grid code,
+.log-payload-grid pre {
+  display: block;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  color: #0f172a;
+  font-family: monospace;
+  font-size: 0.76rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
 hr {
   margin: 1rem 0;
   border: none;
@@ -961,6 +1085,14 @@ hr {
     max-height: none;
   }
   .custom-url-preview code {
+    white-space: normal;
+    word-break: break-all;
+  }
+  .log-item summary,
+  .log-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .log-url {
     white-space: normal;
     word-break: break-all;
   }
