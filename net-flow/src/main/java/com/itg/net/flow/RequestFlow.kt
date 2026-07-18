@@ -187,7 +187,7 @@ fun <T : ParamsBuilder> T.flowBusinessResult(): Flow<BusinessResult> {
  * @receiver [ParamsBuilder] 子类（Get / PostJson / PostForm 等）
  * @return 发射单个 [TypedBusinessResult] 后完成的冷流。
  */
-inline fun <reified R, T : ParamsBuilder> T.flowTypedBusinessResult(): Flow<TypedBusinessResult<R>> {
+inline fun <reified R> ParamsBuilder.flowTypedBusinessResult(): Flow<TypedBusinessResult<R>> {
     val type = object : TypeToken<R>() {}.type
     return flowBusinessResult().map { result -> result.toTypedBusinessResult(type) }
 }

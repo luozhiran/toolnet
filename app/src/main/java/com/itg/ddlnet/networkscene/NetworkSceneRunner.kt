@@ -380,7 +380,7 @@ class NetworkSceneRunner(
             request.url(apiBaseUrl)
                 .path("api/data")
                 .noUseGlobalParams()
-            request.flowTypedBusinessResult<SceneData, Get>()
+            request.flowTypedBusinessResult<SceneData>()
                 .catch { e -> logger.append("net-flow typed business: failed ${e.message.orEmpty()}") }
                 .collect { result ->
                     when (result) {

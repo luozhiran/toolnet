@@ -14,17 +14,18 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     private val params = StringBuilder()
 
     fun getRequestBody(): FormBody? {
-        val formParams = UrlTools.cutOffStrToMap(params.toString())
-        if (formParams.isNullOrEmpty()) return null
-        val builder = FormBody.Builder()
-        formParams.forEach {
-            builder.add(it.key, it.value.toString())
-        }
+        val totalParamsMap = mutableMapOf<String, Any?>()
         if (!this.noGlobalParams) {
-            Net.instance.ddNetConfig.globalParams.forEach {
-                if (it.key.isNotBlank()) {
-                    builder.add(it.key, it.value.toString())
-                }
+            totalParamsMap.putAll(Net.instance.ddNetConfig.globalParams)
+        }
+        UrlTools.cutOffStrToMap(params.toString())?.let {
+            totalParamsMap.putAll(it)
+        }
+        if (totalParamsMap.isEmpty()) return null
+        val builder = FormBody.Builder()
+        totalParamsMap.forEach {
+            if (it.key.isNotBlank()) {
+                builder.add(it.key, it.value.toString())
             }
         }
         return builder.build()

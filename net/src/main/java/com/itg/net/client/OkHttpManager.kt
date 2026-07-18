@@ -43,9 +43,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         }
     }
 
-    var okHttpClient: OkHttpClient = ddNetConfig.client() ?: run {
-        createDefaultClient(ddNetConfig)
-    }
+    var okHttpClient: OkHttpClient = createClient(ddNetConfig)
 
     internal fun dispatchMonitorEvent(event: MonitorEvent) {
         val handler = monitorReportHandler ?: return
@@ -80,11 +78,12 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         }
     }
 
-    private fun createDefaultClient(ddNetConfig: NetConfig): OkHttpClient {
-        val builder = OkHttpClient.Builder()
-        builder.connectTimeout(15, TimeUnit.SECONDS)
-        builder.readTimeout(20, TimeUnit.SECONDS)
-        builder.writeTimeout(35, TimeUnit.SECONDS)
+    private fun createClient(ddNetConfig: NetConfig): OkHttpClient {
+        val builder = ddNetConfig.client()?.newBuilder() ?: OkHttpClient.Builder().apply {
+            connectTimeout(15, TimeUnit.SECONDS)
+            readTimeout(20, TimeUnit.SECONDS)
+            writeTimeout(35, TimeUnit.SECONDS)
+        }
         ddNetConfig.interceptors().forEach { builder.addInterceptor(it) }
         ddNetConfig.cache()?.let {
             builder.cache(it)

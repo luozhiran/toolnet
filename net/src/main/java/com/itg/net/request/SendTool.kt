@@ -150,17 +150,27 @@ class SendTool {
 
     fun send(callback: Callback?, call: Call?) {
         call ?: return
-        callback?:return
+        callback ?: return
+        PrincipalLife.observeActivityLife(call, this.activity)
+        this.activity = null
         PrintLog.logr("开始发起请求 ${call.request().url}")
-        call.enqueue(object :Callback{
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                callback.onFailure(call,e)
-                PrintLog.logr("请求失败 ${call.request().url}")
+                try {
+                    callback.onFailure(call, e)
+                    PrintLog.logr("请求失败 ${call.request().url}")
+                } finally {
+                    PrincipalLife.removeCall(call)
+                }
             }
 
             override fun onResponse(call: Call, response: Response) {
-               callback.onResponse(call,response)
-                PrintLog.logr("请求成功 ${call.request().url}")
+                try {
+                    callback.onResponse(call, response)
+                    PrintLog.logr("请求成功 ${call.request().url}")
+                } finally {
+                    PrincipalLife.removeCall(call)
+                }
             }
 
         })

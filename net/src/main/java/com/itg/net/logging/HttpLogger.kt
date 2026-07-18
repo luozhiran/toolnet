@@ -6,7 +6,6 @@ import com.itg.net.util.JsonTools
 import okhttp3.Interceptor
 import okhttp3.MediaType
 import okhttp3.Response
-import okio.Buffer
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
@@ -36,30 +35,30 @@ class HttpLogger : Interceptor {
 
         return buildString {
             appendLine()
-            appendLine("┌──────────────── HTTP ${statusLabel(response.code)} ────────────────")
-            appendLine("│ ${request.method} ${request.url}")
-            appendLine("├─ Status   : ${response.code} ${response.message}")
-            appendLine("├─ Duration : ${tookMs}ms")
-            appendLine("├─ Type     : ${contentType ?: "-"}")
-            appendLine("├─ Size     : ${formatBytes(contentLength)}")
-            appendLine("├─ Headers")
+            appendLine("+---------------- HTTP ${statusLabel(response.code)} ----------------")
+            appendLine("| ${request.method} ${request.url}")
+            appendLine("| Status   : ${response.code} ${response.message}")
+            appendLine("| Duration : ${tookMs}ms")
+            appendLine("| Type     : ${contentType ?: "-"}")
+            appendLine("| Size     : ${formatBytes(contentLength)}")
+            appendLine("| Headers")
             response.headers.forEach { header ->
-                appendLine("│  ${header.first}: ${header.second}")
+                appendLine("|   ${header.first}: ${header.second}")
             }
-            appendLine("├─ Body")
+            appendLine("| Body")
             appendBodyPreview(bodyPreview)
-            append("└────────────────────────────────────────")
+            append("+---------------------------------------------")
         }
     }
 
     private fun StringBuilder.appendBodyPreview(preview: BodyPreview) {
         when (preview) {
-            BodyPreview.Empty -> appendLine("│  <empty>")
-            is BodyPreview.Skipped -> appendLine("│  <skipped: ${preview.reason}>")
+            BodyPreview.Empty -> appendLine("|   <empty>")
+            is BodyPreview.Skipped -> appendLine("|   <skipped: ${preview.reason}>")
             is BodyPreview.Text -> preview.text
                 .lineSequence()
                 .take(MAX_BODY_LINES)
-                .forEach { line -> appendLine("│  $line") }
+                .forEach { line -> appendLine("|   $line") }
         }
     }
 
@@ -69,7 +68,10 @@ class HttpLogger : Interceptor {
         response: Response
     ): BodyPreview {
         if (!isTextContent(contentType)) {
-            return BodyPreview.Skipped("binary or streaming content")
+            return BodyPreview.Skipped("binary content")
+        }
+        if (isStreamingContent(contentType, contentLength)) {
+            return BodyPreview.Skipped("streaming or unknown length content")
         }
         if (contentLength > MAX_BODY_BYTES) {
             return BodyPreview.Skipped("${formatBytes(contentLength)} exceeds preview limit ${formatBytes(MAX_BODY_BYTES)}")
@@ -77,7 +79,7 @@ class HttpLogger : Interceptor {
 
         return try {
             val source = response.body?.source() ?: return BodyPreview.Empty
-            source.request(MAX_BODY_BYTES + 1)
+            source.request(contentLength.coerceAtMost(MAX_BODY_BYTES))
             val buffer = source.buffer.clone()
             val charset = contentType?.charset(UTF8) ?: UTF8
             val text = buffer.readString(charset)
@@ -100,10 +102,10 @@ class HttpLogger : Interceptor {
     private fun buildErrorLog(method: String, url: String, error: Exception): String {
         return buildString {
             appendLine()
-            appendLine("┌──────────────── HTTP ERROR ────────────────")
-            appendLine("│ $method $url")
-            appendLine("│ ${error::class.java.simpleName}: ${error.message.orEmpty()}")
-            append("└────────────────────────────────────────")
+            appendLine("+---------------- HTTP ERROR ----------------")
+            appendLine("| $method $url")
+            appendLine("| ${error::class.java.simpleName}: ${error.message.orEmpty()}")
+            append("+---------------------------------------------")
         }
     }
 
@@ -115,6 +117,13 @@ class HttpLogger : Interceptor {
             subtype.contains("xml") ||
             subtype.contains("html") ||
             subtype.contains("form")
+    }
+
+    private fun isStreamingContent(contentType: MediaType?, contentLength: Long): Boolean {
+        val subtype = contentType?.subtype?.lowercase().orEmpty()
+        return contentLength < 0 ||
+            subtype.contains("event-stream") ||
+            subtype.contains("stream")
     }
 
     private fun statusLabel(code: Int): String {

@@ -8,6 +8,9 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 /**
  * 字段级加解密拦截器
@@ -208,12 +211,14 @@ class EncryptInterceptor(
                 val eqIndex = pair.indexOf("=")
                 if (eqIndex == -1) { sb.append(pair); continue }
 
-                val name = pair.substring(0, eqIndex)
-                val value = pair.substring(eqIndex + 1)
+                val encodedName = pair.substring(0, eqIndex)
+                val name = encodedName.formDecode()
+                val value = pair.substring(eqIndex + 1).formDecode()
 
                 if (shouldEncrypt(name, requestPath)) {
-                    sb.append(name).append("=")
-                        .append(EncryptUtil.encrypt(value, key, config.algorithm, config.iv))
+                    val encryptedValue = EncryptUtil.encrypt(value, key, config.algorithm, config.iv)
+                    sb.append(encodedName).append("=")
+                        .append(encryptedValue.formEncode())
                     modified = true
                 } else {
                     sb.append(pair)
@@ -233,7 +238,9 @@ class EncryptInterceptor(
         val contentType = body.contentType() ?: return response
 
         val bodyString = body.string()
-        if (bodyString.isBlank()) return response
+        if (bodyString.isBlank()) {
+            return response.withBody(bodyString, contentType)
+        }
 
         val decryptedBody = when {
             contentType.subtype.contains("json", ignoreCase = true) ->
@@ -243,7 +250,9 @@ class EncryptInterceptor(
             else -> null
         }
 
-        if (decryptedBody == null) return response
+        if (decryptedBody == null) {
+            return response.withBody(bodyString, contentType)
+        }
 
         PrintLog.logr("$TAG: response fields decrypted for ${response.request.url.encodedPath}")
         return response.newBuilder()
@@ -322,12 +331,14 @@ class EncryptInterceptor(
                 val eqIndex = pair.indexOf("=")
                 if (eqIndex == -1) { sb.append(pair); continue }
 
-                val name = pair.substring(0, eqIndex)
-                val value = pair.substring(eqIndex + 1)
+                val encodedName = pair.substring(0, eqIndex)
+                val name = encodedName.formDecode()
+                val value = pair.substring(eqIndex + 1).formDecode()
 
                 if (shouldDecrypt(name, requestPath)) {
-                    sb.append(name).append("=")
-                        .append(EncryptUtil.decrypt(value, key, config.algorithm, config.iv))
+                    val decryptedValue = EncryptUtil.decrypt(value, key, config.algorithm, config.iv)
+                    sb.append(encodedName).append("=")
+                        .append(decryptedValue.formEncode())
                     modified = true
                 } else {
                     sb.append(pair)
@@ -403,6 +414,20 @@ class EncryptInterceptor(
 /**
  * 读取 RequestBody 内容为字符串
  */
+private fun Response.withBody(bodyString: String, contentType: MediaType): Response {
+    return newBuilder()
+        .body(bodyString.toResponseBody(contentType))
+        .build()
+}
+
+private fun String.formDecode(): String {
+    return URLDecoder.decode(this, StandardCharsets.UTF_8.name())
+}
+
+private fun String.formEncode(): String {
+    return URLEncoder.encode(this, StandardCharsets.UTF_8.name())
+}
+
 private fun RequestBody.readString(): String {
     val buffer = Buffer()
     writeTo(buffer)

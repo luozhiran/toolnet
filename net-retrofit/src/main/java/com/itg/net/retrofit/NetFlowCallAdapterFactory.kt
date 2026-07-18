@@ -10,10 +10,13 @@ import com.itg.net.request.result.NetResult
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import okhttp3.MediaType
 import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Call
 import retrofit2.CallAdapter
 import retrofit2.Callback
+import retrofit2.Converter
 import retrofit2.Response
 import retrofit2.Retrofit
 import java.io.IOException
@@ -55,17 +58,25 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             else -> ResultMode.Body
         }
 
-        val bodyType: Type = when (mode) {
-            ResultMode.NetResponse -> {
-                check(responseType is ParameterizedType) {
-                    "Flow<NetResponse<T>> must include the response body type"
-                }
-                getParameterUpperBound(0, responseType)
+        val netResponseBodyType: Type? = if (mode == ResultMode.NetResponse) {
+            check(responseType is ParameterizedType) {
+                "Flow<NetResponse<T>> must include the response body type"
             }
+            getParameterUpperBound(0, responseType)
+        } else {
+            null
+        }
+
+        val bodyType: Type = when (mode) {
+            ResultMode.NetResponse -> ResponseBody::class.java
             ResultMode.NetResult,
             ResultMode.BusinessResult,
             ResultMode.TypedBusinessResult -> ResponseBody::class.java
             ResultMode.Body -> responseType
+        }
+
+        val netResponseConverter = netResponseBodyType?.let {
+            retrofit.nextResponseBodyConverter<Any?>(null, it, annotations)
         }
 
         val typedBusinessType = if (mode == ResultMode.TypedBusinessResult) {
@@ -77,7 +88,7 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             null
         }
 
-        return FlowCallAdapter<Any>(bodyType, mode, typedBusinessType)
+        return FlowCallAdapter<Any>(bodyType, mode, typedBusinessType, netResponseBodyType, netResponseConverter)
     }
 
     private enum class ResultMode {
@@ -91,7 +102,9 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
     private class FlowCallAdapter<T>(
         private val bodyType: Type,
         private val mode: ResultMode,
-        private val typedBusinessType: Type?
+        private val typedBusinessType: Type?,
+        private val netResponseBodyType: Type?,
+        private val netResponseConverter: Converter<ResponseBody, Any?>?
     ) : CallAdapter<T, Flow<Any>> {
 
         override fun responseType(): Type = bodyType
@@ -166,22 +179,42 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
         private fun kotlinx.coroutines.channels.ProducerScope<Any>.emitNetResponse(response: Response<T>) {
             val headers = response.headers().toMultimap()
                 .mapValues { (_, values) -> values.joinToString(", ") }
+            val contentType = (response.body() as? ResponseBody)?.contentType()
+                ?: response.errorBody()?.contentType()
+            val rawBody = if (response.isSuccessful) {
+                (response.body() as? ResponseBody)?.string() ?: response.body()?.toString()
+            } else {
+                response.errorBody()?.string()
+            }
+            val convertedBody = if (response.isSuccessful) {
+                convertNetResponseBody(rawBody, contentType)
+            } else {
+                null
+            }
             val netResponse = if (response.isSuccessful) {
                 NetResponse(
-                    body = response.body() as? Any,
-                    rawBody = null,
+                    body = convertedBody,
+                    rawBody = rawBody,
                     code = response.code(),
                     headers = headers
                 )
             } else {
                 NetResponse(
                     body = null,
-                    rawBody = response.errorBody()?.string(),
+                    rawBody = rawBody,
                     code = response.code(),
                     headers = headers
                 )
             }
             trySend(netResponse)
+        }
+
+        private fun convertNetResponseBody(rawBody: String?, contentType: MediaType?): Any? {
+            if (rawBody == null) return null
+            if (netResponseBodyType == String::class.java) return rawBody
+            if (netResponseBodyType == ResponseBody::class.java) return rawBody.toResponseBody(contentType)
+            val converter = netResponseConverter ?: return null
+            return converter.convert(rawBody.toResponseBody(contentType))
         }
 
         private fun Response<T>.toNetResult(): NetResult {
