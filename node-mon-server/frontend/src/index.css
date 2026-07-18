@@ -712,6 +712,57 @@ button.secondary:hover {
   gap: 0.75rem;
   margin-bottom: 0.75rem;
 }
+.api-address-preview {
+  display: grid;
+  gap: 0.5rem;
+  background: #eef6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  margin: 0.65rem 0;
+}
+.api-address-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #475569;
+  font-size: 0.75rem;
+}
+.api-address-header span:first-child {
+  background: #1d4ed8;
+  color: white;
+  border-radius: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  font-weight: 700;
+}
+.api-address-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+.api-address-row label {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+.api-address-row code {
+  color: #0f172a;
+  background: white;
+  border: 1px solid #dbeafe;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+  font-family: monospace;
+  font-size: 0.78rem;
+}
+.api-address-row button {
+  margin: 0;
+  padding: 0.4rem 0.65rem;
+}
 .custom-section {
   background: white;
   border: 1px solid #e2e8f0;
@@ -1078,6 +1129,13 @@ hr {
   .custom-request-grid,
   .custom-body-toolbar {
     grid-template-columns: 1fr;
+  }
+  .api-address-row {
+    grid-template-columns: 1fr;
+  }
+  .api-address-row code {
+    white-space: normal;
+    word-break: break-all;
   }
   .custom-url-preview {
     grid-template-columns: 1fr;

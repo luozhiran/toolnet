@@ -143,6 +143,53 @@ export default function ApiTest({ mode }: { mode?: string }) {
     return params.toString();
   };
 
+  const buildUrlWithParams = (path: string, params: ParamRow[]) => {
+    const query = new URLSearchParams();
+    params.forEach((p) => {
+      if (p.key) query.append(p.key, p.value);
+    });
+    const queryString = query.toString();
+    return queryString ? `${path}?${queryString}` : path;
+  };
+
+  const buildMobileUrl = (url: string) => {
+    if (/^https?:\/\//i.test(url)) return url;
+    const base = androidBaseUrl.trim().replace(/\/+$/, '');
+    const path = url.startsWith('/') ? url : `/${url}`;
+    return `${base}${path}`;
+  };
+
+  const copyUrl = async (url: string, label = '请求地址') => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setResponse(`已复制${label}:\n${url}`);
+    } catch {
+      setResponse(`复制失败，请手动复制${label}:\n${url}`);
+    }
+  };
+
+  const AddressPreview = ({ method, url }: { method: string; url: string }) => {
+    const mobileUrl = buildMobileUrl(url);
+    return (
+      <div className="api-address-preview">
+        <div className="api-address-header">
+          <span>{method}</span>
+          <span>可访问地址</span>
+        </div>
+        <div className="api-address-row">
+          <label>PC</label>
+          <code>{url}</code>
+          <button type="button" className="secondary" onClick={() => copyUrl(url, 'PC 地址')}>复制</button>
+        </div>
+        <div className="api-address-row">
+          <label>手机</label>
+          <code>{mobileUrl}</code>
+          <button type="button" className="secondary" onClick={() => copyUrl(mobileUrl, '手机地址')}>复制</button>
+        </div>
+      </div>
+    );
+  };
+
   const customPreview = {
     method: customMethodValue,
     path: customPath.trim(),
@@ -163,13 +210,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
   };
 
   const handleCopyAndroidUrl = async () => {
-    const url = buildAndroidUrl();
-    try {
-      await navigator.clipboard.writeText(url);
-      setResponse(`已复制请求地址:\n${url}`);
-    } catch {
-      setResponse(`复制失败，请手动复制:\n${url}`);
-    }
+    await copyUrl(buildAndroidUrl(), '请求地址');
   };
 
   const handleCustomRequest = async () => {
@@ -265,6 +306,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
         {show('data') && (
         <div className="form-group">
           <label>GET /api/data（无参数）</label>
+          <AddressPreview method="GET" url="/api/data" />
           <button onClick={handleGetData}>获取数据</button>
           <button className="example-btn" onClick={() => showExample('api-get')}>📱 示例</button>
         </div>
@@ -274,6 +316,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
         <div className="sub-card">
           <label>GET /api/echo?（Query 参数，可多组）</label>
           <DynamicParams onChange={setEchoParams} placeholderKey="参数名" placeholderValue="参数值" />
+          <AddressPreview method="GET" url={buildUrlWithParams('/api/echo', echoParams)} />
           <button onClick={handleEcho} style={{ marginTop: '0.5rem' }}>发送 Echo 请求</button>
           <button className="example-btn" onClick={() => showExample('api-echo')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
@@ -284,6 +327,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
           <label>GET /api/user/:id（路径参数 + Query）</label>
           <input type="text" placeholder="用户ID" value={userId} onChange={(e) => setUserId(e.target.value)} />
           <DynamicParams onChange={setUserParams} placeholderKey="Query参数名" placeholderValue="参数值" />
+          <AddressPreview method="GET" url={buildUrlWithParams(`/api/user/${encodeURIComponent(userId || ':id')}`, userParams)} />
           <button onClick={handleGetUser} style={{ marginTop: '0.5rem' }}>获取用户信息</button>
           <button className="example-btn" onClick={() => showExample('api-user')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
@@ -292,6 +336,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
         {show('json') && (
         <div className="sub-card">
           <label>POST /api/json (发送 JSON)</label>
+          <AddressPreview method="POST" url="/api/json" />
           <textarea rows={2} value={jsonText} onChange={(e) => setJsonText(e.target.value)} style={{ fontFamily: 'monospace' }} />
           <button onClick={handlePostJson}>提交 JSON</button>
           <button className="example-btn" onClick={() => showExample('api-json')}>📱 示例</button>
@@ -301,6 +346,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
         {show('form') && (
         <div className="sub-card">
           <label>POST /api/form (表单, x-www-form-urlencoded)</label>
+          <AddressPreview method="POST" url="/api/form" />
           <DynamicParams onChange={setFormParams} placeholderKey="字段名" placeholderValue="字段值" />
           <button onClick={handlePostForm} style={{ marginTop: '0.5rem' }}>提交表单</button>
           <button className="example-btn" onClick={() => showExample('api-form')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>

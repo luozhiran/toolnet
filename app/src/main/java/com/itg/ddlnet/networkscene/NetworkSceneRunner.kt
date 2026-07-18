@@ -1,0 +1,225 @@
+package com.itg.ddlnet.networkscene
+
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.LifecycleCoroutineScope
+import com.itg.net.Net
+import com.itg.net.download.callback.AbstractProgressCallback
+import com.itg.net.download.data.Task
+import com.itg.net.flow.DownloadPhase
+import com.itg.net.flow.flow
+import com.itg.net.flow.flowString
+import com.itg.net.request.base.DdCallback
+import com.itg.net.retrofit.retrofit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
+import okhttp3.ResponseBody
+import retrofit2.Response
+import retrofit2.converter.scalars.ScalarsConverterFactory
+import retrofit2.http.GET
+import retrofit2.http.Query
+import java.io.File
+
+class NetworkSceneRunner(
+    private val activity: AppCompatActivity,
+    private val lifecycleScope: LifecycleCoroutineScope,
+    private val logger: NetworkSceneLogger
+) {
+    private val apiBaseUrl = "http://192.168.31.216:3000/"
+    private val downloadUrl = "${apiBaseUrl}download/static/test.html"
+
+    private val retrofitApi by lazy {
+        Net.instance.retrofit
+            .baseUrl(apiBaseUrl)
+            .addConverterFactory(ScalarsConverterFactory.create())
+            .build()
+            .create<SceneApi>()
+    }
+
+    fun appendStartupInfo() {
+        logger.append("服务地址: $apiBaseUrl")
+        logger.append("提示: 手机和电脑需要在同一个 Wi-Fi；请求会显示在 Web 的请求日志里。")
+    }
+
+    fun runAllScenes() {
+        runNetGet()
+        runNetPostJson()
+        runFlowGet()
+        runFlowPostJson()
+        runNetDownload()
+        runFlowDownload()
+        runRetrofitSuspend()
+        runRetrofitFlow()
+    }
+
+    fun runNetGet() {
+        logger.append("net GET: start")
+        Net.instance.get()
+            .url(apiBaseUrl)
+            .path("api/data")
+            .addParam("scene", "net-get")
+            .noUseGlobalParams()
+            .autoCancel(activity)
+            .send(object : DdCallback {
+                override fun onFailure(er: String?) {
+                    logger.append("net GET: failed ${er.orEmpty()}")
+                }
+
+                override fun onResponse(result: String?, code: Int) {
+                    logger.append("net GET: code=$code body=${result.shortBody()}")
+                }
+            })
+    }
+
+    fun runNetPostJson() {
+        logger.append("net POST JSON: start")
+        Net.instance.postJson()
+            .url(apiBaseUrl)
+            .path("api/json")
+            .addParam("scene", "net-post-json")
+            .addParam("time", System.currentTimeMillis())
+            .noUseGlobalParams()
+            .autoCancel(activity)
+            .send(object : DdCallback {
+                override fun onFailure(er: String?) {
+                    logger.append("net POST JSON: failed ${er.orEmpty()}")
+                }
+
+                override fun onResponse(result: String?, code: Int) {
+                    logger.append("net POST JSON: code=$code body=${result.shortBody()}")
+                }
+            })
+    }
+
+    fun runFlowGet() {
+        logger.append("net-flow GET: start")
+        lifecycleScope.launch {
+            Net.instance.get()
+                .url(apiBaseUrl)
+                .path("api/echo")
+                .addParam("scene", "net-flow-get")
+                .addParam("client", "android")
+                .noUseGlobalParams()
+                .flowString()
+                .catch { e -> logger.append("net-flow GET: failed ${e.message.orEmpty()}") }
+                .collect { body ->
+                    logger.append("net-flow GET: body=${body.shortBody()}")
+                }
+        }
+    }
+
+    fun runFlowPostJson() {
+        logger.append("net-flow POST JSON: start")
+        lifecycleScope.launch {
+            Net.instance.postJson()
+                .url(apiBaseUrl)
+                .path("api/json")
+                .addParam("scene", "net-flow-post-json")
+                .addParam("time", System.currentTimeMillis())
+                .noUseGlobalParams()
+                .flowString()
+                .catch { e -> logger.append("net-flow POST JSON: failed ${e.message.orEmpty()}") }
+                .collect { body ->
+                    logger.append("net-flow POST JSON: body=${body.shortBody()}")
+                }
+        }
+    }
+
+    fun runNetDownload() {
+        val file = File(activity.cacheDir, "net-callback-sample.bin")
+        logger.append("net download: start ${file.absolutePath}")
+        Net.instance.newDownload()
+            .url(downloadUrl)
+            .savePath(file.absolutePath)
+            .overwrite(true)
+            .retryCount(1)
+            .noUseGlobalParams()
+            .listener(object : AbstractProgressCallback() {
+                override fun onConnecting(task: Task) {
+                    logger.append("net download: connecting")
+                }
+
+                override fun onProgress(task: Task, complete: Boolean) {
+                    if (complete) {
+                        logger.append("net download: complete ${task.path}")
+                    } else {
+                        logger.append("net download: ${task.downloadSize}/${task.contentLength}")
+                    }
+                }
+
+                override fun onFail(error: String?, task: Task) {
+                    logger.append("net download: failed ${error.orEmpty()}")
+                }
+
+                override fun onFinish(task: Task) {
+                    logger.append("net download: finish")
+                }
+            })
+            .start()
+    }
+
+    fun runFlowDownload() {
+        val file = File(activity.cacheDir, "net-flow-sample.bin")
+        logger.append("net-flow download: start ${file.absolutePath}")
+        lifecycleScope.launch {
+            Net.instance.newDownload()
+                .url(downloadUrl)
+                .savePath(file.absolutePath)
+                .overwrite(true)
+                .retryCount(1)
+                .noUseGlobalParams()
+                .flow()
+                .catch { e -> logger.append("net-flow download: failed ${e.message.orEmpty()}") }
+                .collect { progress ->
+                    when (progress.phase) {
+                        DownloadPhase.Connecting -> logger.append("net-flow download: connecting")
+                        DownloadPhase.Downloading -> {
+                            val task = progress.task
+                            logger.append("net-flow download: ${task.downloadSize}/${task.contentLength}")
+                        }
+                        DownloadPhase.Complete -> logger.append("net-flow download: complete ${progress.task.path}")
+                        DownloadPhase.Failed -> logger.append("net-flow download: failed")
+                    }
+                }
+        }
+    }
+
+    fun runRetrofitSuspend() {
+        logger.append("net-retrofit suspend: start")
+        lifecycleScope.launch {
+            try {
+                val response = retrofitApi.getEcho("net-retrofit-suspend", "android")
+                logger.append("net-retrofit suspend: code=${response.code()} body=${response.body()?.string().shortBody()}")
+            } catch (e: Exception) {
+                logger.append("net-retrofit suspend: failed ${e.message.orEmpty()}")
+            }
+        }
+    }
+
+    fun runRetrofitFlow() {
+        logger.append("net-retrofit Flow: start")
+        lifecycleScope.launch {
+            retrofitApi.getDataFlow()
+                .catch { e -> logger.append("net-retrofit Flow: failed ${e.message.orEmpty()}") }
+                .collect { body ->
+                    logger.append("net-retrofit Flow: body=${body.shortBody()}")
+                }
+        }
+    }
+
+    private fun String?.shortBody(maxLength: Int = 240): String {
+        val value = this.orEmpty().replace("\n", " ")
+        return if (value.length <= maxLength) value else value.take(maxLength) + "..."
+    }
+
+    private interface SceneApi {
+        @GET("api/echo")
+        suspend fun getEcho(
+            @Query("scene") scene: String,
+            @Query("client") client: String
+        ): Response<ResponseBody>
+
+        @GET("api/data")
+        fun getDataFlow(): Flow<String>
+    }
+}
