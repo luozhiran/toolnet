@@ -109,6 +109,94 @@ class MonitorConfig {
      * ```
      */
     @Volatile var reportHandler: IMonitorReportHandler? = null
+
+    /**
+     * 开启或关闭网络监控，默认开启。
+     */
+    fun enabled(enabled: Boolean = true): MonitorConfig {
+        this.enabled = enabled
+        return this
+    }
+
+    /**
+     * 关闭网络监控。
+     */
+    fun disabled(): MonitorConfig {
+        enabled = false
+        return this
+    }
+
+    /**
+     * 设置监控数据上报地址。
+     */
+    fun reportUrl(url: String?): MonitorConfig {
+        reportUrl = url
+        return this
+    }
+
+    /**
+     * 设置上报模式。
+     */
+    fun reportMode(mode: ReportMode): MonitorConfig {
+        reportMode = mode
+        return this
+    }
+
+    /**
+     * 设置采样率，范围会被限制在 0.0 到 1.0。
+     */
+    fun sampleRate(rate: Float): MonitorConfig {
+        sampleRate = rate.coerceIn(0.0f, 1.0f)
+        return this
+    }
+
+    /**
+     * 设置单次批量上报的最大事件数。
+     */
+    fun batchSize(size: Int): MonitorConfig {
+        batchSize = size.coerceAtLeast(1)
+        return this
+    }
+
+    /**
+     * 设置批量上报的时间窗口。
+     */
+    fun flushIntervalMs(intervalMs: Long): MonitorConfig {
+        flushIntervalMs = intervalMs.coerceAtLeast(1L)
+        return this
+    }
+
+    /**
+     * 设置内存队列最大容量。
+     */
+    fun maxQueueSize(size: Int): MonitorConfig {
+        maxQueueSize = size.coerceAtLeast(1)
+        return this
+    }
+
+    /**
+     * 设置慢请求阈值。传 0 表示不启用慢请求检测。
+     */
+    fun slowRequestThresholdMs(thresholdMs: Long): MonitorConfig {
+        slowRequestThresholdMs = thresholdMs.coerceAtLeast(0L)
+        return this
+    }
+
+    /**
+     * 设置 URL 脱敏函数。
+     */
+    fun urlSanitizer(sanitizer: (String) -> String): MonitorConfig {
+        urlSanitizer = sanitizer
+        return this
+    }
+
+    /**
+     * 设置自定义上报处理器。
+     */
+    fun reportHandler(handler: IMonitorReportHandler?): MonitorConfig {
+        reportHandler = handler
+        return this
+    }
 }
 
 /**
