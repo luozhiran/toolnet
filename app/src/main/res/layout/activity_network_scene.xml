@@ -104,15 +104,16 @@
 
     <TextView
         android:id="@+id/btn_result_bubble"
-        android:layout_width="48dp"
-        android:layout_height="96dp"
-        android:layout_gravity="start|center_vertical"
+        android:layout_width="40dp"
+        android:layout_height="72dp"
+        android:layout_gravity="start|top"
+        android:layout_marginTop="240dp"
         android:background="@drawable/network_scene_log_handle"
         android:elevation="10dp"
         android:gravity="center"
         android:text="Log\n0"
         android:textColor="#FFFFFF"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:textStyle="bold" />
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -129,29 +130,25 @@
         android:paddingBottom="12dp"
         android:visibility="gone">
 
-        <View
-            android:id="@+id/result_panel_handle"
-            android:layout_width="24dp"
-            android:layout_height="44dp"
-            android:layout_gravity="end"
-            android:layout_marginBottom="10dp"
-            android:background="@drawable/network_scene_drag_handle" />
-
         <androidx.appcompat.widget.LinearLayoutCompat
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Request Console"
-                android:textColor="#F8FAFC"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_result_clear"
+                style="@style/NetworkScenePanelButton"
+                android:text="Clear" />
 
+            <View
+                android:id="@+id/result_panel_handle"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/network_scene_drag_handle" />
         </androidx.appcompat.widget.LinearLayoutCompat>
 
         <ScrollView

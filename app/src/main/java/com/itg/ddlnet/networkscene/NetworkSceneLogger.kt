@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -28,17 +29,20 @@ class NetworkSceneLogger(
     private val resultPanel: LinearLayoutCompat = activity.findViewById(R.id.result_panel)
     private val resultBubble: TextView = activity.findViewById(R.id.btn_result_bubble)
     private val resultPanelHandle: View = activity.findViewById(R.id.result_panel_handle)
+    private val resultClearButton: Button = activity.findViewById(R.id.btn_result_clear)
 
     private val resultBuffer = SpannableStringBuilder()
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     private var resultCount = 0
     private var panelDownRawX = 0f
     private var panelDownRawY = 0f
+    private var bubbleStartTop = 0
     private var panelStartWidth = 0
     private var panelDragging = false
 
     init {
         setupResultPanelGesture()
+        resultClearButton.setOnClickListener { clear() }
     }
 
     fun append(message: String) {
@@ -57,6 +61,13 @@ class NetworkSceneLogger(
         return true
     }
 
+    fun clear() {
+        resultBuffer.clear()
+        resultCount = 0
+        resultView.text = ""
+        resultBubble.text = "Log\n0"
+    }
+
     private fun setupResultPanelGesture() {
         val touchSlop = 8.dp()
         resultBubble.setOnTouchListener { view, event ->
@@ -64,6 +75,7 @@ class NetworkSceneLogger(
                 MotionEvent.ACTION_DOWN -> {
                     panelDownRawX = event.rawX
                     panelDownRawY = event.rawY
+                    bubbleStartTop = resultBubble.top
                     panelDragging = false
                     view.parent.requestDisallowInterceptTouchEvent(true)
                     true
@@ -74,12 +86,15 @@ class NetworkSceneLogger(
                     if (!panelDragging && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
                         panelDragging = true
                     }
+                    if (panelDragging && abs(dy) > abs(dx)) {
+                        moveBubbleVertically(bubbleStartTop + dy.toInt())
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     view.parent.requestDisallowInterceptTouchEvent(false)
                     val dx = event.rawX - panelDownRawX
-                    if (!panelDragging || dx > 32.dp()) {
+                    if (!panelDragging || dx > 32.dp() && abs(dx) >= abs(event.rawY - panelDownRawY)) {
                         showResultPanel()
                     }
                     true
@@ -126,6 +141,18 @@ class NetworkSceneLogger(
                 }
                 else -> false
             }
+        }
+    }
+
+    private fun moveBubbleVertically(top: Int) {
+        val margin = 12.dp()
+        val parentHeight = (resultBubble.parent as View).height
+        val maxTop = (parentHeight - resultBubble.height - margin).coerceAtLeast(margin)
+        val targetTop = top.coerceIn(margin, maxTop)
+
+        resultBubble.layoutParams = (resultBubble.layoutParams as ViewGroup.MarginLayoutParams).apply {
+            topMargin = targetTop
+            bottomMargin = 0
         }
     }
 

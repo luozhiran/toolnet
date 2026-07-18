@@ -10,7 +10,6 @@ import com.itg.net.monitor.MonitorInterceptor
 import com.itg.net.monitor.MonitorEvent
 import com.itg.net.monitor.NetworkTypeCache
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -124,9 +123,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
             }
         }
         if (ddNetConfig.useHttpLog()) {
-            val logInterceptor = HttpLoggingInterceptor(HttpLogger())
-            logInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY)
-            builder.addNetworkInterceptor(logInterceptor)
+            builder.addNetworkInterceptor(HttpLogger())
         }
 
         return builder.build()

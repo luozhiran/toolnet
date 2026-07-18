@@ -9,7 +9,6 @@ import com.itg.net.monitor.MonitorEvent
 import com.itg.net.monitor.ReportMode
 import com.itg.net.retrofit.retrofit
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
@@ -60,9 +59,7 @@ class App:Application() {
         builder.connectTimeout(15, TimeUnit.SECONDS)
         builder.readTimeout(20, TimeUnit.SECONDS)
         builder.writeTimeout(35, TimeUnit.SECONDS)
-        val logInterceptor = HttpLoggingInterceptor(HttpLogger())
-        logInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY)
-        builder.addNetworkInterceptor(logInterceptor)
+        builder.addNetworkInterceptor(HttpLogger())
 
        return builder.build()
     }
