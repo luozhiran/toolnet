@@ -7,8 +7,11 @@ import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.data.Task
 import com.itg.net.flow.DownloadPhase
 import com.itg.net.flow.flow
+import com.itg.net.flow.flowResult
 import com.itg.net.flow.flowString
-import com.itg.net.request.base.DdCallback
+import com.itg.net.request.result.NetResult
+import com.itg.net.request.result.NetResultCallback
+import com.itg.net.request.result.sendResult
 import com.itg.net.retrofit.retrofit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -60,13 +63,17 @@ class NetworkSceneRunner(
             .addParam("scene", "net-get")
             .noUseGlobalParams()
             .autoCancel(activity)
-            .send(object : DdCallback {
-                override fun onFailure(er: String?) {
-                    logger.append("net GET: failed ${er.orEmpty()}")
+            .sendResult(object : NetResultCallback {
+                override fun onSuccess(result: NetResult.Success) {
+                    logger.append("net GET: success code=${result.code} body=${result.body.shortBody()}")
                 }
 
-                override fun onResponse(result: String?, code: Int) {
-                    logger.append("net GET: code=$code body=${result.shortBody()}")
+                override fun onHttpError(error: NetResult.HttpError) {
+                    logger.append("net GET: http error code=${error.code} body=${error.body.shortBody()}")
+                }
+
+                override fun onNetworkError(error: NetResult.NetworkError) {
+                    logger.append("net GET: network error ${error.message.orEmpty()}")
                 }
             })
     }
@@ -80,13 +87,17 @@ class NetworkSceneRunner(
             .addParam("time", System.currentTimeMillis())
             .noUseGlobalParams()
             .autoCancel(activity)
-            .send(object : DdCallback {
-                override fun onFailure(er: String?) {
-                    logger.append("net POST JSON: failed ${er.orEmpty()}")
+            .sendResult(object : NetResultCallback {
+                override fun onSuccess(result: NetResult.Success) {
+                    logger.append("net POST JSON: success code=${result.code} body=${result.body.shortBody()}")
                 }
 
-                override fun onResponse(result: String?, code: Int) {
-                    logger.append("net POST JSON: code=$code body=${result.shortBody()}")
+                override fun onHttpError(error: NetResult.HttpError) {
+                    logger.append("net POST JSON: http error code=${error.code} body=${error.body.shortBody()}")
+                }
+
+                override fun onNetworkError(error: NetResult.NetworkError) {
+                    logger.append("net POST JSON: network error ${error.message.orEmpty()}")
                 }
             })
     }
@@ -100,10 +111,14 @@ class NetworkSceneRunner(
                 .addParam("scene", "net-flow-get")
                 .addParam("client", "android")
                 .noUseGlobalParams()
-                .flowString()
+                .flowResult()
                 .catch { e -> logger.append("net-flow GET: failed ${e.message.orEmpty()}") }
-                .collect { body ->
-                    logger.append("net-flow GET: body=${body.shortBody()}")
+                .collect { result ->
+                    when (result) {
+                        is NetResult.Success -> logger.append("net-flow GET: success code=${result.code} body=${result.body.shortBody()}")
+                        is NetResult.HttpError -> logger.append("net-flow GET: http error code=${result.code} body=${result.body.shortBody()}")
+                        is NetResult.NetworkError -> logger.append("net-flow GET: network error ${result.message.orEmpty()}")
+                    }
                 }
         }
     }

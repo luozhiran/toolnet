@@ -16,6 +16,7 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 |---|---|---|---|---|
 | [快速开始与初始化](./net/doc/01-quick-start.md) | `Net.instance.configure { }` DSL 全局配置 | Android 5.0+，Kotlin/Java | 首次集成 Net 库，需要初始化 | `NetConfig` DSL 统一入口，一次配置全局生效 |
 | [发送各类 HTTP 请求](./net/doc/02-basic-requests.md) | `get()` / `postJson()` / `postForm()` / `postFile()` / `postMultipart()` / `postContent()` | 所有请求类型，支持 Header/Cookie/Tag/缓存/生命周期 | 需要发送 GET/POST 请求，上传文件，提交表单 | Builder 模式链式调用，底层通过 OkHttp 执行 |
+| [区分 HTTP 错误与网络异常](./net/doc/09-error-handling.md) | `sendResult(NetResultCallback)` / `flowResult()` | 适用于普通请求和 Flow 请求 | 需要把 4xx/5xx 与断网、超时、DNS 失败分开处理 | 2xx 进入成功分支，4xx/5xx 进入 `onHttpError`，IOException 进入 `onNetworkError` |
 | [取消请求与生命周期](./net/doc/03-cancel-requests.md) | `cancel(tag)` / `autoCancel(activity)` / 协程取消 | 回调模式和 Flow 模式均支持 | 页面销毁时避免无效回调，手动取消请求 | LifecycleEventObserver 或协程结构化并发 |
 | [文件下载](./net/doc/04-file-download.md) | `newDownload()` + `IProgressCallback` | 普通下载、断点续传需服务器支持 Range | 下载大文件、需要进度回调、支持断点续传 | OkHttp 下载 + 断点续传请求头 + 下载队列管理 |
 | [全局配置](./net/doc/05-global-config.md) | `NetConfig` DSL 配置 Base URL/全局参数/拦截器/缓存/最大并行下载数 | 所有配置集中管理 | 需要统一配置网络行为 | `Net.instance` 单例持有全局配置，所有请求继承 |
@@ -40,6 +41,7 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 | [06. 工具类](./net/doc/06-utilities.md) | StrTools、TaskTools、CacheControlFactory、JsonTools、PrintLog |
 | [07. 字段加密](./net/doc/07-field-encryption.md) | 快速开始、加密模式、算法选择、密钥管理、EncryptUtil |
 | [08. 网络监控](./net/doc/08-network-monitor.md) | 快速开始、上报模式、自定义上报处理器、错误分类、生命周期管理 |
+| [09. HTTP 错误与网络异常处理](./net/doc/09-error-handling.md) | sendResult、onHttpError、onNetworkError、flowResult、4xx/5xx 处理 |
 | **net-flow 模块** | |
 | [09. Flow 化请求](./net-flow/doc/01-flow-basics.md) | flowString、flowResponse、反序列化、NetResponse、retry、便捷方法 |
 | [10. 下载进度 Flow](./net-flow/doc/02-flow-download.md) | TaskBuilder.flow、DownloadProgress、DownloadPhase、取消 |

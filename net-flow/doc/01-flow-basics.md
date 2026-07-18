@@ -38,6 +38,34 @@ Net.instance.postForm().url("...").addParam("k","v").flowString().collect { ... 
 Net.instance.postMultipart().url("...").addFile(file).flowString().collect { ... }
 ```
 
+`flowString()` 只适合“成功时拿响应字符串”的简单场景。HTTP 状态码不是 `2xx` 时，Flow 会以 `NetFlowException(code, message)` 结束，并进入 `catch`。
+
+### flowResult() —— 结构化区分成功、HTTP 错误、网络异常
+
+如果调用方需要明确区分 `4xx/5xx` 和断网/超时，推荐使用 `flowResult()`：
+
+```kotlin
+import com.itg.net.flow.flowResult
+import com.itg.net.request.result.NetResult
+
+lifecycleScope.launch {
+    Net.instance.get()
+        .url("https://api.example.com/user/info")
+        .flowResult()
+        .collect { result ->
+            when (result) {
+                is NetResult.Success -> updateUI(result.body)
+                is NetResult.HttpError -> showError("HTTP ${result.code}: ${result.body}")
+                is NetResult.NetworkError -> showError("网络不可用: ${result.message}")
+            }
+        }
+}
+```
+
+`NetResult.HttpError` 表示服务器已经返回 HTTP 响应，但状态码不是成功；`NetResult.NetworkError` 表示没有拿到 HTTP 响应，例如断网、超时、DNS 失败。
+
+更完整的错误处理策略见 [net 09. HTTP 错误与网络异常处理](../../net/doc/09-error-handling.md)。
+
 ### 与 DdCallback 对比
 
 ```kotlin
@@ -159,7 +187,7 @@ Net.instance.postJson()
 
 ## NetFlowException
 
-当请求失败（网络断开、超时等）时，Flow 以 `NetFlowException` 关闭：
+当请求失败时，Flow 以 `NetFlowException` 关闭。网络断开、超时等异常的 `code` 为 `null`；HTTP 非 2xx 的 `code` 为服务器返回的状态码：
 
 ```kotlin
 class NetFlowException(
@@ -190,6 +218,7 @@ Net.instance.flowGetResponse(GsonNetConverter<User>(type = User::class.java)) {
 | `Net.flowGet { }` | `Flow<String>` | GET 请求 |
 | `Net.flowPostJson { }` | `Flow<String>` | POST JSON 请求 |
 | `Net.flowPostForm { }` | `Flow<String>` | POST Form 请求 |
+| `ParamsBuilder.flowResult()` | `Flow<NetResult>` | 区分 2xx、4xx/5xx、网络异常 |
 | `Net.flowGetResponse(converter) { }` | `Flow<NetResponse<T>>` | GET + 反序列化 |
 | `Net.flowPostJsonResponse(converter) { }` | `Flow<NetResponse<T>>` | POST JSON + 反序列化 |
 | `Net.flowDownload { }` | `Flow<DownloadProgress>` | 下载进度 |

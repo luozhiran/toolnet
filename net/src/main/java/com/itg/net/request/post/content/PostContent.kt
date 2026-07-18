@@ -10,6 +10,7 @@ class PostContent: PostContentGenerator() {
     private val sendTool by lazy { SendTool() }
 
     override fun autoCancel(activity: Activity?): PostContent {
+        super.autoCancel(activity)
         sendTool.autoCancel(activity)
         return this
     }

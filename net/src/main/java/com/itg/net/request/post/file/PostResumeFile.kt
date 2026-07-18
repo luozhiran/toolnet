@@ -11,6 +11,7 @@ class PostResumeFile: PostResumeGenerator() {
     private val sendTool by lazy { SendTool() }
 
     override fun autoCancel(activity: Activity?): PostResumeFile {
+        super.autoCancel(activity)
         sendTool.autoCancel(activity)
         return this
     }

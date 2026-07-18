@@ -35,6 +35,34 @@ Net.instance.get()
     .send(callback)
 ```
 
+### 结构化处理 4xx/5xx 和网络异常
+
+新代码推荐使用 `sendResult()`。它会把结果拆成三类：`onSuccess` 处理 HTTP 2xx，`onHttpError` 处理 4xx/5xx，`onNetworkError` 处理断网、超时、DNS 失败等 IOException。
+
+```kotlin
+import com.itg.net.request.result.NetResult
+import com.itg.net.request.result.NetResultCallback
+import com.itg.net.request.result.sendResult
+
+Net.instance.get()
+    .url("https://api.example.com/user/info")
+    .sendResult(object : NetResultCallback {
+        override fun onSuccess(result: NetResult.Success) {
+            // 2xx
+        }
+
+        override fun onHttpError(error: NetResult.HttpError) {
+            // 4xx/5xx，例如 401 登录过期、404 接口不存在、500 服务器错误
+        }
+
+        override fun onNetworkError(error: NetResult.NetworkError) {
+            // 断网、超时、DNS 失败、连接失败
+        }
+    })
+```
+
+详细说明见 [09. HTTP 错误与网络异常处理](./09-error-handling.md)。
+
 ### POST JSON 请求
 
 `Content-Type: application/json`

@@ -7,6 +7,7 @@
 - GET / POST JSON / POST Form / 文件上传 / Multipart / 自定义 Content-Type 请求
 - 文件下载（断点续传、进度监听、生命周期绑定）
 - 请求取消（按 Tag / URL / 全部取消）
+- 结构化错误处理（`onHttpError` / `onNetworkError`）
 - 全局配置 DSL（Base URL、全局参数、拦截器、缓存）
 - 字段级加解密（AES-CBC/ECB/GCM、RSA）
 - 网络质量监控上报
@@ -39,5 +40,6 @@ Net.instance.get()
 | [06. 工具类](./doc/06-utilities.md) | StrTools/TaskTools/JsonTools 等 |
 | [07. 字段加密](./doc/07-field-encryption.md) | 字段级加解密配置与使用 |
 | [08. 网络监控](./doc/08-network-monitor.md) | 网络质量监控与上报 |
+| [09. HTTP 错误与网络异常处理](./doc/09-error-handling.md) | sendResult、onHttpError、onNetworkError、4xx/5xx 处理 |
 
 完整场景总览请查看 [项目 README](../README.md)。

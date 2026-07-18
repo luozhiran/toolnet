@@ -10,6 +10,7 @@ class PostForm: PostFormBuilder() {
     private val sendTool by lazy { SendTool() }
 
     override fun autoCancel(activity: Activity?): PostForm {
+        super.autoCancel(activity)
         sendTool.autoCancel(activity)
         return this
     }

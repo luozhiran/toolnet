@@ -4,7 +4,8 @@
 
 ## 包含功能
 
-- `flowString()` — 将任意请求转为 `Flow<String>`
+- `flowString()` — 将任意请求转为 `Flow<String>`，非 2xx 会进入 `catch`
+- `flowResult()` — 将请求转为 `Flow<NetResult>`，明确区分成功、HTTP 错误和网络异常
 - `flowResponse(converter)` — 含反序列化的 `Flow<NetResponse<T>>`
 - `TaskBuilder.flow()` — 下载进度 `Flow<DownloadProgress>`
 - `NetConverter<T>` 接口 + `GsonNetConverter<T>` 实现
@@ -31,7 +32,7 @@ lifecycleScope.launch {
 
 | 文档 | 内容 |
 |---|---|
-| [01. Flow 化请求](./doc/01-flow-basics.md) | flowString、flowResponse、反序列化、NetResponse |
+| [01. Flow 化请求](./doc/01-flow-basics.md) | flowString、flowResult、flowResponse、反序列化、NetResponse |
 | [02. 下载进度 Flow](./doc/02-flow-download.md) | TaskBuilder.flow、DownloadProgress、取消 |
 
 完整场景总览请查看 [项目 README](../README.md)。

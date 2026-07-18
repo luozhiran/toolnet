@@ -1,5 +1,6 @@
 package com.itg.net.flow
 
+import com.itg.net.request.result.NetResult
 import com.itg.net.request.base.ParamsBuilder
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -51,7 +52,61 @@ fun <T : ParamsBuilder> T.flowString(): Flow<String> = callbackFlow {
             try {
                 if (!call.isCanceled()) {
                     val body = response.body?.string()
-                    trySend(body.orEmpty())
+                    if (response.isSuccessful) {
+                        trySend(body.orEmpty())
+                        close()
+                    } else {
+                        close(NetFlowException(response.code, body ?: response.message))
+                    }
+                }
+            } finally {
+                response.close()
+            }
+        }
+    })
+
+    awaitClose {
+        call.cancel()
+    }
+}
+
+fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
+    val call: Call? = buildCall()
+    if (call == null) {
+        trySend(NetResult.NetworkError(IOException("url is error, please check url")))
+        close()
+        return@callbackFlow
+    }
+
+    call.enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            if (!call.isCanceled()) {
+                trySend(NetResult.NetworkError(e))
+                close()
+            }
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            try {
+                if (!call.isCanceled()) {
+                    val rawBody = response.body?.string()
+                    val headers = response.headers.toMultimap()
+                        .mapValues { (_, values) -> values.joinToString(", ") }
+                    val result = if (response.isSuccessful) {
+                        NetResult.Success(
+                            body = rawBody,
+                            code = response.code,
+                            headers = headers
+                        )
+                    } else {
+                        NetResult.HttpError(
+                            body = rawBody,
+                            code = response.code,
+                            message = response.message,
+                            headers = headers
+                        )
+                    }
+                    trySend(result)
                     close()
                 }
             } finally {

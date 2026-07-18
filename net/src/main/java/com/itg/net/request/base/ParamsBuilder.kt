@@ -39,6 +39,7 @@ abstract class ParamsBuilder : Builder, SentBuilder {
     var path:String?=null
     var noGlobalParams = false
     var cacheControl: CacheControl? = null
+    internal var autoCancelActivity: Activity? = null
 
     /**
      * 加密标记：null=使用全局配置，"__encrypt_force__"=强制加密，"__encrypt_skip__"=强制跳过
@@ -177,6 +178,9 @@ abstract class ParamsBuilder : Builder, SentBuilder {
         return this
     }
 
-    override fun autoCancel(activity: Activity?): ParamsBuilder =this
+    override fun autoCancel(activity: Activity?): ParamsBuilder {
+        autoCancelActivity = activity
+        return this
+    }
 
 }

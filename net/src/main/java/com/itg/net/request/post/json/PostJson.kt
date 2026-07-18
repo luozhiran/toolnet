@@ -11,6 +11,7 @@ class PostJson: PostJsonGenerator() {
     private val sendTool by lazy { SendTool() }
 
     override fun autoCancel(activity: Activity?): PostJson {
+        super.autoCancel(activity)
         sendTool.autoCancel(activity)
         return this
     }

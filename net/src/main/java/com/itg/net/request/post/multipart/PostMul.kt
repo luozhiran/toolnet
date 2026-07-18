@@ -10,6 +10,7 @@ class PostMul : PostMulGenerator() {
     private val sendTool by lazy { SendTool() }
 
     override fun autoCancel(activity: Activity?): PostMul {
+        super.autoCancel(activity)
         sendTool.autoCancel(activity)
         return this
     }

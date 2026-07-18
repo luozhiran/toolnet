@@ -11,6 +11,7 @@ class PostFile: PostFileGenerator() {
     private val sendTool by lazy { SendTool() }
 
     override fun autoCancel(activity: Activity?): PostFile {
+        super.autoCancel(activity)
         sendTool.autoCancel(activity)
         return this
     }
