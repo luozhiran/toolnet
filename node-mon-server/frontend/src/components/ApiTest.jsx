@@ -4,7 +4,8 @@ import DynamicParams from './DynamicParams';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
 
-export default function ApiTest() {
+export default function ApiTest({ mode }) {
+  const show = (name) => mode === undefined || mode === name;
   const [response, setResponse] = useState('');
   const [echoParams, setEchoParams] = useState([]);
   const [userId, setUserId] = useState('');
@@ -54,21 +55,35 @@ export default function ApiTest() {
 
   return (
     <div className="card">
-      <div className="card-header">📡 API 测试 <span className="badge">REST</span></div>
+      <div className="card-header">
+          📡 API 测试{' '}
+          <span className="badge">
+            {mode === 'data' ? 'GET /api/data' :
+             mode === 'echo' ? 'GET /api/echo' :
+             mode === 'user' ? 'GET /api/user/:id' :
+             mode === 'json' ? 'POST /api/json' :
+             mode === 'form' ? 'POST /api/form' : 'REST'}
+          </span>
+        </div>
       <div className="card-body">
+        {show('data') && (
         <div className="form-group">
           <label>GET /api/data（无参数）</label>
           <button onClick={handleGetData}>获取数据</button>
           <button className="example-btn" onClick={() => showModal('api-get')}>📱 示例</button>
         </div>
+        )}
 
+        {show('echo') && (
         <div className="sub-card">
           <label>GET /api/echo?（Query 参数，可多组）</label>
           <DynamicParams onChange={setEchoParams} placeholderKey="参数名" placeholderValue="参数值" />
           <button onClick={handleEcho} style={{ marginTop: '0.5rem' }}>发送 Echo 请求</button>
           <button className="example-btn" onClick={() => showModal('api-echo')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
+        )}
 
+        {show('user') && (
         <div className="sub-card">
           <label>GET /api/user/:id（路径参数 + Query）</label>
           <input type="text" placeholder="用户ID" value={userId} onChange={(e) => setUserId(e.target.value)} />
@@ -76,20 +91,25 @@ export default function ApiTest() {
           <button onClick={handleGetUser} style={{ marginTop: '0.5rem' }}>获取用户信息</button>
           <button className="example-btn" onClick={() => showModal('api-user')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
+        )}
 
+        {show('json') && (
         <div className="sub-card">
           <label>POST /api/json (发送 JSON)</label>
           <textarea rows="2" value={jsonText} onChange={(e) => setJsonText(e.target.value)} style={{ fontFamily: 'monospace' }} />
           <button onClick={handlePostJson}>提交 JSON</button>
           <button className="example-btn" onClick={() => showModal('api-json')}>📱 示例</button>
         </div>
+        )}
 
+        {show('form') && (
         <div className="sub-card">
           <label>POST /api/form (表单, x-www-form-urlencoded)</label>
           <DynamicParams onChange={setFormParams} placeholderKey="字段名" placeholderValue="字段值" />
           <button onClick={handlePostForm} style={{ marginTop: '0.5rem' }}>提交表单</button>
           <button className="example-btn" onClick={() => showModal('api-form')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
+        )}
 
         <div className="response-area">
           <pre>{response || '等待请求...'}</pre>

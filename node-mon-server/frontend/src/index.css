@@ -5,36 +5,163 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   background: #f5f7fb;
   margin: 0;
-  padding: 20px;
+  padding: 0;
   color: #1e293b;
 }
-.container {
-  max-width: 1400px;
-  margin: 0 auto;
+
+/* ========== 侧边栏布局 ========== */
+.layout {
+  display: flex;
+  min-height: 100vh;
 }
-h1 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
+
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  user-select: none;
 }
-.sub {
+
+.sidebar-header {
+  padding: 1.5rem 1.25rem 1rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f8fafc;
+  border-bottom: 1px solid #1e293b;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-item:hover {
+  background: #1e293b;
+  border-left-color: #475569;
+}
+
+.sidebar-item.active {
+  background: #1e293b;
+  border-left-color: #3b82f6;
+  color: #f8fafc;
+}
+
+.sidebar-item.active .sidebar-label {
+  color: #60a5fa;
+}
+
+.sidebar-icon {
+  font-size: 1.3rem;
+  width: 1.8rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.sidebar-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.sidebar-item.active .sidebar-label {
+  color: #f1f5f9;
+}
+
+.sidebar-desc {
+  font-size: 0.7rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-item.active .sidebar-desc {
+  color: #60a5fa;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #1e293b;
+}
+
+.sidebar-tip {
+  font-size: 0.7rem;
   color: #475569;
-  margin-bottom: 2rem;
-  border-left: 3px solid #3b82f6;
-  padding-left: 1rem;
+  line-height: 1.6;
 }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+
+/* ========== 侧边栏展开/折叠子项 ========== */
+.sidebar-parent {
+  position: relative;
 }
+
+.sidebar-arrow {
+  font-size: 0.6rem;
+  color: #64748b;
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.sidebar-children {
+  overflow: hidden;
+}
+
+.sidebar-child {
+  padding-left: 3rem;
+}
+
+.sidebar-child .sidebar-icon {
+  font-size: 1rem;
+  width: 1.4rem;
+}
+
+.sidebar-child .sidebar-label {
+  font-size: 0.82rem;
+}
+
+.sidebar-child .sidebar-desc {
+  font-size: 0.68rem;
+}
+
+/* ========== 主内容区 ========== */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 960px;
+  min-width: 0;
+}
+
+/* ========== Card 组件样式 ========== */
 .card {
   background: white;
   border-radius: 1rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 10px 20px -5px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
   overflow: hidden;
+  margin-bottom: 1.5rem;
 }
+
 .card-header {
   background: #f8fafc;
   padding: 1rem 1.25rem;
@@ -45,6 +172,7 @@ h1 {
   align-items: center;
   gap: 0.5rem;
 }
+
 .badge {
   background: #e2e8f0;
   color: #1e293b;
@@ -53,12 +181,16 @@ h1 {
   border-radius: 999px;
   font-weight: normal;
 }
+
 .card-body {
   padding: 1.25rem;
 }
+
+/* ========== 表单样式 ========== */
 .form-group {
   margin-bottom: 1rem;
 }
+
 label {
   display: block;
   font-size: 0.85rem;
@@ -66,6 +198,7 @@ label {
   margin-bottom: 0.4rem;
   color: #334155;
 }
+
 input, select, textarea {
   width: 100%;
   padding: 0.6rem 0.75rem;
@@ -73,11 +206,13 @@ input, select, textarea {
   border-radius: 0.5rem;
   font-size: 0.9rem;
 }
+
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
 }
+
 button {
   background: #3b82f6;
   color: white;
@@ -98,6 +233,8 @@ button.secondary {
 button.secondary:hover {
   background: #475569;
 }
+
+/* ========== 响应区域 ========== */
 .response-area {
   background: #0f172a;
   color: #e2e8f0;
@@ -111,6 +248,8 @@ button.secondary:hover {
   overflow: auto;
   margin-top: 1rem;
 }
+
+/* ========== 文件列表 ========== */
 .file-list {
   background: #f1f5f9;
   border-radius: 0.75rem;
@@ -133,6 +272,8 @@ button.secondary:hover {
   text-decoration: none;
   font-size: 0.7rem;
 }
+
+/* ========== 通用工具样式 ========== */
 .inline-group {
   display: flex;
   gap: 0.5rem;
@@ -167,74 +308,38 @@ hr {
   border: none;
   border-top: 1px solid #e2e8f0;
 }
-@media (max-width: 640px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
 
-/* 模态框样式 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-.modal-container {
-  background: white;
-  border-radius: 1rem;
-  width: 90%;
-  max-width: 700px;
-  max-height: 80vh;
-  overflow: auto;
-  position: relative;
-}
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-.modal-close {
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: #64748b;
-}
-.modal-body {
-  padding: 1.5rem;
-}
-.modal-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
-  text-align: right;
-}
-.code-block {
-  background: #0f172a;
-  color: #e2e8f0;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
-  font-family: monospace;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-}
-.example-btn {
-  background: #10b981;
-  color: white;
-  font-size: 0.75rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  cursor: pointer;
-  border: none;
-  margin-left: 0.5rem;
-}
-.example-btn:hover {
-  background: #059669;
+/* ========== 响应式 ========== */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0.5rem;
+  }
+  .sidebar-header {
+    display: none;
+  }
+  .sidebar-item {
+    padding: 0.5rem 0.75rem;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+  }
+  .sidebar-item.active {
+    border-left-color: transparent;
+    border-bottom-color: #3b82f6;
+  }
+  .sidebar-desc,
+  .sidebar-footer {
+    display: none;
+  }
+  .main-content {
+    padding: 1rem;
+  }
 }

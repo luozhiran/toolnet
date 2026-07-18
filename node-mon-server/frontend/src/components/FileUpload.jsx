@@ -3,7 +3,9 @@ import { uploadSingle, uploadMultiple } from '../api';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
 
-export default function FileUpload() {
+export default function FileUpload({ mode = 'both' }) {
+  const showSingle = mode === 'single' || mode === 'both';
+  const showMulti = mode === 'multi' || mode === 'both';
   const [singleFile, setSingleFile] = useState(null);
   const [extraField, setExtraField] = useState('');
   const [singleResp, setSingleResp] = useState('');
@@ -38,6 +40,7 @@ export default function FileUpload() {
 
   return (
     <>
+      {showSingle && (
       <div className="card">
         <div className="card-header">
           📤 单文件上传 <span className="badge">/upload/single</span>
@@ -56,7 +59,9 @@ export default function FileUpload() {
           <div className="response-area"><pre>{singleResp || '等待上传...'}</pre></div>
         </div>
       </div>
+      )}
 
+      {showMulti && (
       <div className="card">
         <div className="card-header">
           📚 多文件上传 <span className="badge">/upload/multiple</span>
@@ -71,6 +76,8 @@ export default function FileUpload() {
           <div className="response-area"><pre>{multiResp || '等待上传...'}</pre></div>
         </div>
       </div>
+      )}
+
       {exampleKey && (
         <ExampleModal
           title={examples[exampleKey]?.title || '示例'}
