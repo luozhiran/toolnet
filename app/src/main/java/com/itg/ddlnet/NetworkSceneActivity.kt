@@ -27,9 +27,19 @@ class NetworkSceneActivity : AppCompatActivity() {
     private fun bindSceneButtons() {
         findViewById<Button>(R.id.btn_net_get).setOnClickListener { runner.runNetGet() }
         findViewById<Button>(R.id.btn_net_post).setOnClickListener { runner.runNetPostJson() }
+        findViewById<Button>(R.id.btn_net_form).setOnClickListener { runner.runNetPostForm() }
+        findViewById<Button>(R.id.btn_net_content).setOnClickListener { runner.runNetPostContent() }
+        findViewById<Button>(R.id.btn_typed_business).setOnClickListener { runner.runTypedBusinessCallback() }
         findViewById<Button>(R.id.btn_encrypt_scene).setOnClickListener { runner.runFieldEncryptScene() }
+        findViewById<Button>(R.id.btn_skip_encrypt).setOnClickListener { runner.runSkipEncryptScene() }
+        findViewById<Button>(R.id.btn_global_path).setOnClickListener { runner.runGlobalParamsAndPathScene() }
+        findViewById<Button>(R.id.btn_cache_monitor).setOnClickListener { runner.runCacheAndMonitorExtraScene() }
+        findViewById<Button>(R.id.btn_http_error).setOnClickListener { runner.runHttpErrorResult() }
         findViewById<Button>(R.id.btn_flow_get).setOnClickListener { runner.runFlowGet() }
         findViewById<Button>(R.id.btn_flow_post).setOnClickListener { runner.runFlowPostJson() }
+        findViewById<Button>(R.id.btn_flow_result).setOnClickListener { runner.runFlowResult() }
+        findViewById<Button>(R.id.btn_flow_typed).setOnClickListener { runner.runFlowTypedBusinessResult() }
+        findViewById<Button>(R.id.btn_flow_response).setOnClickListener { runner.runFlowResponse() }
         findViewById<Button>(R.id.btn_net_download).setOnClickListener { runner.runNetDownload() }
         findViewById<Button>(R.id.btn_flow_download).setOnClickListener { runner.runFlowDownload() }
         findViewById<Button>(R.id.btn_retrofit_suspend).setOnClickListener { runner.runRetrofitSuspend() }

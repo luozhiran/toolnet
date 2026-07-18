@@ -49,9 +49,48 @@
                 android:text="net POST JSON callback" />
 
             <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_net_form"
+                style="@style/NetworkSceneButton"
+                android:text="net POST Form callback" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_net_content"
+                style="@style/NetworkSceneButton"
+                android:text="net POST raw content" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_typed_business"
+                style="@style/NetworkSceneButton"
+                android:text="typed business callback" />
+
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_encrypt_scene"
                 style="@style/NetworkSceneButton"
                 android:text="field encrypt/decrypt JSON" />
+
+            <TextView
+                style="@style/NetworkSceneSectionTitle"
+                android:text="Advanced and errors" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_skip_encrypt"
+                style="@style/NetworkSceneButton"
+                android:text="skip encrypt override" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_global_path"
+                style="@style/NetworkSceneButton"
+                android:text="global params + path/query" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_cache_monitor"
+                style="@style/NetworkSceneButton"
+                android:text="cache + monitorExtra" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_http_error"
+                style="@style/NetworkSceneButton"
+                android:text="sendResult HTTP error" />
 
             <TextView
                 style="@style/NetworkSceneSectionTitle"
@@ -66,6 +105,21 @@
                 android:id="@+id/btn_flow_post"
                 style="@style/NetworkSceneButton"
                 android:text="net-flow POST JSON" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_result"
+                style="@style/NetworkSceneButton"
+                android:text="net-flow result branches" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_typed"
+                style="@style/NetworkSceneButton"
+                android:text="net-flow typed business" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_response"
+                style="@style/NetworkSceneButton"
+                android:text="net-flow response converter" />
 
             <TextView
                 style="@style/NetworkSceneSectionTitle"
