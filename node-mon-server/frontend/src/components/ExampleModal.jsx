@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function ExampleModal({ title, code, onClose }) {
   const [visible, setVisible] = useState(true);
@@ -10,7 +11,7 @@ export default function ExampleModal({ title, code, onClose }) {
 
   if (!visible) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -25,6 +26,7 @@ export default function ExampleModal({ title, code, onClose }) {
           <button onClick={handleClose}>关闭</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

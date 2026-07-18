@@ -309,6 +309,83 @@ hr {
   border-top: 1px solid #e2e8f0;
 }
 
+/* ========== 示例按钮 ========== */
+.example-btn {
+  background: #10b981;
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  margin-left: 0.5rem;
+}
+.example-btn:hover {
+  background: #059669;
+}
+
+/* ========== 模态框/浮层 ========== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.modal-container {
+  background: white;
+  border-radius: 1rem;
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  overflow: auto;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.modal-close {
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: #64748b;
+  line-height: 1;
+}
+.modal-close:hover {
+  color: #1e293b;
+}
+.modal-body {
+  padding: 1.5rem;
+}
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  text-align: right;
+}
+.code-block {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-family: monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
 /* ========== 响应式 ========== */
 @media (max-width: 768px) {
   .layout {
