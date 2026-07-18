@@ -1,7 +1,6 @@
 package com.itg.net.request.base
 
 import android.app.Activity
-import android.text.TextUtils
 import com.itg.net.Net
 import com.itg.net.request.post.json.PostJsonBuilder
 import com.itg.net.util.StrTools
@@ -23,7 +22,7 @@ import org.json.JSONObject
 abstract class ParamsBuilder : Builder, SentBuilder {
     var url: String? = Net.instance.ddNetConfig.url
         get() {
-            return if (TextUtils.isEmpty(this.path)) {
+            return if (this.path.isNullOrEmpty()) {
                 field
             } else {
                 if (field?.endsWith("/") == true) {

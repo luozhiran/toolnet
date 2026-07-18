@@ -1,6 +1,8 @@
 package com.itg.net.request.business
 
-import org.json.JSONObject
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 
 class DefaultApiEnvelopeParser(
     private val successCodes: Set<String> = setOf("0", "200", "success", "true"),
@@ -21,7 +23,7 @@ class DefaultApiEnvelopeParser(
         }
 
         return runCatching {
-            val json = JSONObject(rawBody)
+            val json = JsonParser.parseString(rawBody).asJsonObject
             val code = firstValue(json, codeKeys)
             val message = firstValue(json, messageKeys)
             val dataRaw = firstRawValue(json, dataKeys)
@@ -43,21 +45,28 @@ class DefaultApiEnvelopeParser(
         }
     }
 
-    private fun firstValue(json: JSONObject, keys: List<String>): String? {
+    private fun firstValue(json: JsonObject, keys: List<String>): String? {
         for (key in keys) {
-            if (json.has(key) && !json.isNull(key)) {
-                return json.opt(key)?.toString()
+            val value = json.valueOrNull(key) ?: continue
+            if (value.isJsonPrimitive) {
+                return value.asJsonPrimitive.asString
             }
+            return value.toString()
         }
         return null
     }
 
-    private fun firstRawValue(json: JSONObject, keys: List<String>): String? {
+    private fun firstRawValue(json: JsonObject, keys: List<String>): String? {
         for (key in keys) {
-            if (json.has(key) && !json.isNull(key)) {
-                return json.opt(key)?.toString()
-            }
+            val value = json.valueOrNull(key) ?: continue
+            return if (value.isJsonPrimitive) value.asJsonPrimitive.asString else value.toString()
         }
         return null
+    }
+
+    private fun JsonObject.valueOrNull(key: String): JsonElement? {
+        if (!has(key)) return null
+        val value = get(key)
+        return if (value == null || value.isJsonNull) null else value
     }
 }

@@ -110,7 +110,6 @@ class OkHttpManager(ddNetConfig: NetConfig) {
                 val interceptor = MonitorInterceptor(
                     config = monitorConfig,
                     reportHandler = handler,
-                    application = ddNetConfig.application,
                     networkTypeCache = networkTypeCache
                 )
                 monitorInterceptor = interceptor

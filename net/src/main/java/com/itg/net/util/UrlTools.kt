@@ -1,6 +1,6 @@
 package com.itg.net.util
 
-import android.net.Uri
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 object UrlTools {
 
@@ -16,9 +16,9 @@ object UrlTools {
      */
     @JvmStatic
     fun getSpliceUrl(pastMap: MutableMap<String, Any?>?, url: String): String {
-        val urlBuilder = Uri.parse(url).buildUpon()
+        val urlBuilder = url.toHttpUrlOrNull()?.newBuilder() ?: return url
         pastMap?.forEach { entry ->
-            urlBuilder.appendQueryParameter(entry.key, entry.value.toString())
+            urlBuilder.addQueryParameter(entry.key, entry.value.toString())
         }
         return urlBuilder.build().toString()
     }

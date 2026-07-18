@@ -1,6 +1,5 @@
 package com.itg.net.monitor
 
-import android.app.Application
 import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -35,7 +34,6 @@ import java.util.concurrent.atomic.AtomicLong
 class MonitorInterceptor(
     private val config: MonitorConfig,
     private val reportHandler: IMonitorReportHandler,
-    private val application: Application?,
     private val networkTypeCache: NetworkTypeCache? = null
 ) : Interceptor {
 
@@ -44,25 +42,11 @@ class MonitorInterceptor(
     }
 
     // ==================== 非加密级请求 ID 生成 ====================
-    // 使用 AtomicLong + 时间戳 + 设备标识，消除 UUID.randomUUID() 的 SecureRandom 熵池阻塞风险
+    // 使用 AtomicLong + 时间戳生成请求 ID，避免 UUID.randomUUID() 的 SecureRandom 熵池阻塞风险。
 
     private val idCounter = AtomicLong(0)
-    private val deviceId: String by lazy {
-        try {
-            application?.let {
-                val androidId = android.provider.Settings.Secure.getString(
-                    it.contentResolver,
-                    android.provider.Settings.Secure.ANDROID_ID
-                )
-                if (!androidId.isNullOrBlank()) androidId.take(8) else "unknown"
-            } ?: "unknown"
-        } catch (_: Exception) {
-            "unknown"
-        }
-    }
-
     private fun nextRequestId(): String =
-        "${deviceId}_${System.currentTimeMillis()}_${idCounter.incrementAndGet()}"
+        "net_${System.currentTimeMillis()}_${idCounter.incrementAndGet()}"
 
     /** 后台线程池，仅当 Handler 不是异步时（isAsync=false）才创建。
      * Handler 已异步时（如 DefaultMonitorReportHandler / Firebase），框架内联调用，省去线程开销 */

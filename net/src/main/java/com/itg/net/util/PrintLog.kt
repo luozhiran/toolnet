@@ -25,20 +25,20 @@ class PrintLog {
         @JvmStatic
         fun logr(message: String) {
             if (!open) return
-            Log.i(TAG, "$SUB_TAG :$message")
+            runCatching { Log.i(TAG, "$SUB_TAG :$message") }
         }
 
         @JvmStatic
         fun logd(message: String) {
             if (!open) return
-            Log.i(TAG, "$SUB_DOWNLOAD :$message")
+            runCatching { Log.i(TAG, "$SUB_DOWNLOAD :$message") }
         }
 
 
         @JvmStatic
         fun logSubd(message: String) {
             if (!open) return
-            Log.i(TAG, "$SUB_DOWNLOAD :${SUB_CONTENT_START}$message${SUB_CONTENT_END}")
+            runCatching { Log.i(TAG, "$SUB_DOWNLOAD :${SUB_CONTENT_START}$message${SUB_CONTENT_END}") }
         }
     }
 }
