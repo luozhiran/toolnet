@@ -83,12 +83,12 @@ val retrofit = Net.instance.retrofit
 ```kotlin
 val retrofit = Net.instance.retrofit
     .baseUrl("https://api.example.com/")
-    .addCallAdapterFactory(NetFlowCallAdapterFactory())       // 支持 Flow
+    .addCallAdapterFactory(NetFlowCallAdapterFactory())       // 支持 Flow<T>/NetResponse/NetResult/BusinessResult
     .addCallAdapterFactory(RxJava3CallAdapterFactory.create()) // 支持 RxJava
     .build()
 ```
 
-> **注意**：一旦调用了 `addCallAdapterFactory()`，默认的 `NetFlowCallAdapterFactory` 不会被自动注册，需要手动添加。
+> **注意**：一旦调用了 `addCallAdapterFactory()`，默认的 `NetFlowCallAdapterFactory` 不会被自动注册，需要手动添加，否则 `Flow<T>`、`Flow<NetResult>`、`Flow<BusinessResult>` 等返回类型都不可用。
 
 ### 多个 Service 实例管理
 

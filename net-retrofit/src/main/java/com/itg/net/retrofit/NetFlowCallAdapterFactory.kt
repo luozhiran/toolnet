@@ -2,45 +2,30 @@ package com.itg.net.retrofit
 
 import com.itg.net.flow.NetFlowException
 import com.itg.net.flow.NetResponse
+import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.toBusinessResult
+import com.itg.net.request.result.NetResult
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.CallAdapter
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
+import java.io.IOException
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 
 /**
- * Retrofit [CallAdapter.Factory]，将 [Call] 适配为 Kotlin [Flow]
+ * Retrofit CallAdapter.Factory that adapts Retrofit Call into Kotlin Flow.
  *
- * 使 Retrofit Service 接口可以直接声明返回 [Flow] 或 [Flow]<[NetResponse]>，
- * 底层使用 [callbackFlow] 桥接 Retrofit 回调，
- * Flow 收集取消时自动取消底层网络请求。
- *
- * ## 支持的返回类型
- *
- * | Service 返回类型                     | 行为                                       |
- * |--------------------------------------|--------------------------------------------|
- * | `Flow<T>`                            | 发射单个反序列化后的 body 后完成            |
- * | `Flow<NetResponse<T>>`               | 发射包含状态码和反序列化 body 的响应包装    |
- * | `Call<T>`                            | 保持 Retrofit 原生行为（透传）              |
- * | `suspend fun ...: T`                 | Retrofit 内置支持，不需要本 Adapter         |
- *
- * ## 使用示例
- * ```
- * interface ApiService {
- *     // suspend 函数 — Retrofit 内置支持
- *     @GET("user/{id}")
- *     suspend fun getUser(@Path("id") id: String): User
- *
- *     // Flow 流式 — 需要本 Adapter
- *     @GET("events")
- *     fun eventStream(): Flow<Event>
- * }
- * ```
+ * Supported return types:
+ * - Flow<T>
+ * - Flow<NetResponse<T>>
+ * - Flow<NetResult>
+ * - Flow<BusinessResult>
  */
 class NetFlowCallAdapterFactory : CallAdapter.Factory() {
 
@@ -49,38 +34,47 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
         annotations: Array<Annotation>,
         retrofit: Retrofit
     ): CallAdapter<*, *>? {
-        // 只处理 Flow 返回类型
         if (getRawType(returnType) != Flow::class.java) {
             return null
         }
 
-        // Flow<T> 或 Flow<NetResponse<T>>
         check(returnType is ParameterizedType) {
-            "Flow return type must be parameterized as Flow<T> or Flow<NetResponse<T>>"
+            "Flow return type must be parameterized as Flow<T>, Flow<NetResponse<T>>, Flow<NetResult>, or Flow<BusinessResult>"
         }
 
-        val flowType = returnType
-        val responseType = getParameterUpperBound(0, flowType)
-        val isNetResponse = getRawType(responseType) == NetResponse::class.java
-
-        val bodyType: Type = if (isNetResponse) {
-            // Flow<NetResponse<T>> → 提取 T
-            check(responseType is ParameterizedType)
-            getParameterUpperBound(0, responseType)
-        } else {
-            // Flow<T>
-            responseType
+        val responseType = getParameterUpperBound(0, returnType)
+        val mode = when (getRawType(responseType)) {
+            NetResponse::class.java -> ResultMode.NetResponse
+            NetResult::class.java -> ResultMode.NetResult
+            BusinessResult::class.java -> ResultMode.BusinessResult
+            else -> ResultMode.Body
         }
 
-        return FlowCallAdapter<Any>(bodyType, isNetResponse)
+        val bodyType: Type = when (mode) {
+            ResultMode.NetResponse -> {
+                check(responseType is ParameterizedType) {
+                    "Flow<NetResponse<T>> must include the response body type"
+                }
+                getParameterUpperBound(0, responseType)
+            }
+            ResultMode.NetResult,
+            ResultMode.BusinessResult -> ResponseBody::class.java
+            ResultMode.Body -> responseType
+        }
+
+        return FlowCallAdapter<Any>(bodyType, mode)
     }
 
-    /**
-     * Flow 适配器实现 — 将 Retrofit Call 适配为 Flow
-     */
+    private enum class ResultMode {
+        Body,
+        NetResponse,
+        NetResult,
+        BusinessResult
+    }
+
     private class FlowCallAdapter<T>(
         private val bodyType: Type,
-        private val isNetResponse: Boolean
+        private val mode: ResultMode
     ) : CallAdapter<T, Flow<Any>> {
 
         override fun responseType(): Type = bodyType
@@ -90,46 +84,32 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 override fun onResponse(call: Call<T>, response: Response<T>) {
                     if (call.isCanceled) return
 
-                    val headers = response.headers().toMultimap()
-                        .mapValues { (_, values) -> values.joinToString(", ") }
-
-                    if (isNetResponse) {
-                        val netResp = if (response.isSuccessful) {
-                            NetResponse(
-                                body = response.body() as? Any,
-                                rawBody = null,
-                                code = response.code(),
-                                headers = headers
-                            )
-                        } else {
-                            val errorBody = response.errorBody()?.string()
-                            NetResponse(
-                                body = null,
-                                rawBody = errorBody,
-                                code = response.code(),
-                                headers = headers
-                            )
+                    when (mode) {
+                        ResultMode.Body -> emitBody(response)
+                        ResultMode.NetResponse -> emitNetResponse(response)
+                        ResultMode.NetResult -> {
+                            trySend(response.toNetResult())
                         }
-                        trySend(netResp)
-                    } else {
-                        if (response.isSuccessful) {
-                            trySend(response.body() as Any)
-                        } else {
-                            close(
-                                NetFlowException(
-                                    response.code(),
-                                    response.errorBody()?.string()
-                                )
-                            )
-                            return
+                        ResultMode.BusinessResult -> {
+                            trySend(response.toNetResult().toBusinessResult())
                         }
                     }
                     close()
                 }
 
                 override fun onFailure(call: Call<T>, t: Throwable) {
-                    if (!call.isCanceled) {
-                        close(NetFlowException(null, t.message))
+                    if (call.isCanceled) return
+
+                    when (mode) {
+                        ResultMode.NetResult -> {
+                            trySend(NetResult.NetworkError(t.asIOException()))
+                            close()
+                        }
+                        ResultMode.BusinessResult -> {
+                            trySend(NetResult.NetworkError(t.asIOException()).toBusinessResult())
+                            close()
+                        }
+                        else -> close(NetFlowException(null, t.message))
                     }
                 }
             })
@@ -137,6 +117,70 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             awaitClose {
                 call.cancel()
             }
+        }
+
+        private fun kotlinx.coroutines.channels.ProducerScope<Any>.emitBody(response: Response<T>) {
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    trySend(body as Any)
+                    return
+                }
+                close(NetFlowException(response.code(), "response body is null"))
+                return
+            }
+
+            close(NetFlowException(response.code(), response.errorBody()?.string()))
+        }
+
+        private fun kotlinx.coroutines.channels.ProducerScope<Any>.emitNetResponse(response: Response<T>) {
+            val headers = response.headers().toMultimap()
+                .mapValues { (_, values) -> values.joinToString(", ") }
+            val netResponse = if (response.isSuccessful) {
+                NetResponse(
+                    body = response.body() as? Any,
+                    rawBody = null,
+                    code = response.code(),
+                    headers = headers
+                )
+            } else {
+                NetResponse(
+                    body = null,
+                    rawBody = response.errorBody()?.string(),
+                    code = response.code(),
+                    headers = headers
+                )
+            }
+            trySend(netResponse)
+        }
+
+        private fun Response<T>.toNetResult(): NetResult {
+            val headers = headers().toMultimap()
+                .mapValues { (_, values) -> values.joinToString(", ") }
+            val rawBody = if (isSuccessful) {
+                (body() as? ResponseBody)?.string() ?: body()?.toString()
+            } else {
+                errorBody()?.string()
+            }
+
+            return if (isSuccessful) {
+                NetResult.Success(
+                    body = rawBody,
+                    code = code(),
+                    headers = headers
+                )
+            } else {
+                NetResult.HttpError(
+                    body = rawBody,
+                    code = code(),
+                    message = message(),
+                    headers = headers
+                )
+            }
+        }
+
+        private fun Throwable.asIOException(): IOException {
+            return this as? IOException ?: IOException(message, this)
         }
     }
 }

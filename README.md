@@ -23,7 +23,7 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 | [工具类](./net/doc/06-utilities.md) | `StrTools` / `TaskTools` / `CacheControlFactory` / `JsonTools` / `PrintLog` | 无特殊限制 | 需要 MD5、JSON 合并、进度计算、调试日志等辅助功能 | 内置工具类覆盖常见网络开发需求 |
 | [Flow 化请求](./net-flow/doc/01-flow-basics.md) | `flowString()` / `flowResponse(converter)` | 依赖 `net-flow` 模块，需 kotlinx-coroutines | 需要协程/Flow 风格调用，结构化并发 | `callbackFlow` 桥接 OkHttp Call，自动生命周期管理 |
 | [下载进度 Flow](./net-flow/doc/02-flow-download.md) | `TaskBuilder.flow()` → `Flow<DownloadProgress>` | 依赖 `net-flow` 模块 | 需要通过 Flow 获取下载进度（替代回调） | `callbackFlow` 桥接下载回调事件 |
-| [Retrofit 声明式 API](./net-retrofit/doc/01-retrofit-basics.md) | `@GET`/`@POST` 注解 + `suspend` 函数 + `NetResponse<T>` | 依赖 `net-retrofit` 模块，需 Retrofit 2.9.0 | 需要接口+注解方式定义 API，统一管理 | 复用 Net 全局 OkHttpClient，支持 suspend/Flow/NetResponse |
+| [Retrofit 声明式 API](./net-retrofit/doc/01-retrofit-basics.md) | `@GET`/`@POST` 注解 + `suspend` 函数 + `Flow<BusinessResult>` | 依赖 `net-retrofit` 模块，需 Retrofit 2.9.0 | 需要接口+注解方式定义 API，统一管理 | 复用 Net 全局 OkHttpClient，支持 suspend/Flow/NetResponse/NetResult/BusinessResult |
 | [Retrofit 高级配置](./net-retrofit/doc/02-retrofit-advanced.md) | 自定义 Converter/CallAdapter、多 Base URL、独立 OkHttpClient | 依赖 `net-retrofit` 模块 | 需要 Moshi/Jackson 替代 Gson，或对接多个后端 | `NetRetrofit.Builder` 提供完全自定义能力 |
 | [字段加密](./net/doc/07-field-encryption.md) | `encrypt { }` DSL + `Algorithm.AES_GCM_NO_PADDING` | `net` 核心库内置，对 Flow/Retrofit 透明 | 需要保护密码、手机号等敏感字段在传输中的安全 | `EncryptInterceptor` 在 OkHttp 层透明加解密 |
 | [网络监控](./net/doc/08-network-monitor.md) | `monitor { }` DSL + `FAILURE_ONLY` / `ALL` / `SLOW_ONLY` 模式 | `net` 核心库内置，对 Flow/Retrofit 透明 | 需要监控线上请求质量、排查 DNS/超时/HTTP 错误 | `MonitorInterceptor` 在 OkHttp 层自动采集并上报 |
@@ -46,7 +46,7 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 | [09. Flow 化请求](./net-flow/doc/01-flow-basics.md) | flowString、flowResponse、反序列化、NetResponse、retry、便捷方法 |
 | [10. 下载进度 Flow](./net-flow/doc/02-flow-download.md) | TaskBuilder.flow、DownloadProgress、DownloadPhase、取消 |
 | **net-retrofit 模块** | |
-| [11. Retrofit 声明式 API](./net-retrofit/doc/01-retrofit-basics.md) | Service 定义、NetRetrofit 构建、suspend/Flow/NetResponse 返回类型 |
+| [11. Retrofit 声明式 API](./net-retrofit/doc/01-retrofit-basics.md) | Service 定义、NetRetrofit 构建、suspend/Flow/NetResponse/NetResult/BusinessResult 返回类型 |
 | [12. Retrofit 高级配置](./net-retrofit/doc/02-retrofit-advanced.md) | 自定义 Converter/CallAdapter、多 Base URL、ProGuard |
 
 ## 快速开始

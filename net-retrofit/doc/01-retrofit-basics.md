@@ -15,6 +15,8 @@
 ```kotlin
 import retrofit2.http.*
 import com.itg.net.flow.NetResponse
+import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.result.NetResult
 
 interface UserService {
 
@@ -50,6 +52,14 @@ interface UserService {
     // Flow 流式返回
     @GET("events")
     fun eventStream(): Flow<Event>
+
+    // Flow + HTTP 结果分流
+    @GET("user/info")
+    fun userInfoResult(): Flow<NetResult>
+
+    // Flow + 业务码责任链
+    @GET("user/info")
+    fun userInfoBusiness(): Flow<BusinessResult>
 }
 ```
 
@@ -94,7 +104,7 @@ object ApiServices {
 |---|---|
 | OkHttpClient | `Net.instance.okhttpManager.okHttpClient`（继承全部拦截器/超时/缓存） |
 | Converter.Factory | `GsonConverterFactory.create()` |
-| CallAdapter.Factory | `NetFlowCallAdapterFactory()`（支持 `Flow<T>` / `Flow<NetResponse<T>>`） |
+| CallAdapter.Factory | `NetFlowCallAdapterFactory()`（支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>`） |
 
 ### suspend 函数请求
 
@@ -167,6 +177,58 @@ lifecycleScope.launch {
 }
 ```
 
+#### Flow<NetResult>
+
+`Flow<NetResult>` 和 `net-flow` 的 `flowResult()` 行为一致：2xx 进入 `Success`，4xx/5xx 进入 `HttpError`，断网/超时进入 `NetworkError`。
+
+```kotlin
+import com.itg.net.request.result.NetResult
+
+interface UserService {
+    @GET("user/info")
+    fun userInfoResult(): Flow<NetResult>
+}
+
+lifecycleScope.launch {
+    userService.userInfoResult()
+        .collect { result ->
+            when (result) {
+                is NetResult.Success -> render(result.body)
+                is NetResult.HttpError -> showError("HTTP ${result.code}: ${result.body}")
+                is NetResult.NetworkError -> showError("网络不可用: ${result.message}")
+            }
+        }
+}
+```
+
+#### Flow<BusinessResult>
+
+`Flow<BusinessResult>` 和 `net-flow` 的 `flowBusinessResult()` 行为一致：HTTP 2xx 会先进入 `ApiEnvelopeParser`，再走 `BusinessResultInterceptor` 责任链，适合统一处理登录失效、权限不足、维护模式等业务码。
+
+```kotlin
+import com.itg.net.request.business.BusinessResult
+
+interface UserService {
+    @GET("user/info")
+    fun userInfoBusiness(): Flow<BusinessResult>
+}
+
+lifecycleScope.launch {
+    userService.userInfoBusiness()
+        .collect { result ->
+            when (result) {
+                is BusinessResult.Success -> render(result.dataRaw)
+                is BusinessResult.BusinessError -> showError(result.message)
+                is BusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
+                is BusinessResult.NetworkError -> showError("网络不可用")
+                is BusinessResult.Consumed -> Unit
+            }
+        }
+}
+```
+
+`BusinessResult` 使用 `Net.instance.configure { businessResultParser(...) }` 和 `addBusinessResultInterceptor(...)` 中的全局配置，详见 [net 09. HTTP 错误、网络异常与业务码处理](../../net/doc/09-error-handling.md)。
+
 ## 返回类型对比
 
 | Service 返回类型 | 非 2xx 行为 | 需要 CallAdapter |
@@ -176,6 +238,8 @@ lifecycleScope.launch {
 | `NetResponse<T>` (suspend) | 正常返回，rawBody 含错误信息 | Retrofit 内置 |
 | `Flow<T>` | 以 `NetFlowException` 关闭 | `NetFlowCallAdapterFactory` |
 | `Flow<NetResponse<T>>` | 正常发送，.code 体现错误 | `NetFlowCallAdapterFactory` |
+| `Flow<NetResult>` | 发射 `Success` / `HttpError` / `NetworkError` | `NetFlowCallAdapterFactory` |
+| `Flow<BusinessResult>` | 发射业务责任链处理后的结果 | `NetFlowCallAdapterFactory` |
 | `Call<T>` | Retrofit 原生 | 否 |
 
 ## 关键说明
@@ -184,12 +248,15 @@ lifecycleScope.launch {
 - Retrofit Service 自动使用 Net 库中配置的 OkHttpClient（包含所有拦截器、超时、缓存等）
 - `globalParams` 不会自动附加到 Retrofit 请求（需在接口中自行添加 `@Query` 参数）
 - `NetResponse<T>` 作为返回类型时，非 2xx 不会抛异常，可通过 `response.code` 自行判断
-- `Flow<T>` 和 `Flow<NetResponse<T>>` 依赖 `NetFlowCallAdapterFactory`（默认已注册）
+- `Flow<T>`、`Flow<NetResponse<T>>`、`Flow<NetResult>` 和 `Flow<BusinessResult>` 依赖 `NetFlowCallAdapterFactory`（默认已注册）
+- `Flow<BusinessResult>` 会复用 `NetConfig` 中配置的 `ApiEnvelopeParser` 和 `BusinessResultInterceptor`
 
 ## 验证方式
 
 - 编译通过并确认 Service 接口方法可正常调用
 - 在 Retrofit Service 中设置断点确认 OkHttpClient 与全局配置一致
 - 测试 `NetResponse<T>` 在非 2xx 时不抛异常
+- 测试 `Flow<NetResult>` 在 4xx/5xx 时发射 `NetResult.HttpError`
+- 测试 `Flow<BusinessResult>` 在 HTTP 200 + 业务失败码时发射 `BusinessResult.BusinessError` 或被责任链消费
 
 [返回 README](../../README.md)

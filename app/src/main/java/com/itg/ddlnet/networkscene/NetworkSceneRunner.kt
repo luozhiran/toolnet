@@ -230,12 +230,18 @@ class NetworkSceneRunner(
     }
 
     fun runRetrofitFlow() {
-        logger.append("net-retrofit Flow: start")
+        logger.append("net-retrofit Business Flow: start")
         lifecycleScope.launch {
             retrofitApi.getDataFlow()
-                .catch { e -> logger.append("net-retrofit Flow: failed ${e.message.orEmpty()}") }
-                .collect { body ->
-                    logger.append("net-retrofit Flow: body=${body.shortBody()}")
+                .catch { e -> logger.append("net-retrofit Business Flow: failed ${e.message.orEmpty()}") }
+                .collect { result ->
+                    when (result) {
+                        is BusinessResult.Success -> logger.append("net-retrofit Business Flow: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
+                        is BusinessResult.BusinessError -> logger.append("net-retrofit Business Flow: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
+                        is BusinessResult.HttpError -> logger.append("net-retrofit Business Flow: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
+                        is BusinessResult.NetworkError -> logger.append("net-retrofit Business Flow: network error ${result.error.error.message.orEmpty()}")
+                        is BusinessResult.Consumed -> logger.append("net-retrofit Business Flow: consumed ${result.reason.orEmpty()}")
+                    }
                 }
         }
     }
@@ -253,6 +259,6 @@ class NetworkSceneRunner(
         ): Response<ResponseBody>
 
         @GET("api/data")
-        fun getDataFlow(): Flow<String>
+        fun getDataFlow(): Flow<BusinessResult>
     }
 }
