@@ -1,50 +1,21 @@
 import { useState } from 'react';
-import { uploadSingle, uploadMultiple, getDownloadUrl } from '../api';
+import { uploadSingle, uploadMultiple } from '../api';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
+import { fileTypeInfo, formatSize, buildDownloadUrl, copyToClipboard } from '../utils/format';
+import { useExampleModal } from '../hooks/useExampleModal';
 
-// 文件类型图标
-function fileIcon(ext: string): string {
-  const map: Record<string, string> = {
-    png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️', svg:'🖼️', webp:'🖼️',
-    pdf:'📕', zip:'📦', rar:'📦', '7z':'📦', tar:'📦', gz:'📦',
-    mp4:'🎬', mov:'🎬', avi:'🎬', mp3:'🎵', wav:'🎵',
-    json:'📋', xml:'📋', txt:'📄', log:'📄', md:'📝',
-    js:'💛', ts:'💙', html:'🌐', css:'🎨',
-  };
-  return map[(ext || '').toLowerCase()] || '📎';
-}
-
-function formatSize(bytes: number | undefined): string {
-  if (!bytes) return '未知';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
-}
-
-function fullUrl(filename: string): string {
-  return window.location.origin + getDownloadUrl(filename);
-}
-
-interface FileInfo {
-  filename: string;
-  originalName?: string;
-  size?: number;
-  mimetype?: string;
-}
-
-function FileResult({ file, onCopy }: { file: FileInfo; onCopy: (filename: string) => void }) {
-  const ext = (file.originalName || file.filename || '').split('.').pop() || '';
+function FileResult({ file, onCopy }: { file: { filename: string; originalName?: string; size?: number; mimetype?: string }; onCopy: (filename: string) => void }) {
   return (
     <div className="upload-result">
-      <span className="upload-result-icon">{fileIcon(ext)}</span>
+      <span className="upload-result-icon">{fileTypeInfo(file.originalName || file.filename).icon}</span>
       <div className="upload-result-info">
         <div className="upload-result-name">{file.originalName || file.filename}</div>
         <div className="upload-result-meta">
-          大小 {formatSize(file.size)} · {file.mimetype || ''}
+          大小 {formatSize(file.size || 0)} · {file.mimetype || ''}
         </div>
         <div className="upload-result-url">
-          <code>{fullUrl(file.filename)}</code>
+          <code>{buildDownloadUrl(file.filename)}</code>
           <button className="file-copy-btn" onClick={() => onCopy(file.filename)}>📋 复制</button>
         </div>
       </div>
@@ -52,18 +23,8 @@ function FileResult({ file, onCopy }: { file: FileInfo; onCopy: (filename: strin
   );
 };
 
-function copyUrl(filename: string): void {
-  navigator.clipboard.writeText(fullUrl(filename)).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = fullUrl(filename);
-    ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-  });
-}
-
-interface SingleResult { file: FileInfo; ok: true }
-interface MultiResult { files: FileInfo[]; ok: true }
+interface SingleResult { file: { filename: string; originalName?: string; size?: number; mimetype?: string }; ok: true }
+interface MultiResult { files: { filename: string; originalName?: string; size?: number; mimetype?: string }[]; ok: true }
 interface ErrorResult { ok: false; message: string }
 
 export default function FileUpload({ mode = 'both' }: { mode?: string }) {
@@ -76,14 +37,11 @@ export default function FileUpload({ mode = 'both' }: { mode?: string }) {
   const [multiFiles, setMultiFiles] = useState<File[]>([]);
   const [multiResults, setMultiResults] = useState<MultiResult | ErrorResult | null>(null);
   const [multiRaw, setMultiRaw] = useState('');
-  const [exampleKey, setExampleKey] = useState<string | null>(null);
+  const { exampleKey, showExample, closeExample } = useExampleModal();
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
 
-  const showModal = (key: string) => setExampleKey(key);
-  const closeModal = () => setExampleKey(null);
-
-  const doCopy = (filename: string) => {
-    copyUrl(filename);
+  const doCopy = async (filename: string) => {
+    await copyToClipboard(buildDownloadUrl(filename));
     setCopiedFile(filename);
     setTimeout(() => setCopiedFile(null), 1500);
   };
@@ -130,7 +88,7 @@ export default function FileUpload({ mode = 'both' }: { mode?: string }) {
       <div className="card">
         <div className="card-header">
           📤 单文件上传 <span className="badge">/upload/single</span>
-          <button className="example-btn" onClick={() => showModal('upload-single')}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('upload-single')}>📱 示例</button>
         </div>
         <div className="card-body">
           <div className="form-group">
@@ -178,7 +136,7 @@ export default function FileUpload({ mode = 'both' }: { mode?: string }) {
       <div className="card">
         <div className="card-header">
           📚 多文件上传 <span className="badge">/upload/multiple</span>
-          <button className="example-btn" onClick={() => showModal('upload-multiple')}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('upload-multiple')}>📱 示例</button>
         </div>
         <div className="card-body">
           <div className="form-group">
@@ -224,7 +182,7 @@ export default function FileUpload({ mode = 'both' }: { mode?: string }) {
         <ExampleModal
           title={examples[exampleKey]?.title || '示例'}
           code={examples[exampleKey]?.code || '示例代码未找到'}
-          onClose={closeModal}
+          onClose={closeExample}
         />
       )}
     </>

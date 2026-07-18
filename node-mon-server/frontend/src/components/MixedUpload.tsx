@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { uploadMixed } from '../api';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
+import { useExampleModal } from '../hooks/useExampleModal';
 
 export default function MixedUpload() {
   const [files, setFiles] = useState<File[]>([]);
@@ -10,10 +11,7 @@ export default function MixedUpload() {
   const [extraKey, setExtraKey] = useState('');
   const [extraValue, setExtraValue] = useState('');
   const [response, setResponse] = useState('');
-  const [exampleKey, setExampleKey] = useState<string | null>(null);
-
-  const showModal = (key: string) => setExampleKey(key);
-  const closeModal = () => setExampleKey(null);
+  const { exampleKey, showExample, closeExample } = useExampleModal();
 
   const handleUpload = async () => {
     if (!files.length) { alert('请至少选择一个文件'); return; }
@@ -27,7 +25,7 @@ export default function MixedUpload() {
     <div className="card">
       <div className="card-header">
         🧬 混合上传 <span className="badge">/upload/mixed</span>
-        <button className="example-btn" onClick={() => showModal('upload-mixed')}>📱 示例</button>
+        <button className="example-btn" onClick={() => showExample('upload-mixed')}>📱 示例</button>
       </div>
       <div className="card-body">
         <div className="form-group">
@@ -56,7 +54,7 @@ export default function MixedUpload() {
         <ExampleModal
           title={examples[exampleKey]?.title || '示例'}
           code={examples[exampleKey]?.code || '示例代码未找到'}
-          onClose={closeModal}
+          onClose={closeExample}
         />
       )}
     </div>

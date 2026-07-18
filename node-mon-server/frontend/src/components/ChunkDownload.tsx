@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
 import { getFileList, getDownloadUrl } from '../api';
+import { useExampleModal } from '../hooks/useExampleModal';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
 
-interface FileEntry { name: string; size: number; modified: string }
-
 export default function ChunkDownload() {
-  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [files, setFiles] = useState<{ name: string; size: number; modified: string }[]>([]);
   const [selectedFile, setSelectedFile] = useState('');
   const [chunkCount, setChunkCount] = useState(3);
   const [progress, setProgress] = useState('');
   const [fillWidth, setFillWidth] = useState(0);
   const [result, setResult] = useState('');
-  const [exampleKey, setExampleKey] = useState<string | null>(null);
+  const { exampleKey, showExample, closeExample } = useExampleModal();
 
   const refreshFiles = async () => {
     const res = await getFileList();
@@ -71,14 +70,11 @@ export default function ChunkDownload() {
     }
   };
 
-  const showModal = (key: string) => setExampleKey(key);
-  const closeModal = () => setExampleKey(null);
-
   return (
     <div className="card">
       <div className="card-header">
         🔁 断点续传演示 <span className="badge">分片下载合并</span>
-        <button className="example-btn" onClick={() => showModal('chunk-demo')}>📱 示例</button>
+        <button className="example-btn" onClick={() => showExample('chunk-demo')}>📱 示例</button>
       </div>
       <div className="card-body">
         <div className="form-group">
@@ -101,7 +97,7 @@ export default function ChunkDownload() {
         <ExampleModal
           title={examples[exampleKey]?.title || '示例'}
           code={examples[exampleKey]?.code || '示例代码未找到'}
-          onClose={closeModal}
+          onClose={closeExample}
         />
       )}
     </div>

@@ -1,74 +1,14 @@
 import { useEffect, useState } from 'react';
 import { getFileList, getDownloadUrl, deleteFile } from '../api';
+import { fileTypeInfo, formatSize, formatTime, buildDownloadUrl, copyToClipboard } from '../utils/format';
+import { useExampleModal } from '../hooks/useExampleModal';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
 
-interface FileEntry {
-  name: string;
-  size: number;
-  modified: string;
-}
-
-// 根据扩展名返回图标和颜色
-function fileMeta(filename: string): { icon: string; color: string; label: string } {
-  const ext = (filename.split('.').pop() || '').toLowerCase();
-  const map: Record<string, { icon: string; color: string; label: string }> = {
-    png:  { icon: '🖼️', color: '#f59e0b', label: '图片' },
-    jpg:  { icon: '🖼️', color: '#f59e0b', label: '图片' },
-    jpeg: { icon: '🖼️', color: '#f59e0b', label: '图片' },
-    gif:  { icon: '🖼️', color: '#f59e0b', label: '图片' },
-    svg:  { icon: '🖼️', color: '#f59e0b', label: '图片' },
-    webp: { icon: '🖼️', color: '#f59e0b', label: '图片' },
-    pdf:  { icon: '📕', color: '#ef4444', label: 'PDF' },
-    zip:  { icon: '📦', color: '#8b5cf6', label: '压缩包' },
-    rar:  { icon: '📦', color: '#8b5cf6', label: '压缩包' },
-    '7z': { icon: '📦', color: '#8b5cf6', label: '压缩包' },
-    tar:  { icon: '📦', color: '#8b5cf6', label: '压缩包' },
-    gz:   { icon: '📦', color: '#8b5cf6', label: '压缩包' },
-    mp4:  { icon: '🎬', color: '#06b6d4', label: '视频' },
-    mov:  { icon: '🎬', color: '#06b6d4', label: '视频' },
-    avi:  { icon: '🎬', color: '#06b6d4', label: '视频' },
-    mp3:  { icon: '🎵', color: '#10b981', label: '音频' },
-    wav:  { icon: '🎵', color: '#10b981', label: '音频' },
-    json: { icon: '📋', color: '#6366f1', label: 'JSON' },
-    xml:  { icon: '📋', color: '#6366f1', label: 'XML' },
-    txt:  { icon: '📄', color: '#64748b', label: '文本' },
-    log:  { icon: '📄', color: '#64748b', label: '日志' },
-    md:   { icon: '📝', color: '#64748b', label: 'Markdown' },
-    js:   { icon: '💛', color: '#eab308', label: 'JS' },
-    ts:   { icon: '💙', color: '#3b82f6', label: 'TS' },
-    html: { icon: '🌐', color: '#f97316', label: 'HTML' },
-    css:  { icon: '🎨', color: '#06b6d4', label: 'CSS' },
-  };
-  return map[ext] || { icon: '📎', color: '#94a3b8', label: ext || '文件' };
-}
-
-// 智能文件大小格式化
-function formatSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
-}
-
-// 相对时间
-function formatTime(dateStr: string): string {
-  const now = Date.now();
-  const diff = now - new Date(dateStr).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return new Date(dateStr).toLocaleDateString('zh-CN');
-}
-
 export default function FileManager() {
-  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [files, setFiles] = useState<{ name: string; size: number; modified: string }[]>([]);
   const [downloadFilename, setDownloadFilename] = useState('');
-  const [exampleKey, setExampleKey] = useState<string | null>(null);
+  const { exampleKey, showExample, closeExample } = useExampleModal();
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
 
   const refreshFiles = async () => {
@@ -84,26 +24,10 @@ export default function FileManager() {
     window.open(getDownloadUrl(downloadFilename), '_blank');
   };
 
-  const fullDownloadUrl = (filename: string): string =>
-    window.location.origin + getDownloadUrl(filename);
-
-  const copyUrl = async (filename: string) => {
-    try {
-      await navigator.clipboard.writeText(fullDownloadUrl(filename));
-      setCopiedFile(filename);
-      setTimeout(() => setCopiedFile(null), 1500);
-    } catch {
-      // 回退：用传统方法
-      const ta = document.createElement('textarea');
-      ta.value = fullDownloadUrl(filename);
-      ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      setCopiedFile(filename);
-      setTimeout(() => setCopiedFile(null), 1500);
-    }
+  const handleCopy = async (filename: string) => {
+    await copyToClipboard(buildDownloadUrl(filename));
+    setCopiedFile(filename);
+    setTimeout(() => setCopiedFile(null), 1500);
   };
 
   const handleDelete = async (filename: string) => {
@@ -117,8 +41,6 @@ export default function FileManager() {
     }
   };
 
-  const showModal = (key: string) => setExampleKey(key);
-  const closeModal = () => setExampleKey(null);
 
   return (
     <div className="card">
@@ -128,7 +50,7 @@ export default function FileManager() {
         <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: '#64748b' }}>
           {files.length} 个文件
         </span>
-        <button className="example-btn" onClick={() => showModal('download')}>📱 示例</button>
+        <button className="example-btn" onClick={() => showExample('download')}>📱 示例</button>
       </div>
       <div className="card-body">
         {/* 工具栏 */}
@@ -171,7 +93,7 @@ export default function FileManager() {
         ) : (
           <div className="file-grid">
             {files.map(file => {
-              const meta = fileMeta(file.name);
+              const meta = fileTypeInfo(file.name);
               return (
                 <div key={file.name} className="file-row">
                   <div className="file-icon-col" style={{ backgroundColor: meta.color + '18' }}>
@@ -186,10 +108,10 @@ export default function FileManager() {
                       <span>{formatTime(file.modified)}</span>
                     </div>
                     <div className="file-url-row">
-                      <code className="file-url-text">{fullDownloadUrl(file.name)}</code>
+                      <code className="file-url-text">{buildDownloadUrl(file.name)}</code>
                       <button
                         className="file-copy-btn"
-                        onClick={(e) => { e.preventDefault(); copyUrl(file.name); }}
+                        onClick={(e) => { e.preventDefault(); handleCopy(file.name); }}
                       >
                         {copiedFile === file.name ? '✅ 已复制' : '📋 复制'}
                       </button>
@@ -224,7 +146,7 @@ export default function FileManager() {
         <ExampleModal
           title={examples[exampleKey]?.title || '示例'}
           code={examples[exampleKey]?.code || '示例代码未找到'}
-          onClose={closeModal}
+          onClose={closeExample}
         />
       )}
     </div>

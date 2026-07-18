@@ -3,6 +3,7 @@ import { getApiData, getEcho, getUser, postJson, postForm } from '../api';
 import DynamicParams from './DynamicParams';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
+import { useExampleModal } from '../hooks/useExampleModal';
 
 type ParamRow = { key: string; value: string };
 
@@ -14,10 +15,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
   const [userParams, setUserParams] = useState<ParamRow[]>([]);
   const [jsonText, setJsonText] = useState('{"message": "Hello Server", "timestamp": "now"}');
   const [formParams, setFormParams] = useState<ParamRow[]>([]);
-  const [exampleKey, setExampleKey] = useState<string | null>(null);
-
-  const showModal = (key: string) => setExampleKey(key);
-  const closeModal = () => setExampleKey(null);
+  const { exampleKey, showExample, closeExample } = useExampleModal();
 
   const handleGetData = async () => {
     const res = await getApiData();
@@ -72,7 +70,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
         <div className="form-group">
           <label>GET /api/data（无参数）</label>
           <button onClick={handleGetData}>获取数据</button>
-          <button className="example-btn" onClick={() => showModal('api-get')}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('api-get')}>📱 示例</button>
         </div>
         )}
 
@@ -81,7 +79,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
           <label>GET /api/echo?（Query 参数，可多组）</label>
           <DynamicParams onChange={setEchoParams} placeholderKey="参数名" placeholderValue="参数值" />
           <button onClick={handleEcho} style={{ marginTop: '0.5rem' }}>发送 Echo 请求</button>
-          <button className="example-btn" onClick={() => showModal('api-echo')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('api-echo')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
         )}
 
@@ -91,7 +89,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
           <input type="text" placeholder="用户ID" value={userId} onChange={(e) => setUserId(e.target.value)} />
           <DynamicParams onChange={setUserParams} placeholderKey="Query参数名" placeholderValue="参数值" />
           <button onClick={handleGetUser} style={{ marginTop: '0.5rem' }}>获取用户信息</button>
-          <button className="example-btn" onClick={() => showModal('api-user')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('api-user')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
         )}
 
@@ -100,7 +98,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
           <label>POST /api/json (发送 JSON)</label>
           <textarea rows={2} value={jsonText} onChange={(e) => setJsonText(e.target.value)} style={{ fontFamily: 'monospace' }} />
           <button onClick={handlePostJson}>提交 JSON</button>
-          <button className="example-btn" onClick={() => showModal('api-json')}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('api-json')}>📱 示例</button>
         </div>
         )}
 
@@ -109,7 +107,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
           <label>POST /api/form (表单, x-www-form-urlencoded)</label>
           <DynamicParams onChange={setFormParams} placeholderKey="字段名" placeholderValue="字段值" />
           <button onClick={handlePostForm} style={{ marginTop: '0.5rem' }}>提交表单</button>
-          <button className="example-btn" onClick={() => showModal('api-form')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
+          <button className="example-btn" onClick={() => showExample('api-form')} style={{ marginLeft: '0.5rem' }}>📱 示例</button>
         </div>
         )}
 
@@ -121,7 +119,7 @@ export default function ApiTest({ mode }: { mode?: string }) {
         <ExampleModal
           title={examples[exampleKey]?.title || '示例'}
           code={examples[exampleKey]?.code || '示例代码未找到'}
-          onClose={closeModal}
+          onClose={closeExample}
         />
       )}
     </div>
