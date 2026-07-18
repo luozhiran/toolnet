@@ -120,9 +120,11 @@ class EncryptInterceptor(
     private fun encryptRequest(request: Request): Request {
         val body = request.body ?: return request
         val contentType = body.contentType() ?: return request
+        if (exceedsBodyLimit(body)) return request
 
         val bodyString = body.readString()
         if (bodyString.isBlank()) return request
+        if (exceedsBodyLimit(bodyString)) return request
 
         val encryptedBody = when {
             contentType.subtype.contains("json", ignoreCase = true) ->
@@ -236,9 +238,13 @@ class EncryptInterceptor(
     private fun decryptResponse(response: Response): Response {
         val body = response.body ?: return response
         val contentType = body.contentType() ?: return response
+        if (exceedsBodyLimit(body)) return response
 
         val bodyString = body.string()
         if (bodyString.isBlank()) {
+            return response.withBody(bodyString, contentType)
+        }
+        if (exceedsBodyLimit(bodyString)) {
             return response.withBody(bodyString, contentType)
         }
 
@@ -408,6 +414,29 @@ class EncryptInterceptor(
             }
         }
         return false
+    }
+
+    private fun exceedsBodyLimit(body: RequestBody): Boolean {
+        val limit = config.maxBodyBytes
+        if (limit <= 0L) return false
+        val length = try {
+            body.contentLength()
+        } catch (_: Exception) {
+            -1L
+        }
+        return length > limit
+    }
+
+    private fun exceedsBodyLimit(body: ResponseBody): Boolean {
+        val limit = config.maxBodyBytes
+        if (limit <= 0L) return false
+        val length = body.contentLength()
+        return length > limit
+    }
+
+    private fun exceedsBodyLimit(bodyString: String): Boolean {
+        val limit = config.maxBodyBytes
+        return limit > 0L && bodyString.toByteArray(StandardCharsets.UTF_8).size > limit
     }
 }
 

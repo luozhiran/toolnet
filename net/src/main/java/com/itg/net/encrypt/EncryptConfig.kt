@@ -38,6 +38,14 @@ class EncryptConfig {
     /** 是否跳过 GET 请求（GET 通常无 body） */
     var skipGetRequest: Boolean = true
 
+    /**
+     * 单次字段加解密允许处理的最大 body 字节数。
+     *
+     * 字段级加解密需要把 JSON/Form body 读入内存后解析，超过该阈值会跳过处理，避免大包请求或响应造成
+     * 内存峰值和 GC 抖动。设置为 0 或负数表示不限制。
+     */
+    var maxBodyBytes: Long = DEFAULT_MAX_BODY_BYTES
+
     // ==================== 加密规则 ====================
 
     /** 加密规则列表 */
@@ -127,6 +135,14 @@ class EncryptConfig {
      */
     fun skipGetRequest(skip: Boolean): EncryptConfig {
         this.skipGetRequest = skip
+        return this
+    }
+
+    /**
+     * 设置字段加解密最大 body 字节数。默认 64KB，传入 0 或负数表示不限制。
+     */
+    fun maxBodyBytes(maxBytes: Long): EncryptConfig {
+        this.maxBodyBytes = maxBytes
         return this
     }
 
@@ -233,5 +249,9 @@ class EncryptConfig {
             if (pattern.matches(requestPath)) return true
         }
         return false
+    }
+
+    private companion object {
+        private const val DEFAULT_MAX_BODY_BYTES = 64L * 1024L
     }
 }

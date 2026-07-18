@@ -9,7 +9,6 @@ import com.itg.net.util.PrintLog
 
 class TaskState {
 
-    private val maxDownloadSize = Net.instance.ddNetConfig.maxDownloadNum.coerceAtLeast(1)
     private val waitingTasks: MutableList<Task> by lazy { mutableListOf() }
     private val waitingTaskUrls: MutableSet<String> by lazy { mutableSetOf() }
     private val runningTasks: MutableList<Task> by lazy { mutableListOf() }
@@ -123,7 +122,7 @@ class TaskState {
 
     @Synchronized
     fun runningQueueCanAcceptTask(): Boolean {
-        return runningTasks.size < maxDownloadSize
+        return runningTasks.size < maxDownloadSize()
     }
 
     @Synchronized
@@ -175,5 +174,9 @@ class TaskState {
         val task = waitingTasks.removeAt(0)
         task.url?.let { waitingTaskUrls.remove(it) }
         return task
+    }
+
+    private fun maxDownloadSize(): Int {
+        return Net.instance.ddNetConfig.maxDownloadNum.coerceAtLeast(1)
     }
 }
