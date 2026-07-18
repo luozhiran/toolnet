@@ -1,13 +1,9 @@
 package com.itg.ddlnet
 
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
-
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
-
-
 
 class MainActivity : AppCompatActivity() {
 
@@ -15,7 +11,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         findViewById<Button>(R.id.get).setOnClickListener {
-            startActivity(Intent(this, DownloadActivity::class.java));
+            startActivity(Intent(this, NetworkSceneActivity::class.java))
         }
     }
 
