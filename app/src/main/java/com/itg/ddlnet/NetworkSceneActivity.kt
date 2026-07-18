@@ -27,6 +27,7 @@ class NetworkSceneActivity : AppCompatActivity() {
     private fun bindSceneButtons() {
         findViewById<Button>(R.id.btn_net_get).setOnClickListener { runner.runNetGet() }
         findViewById<Button>(R.id.btn_net_post).setOnClickListener { runner.runNetPostJson() }
+        findViewById<Button>(R.id.btn_encrypt_scene).setOnClickListener { runner.runFieldEncryptScene() }
         findViewById<Button>(R.id.btn_flow_get).setOnClickListener { runner.runFlowGet() }
         findViewById<Button>(R.id.btn_flow_post).setOnClickListener { runner.runFlowPostJson() }
         findViewById<Button>(R.id.btn_net_download).setOnClickListener { runner.runNetDownload() }

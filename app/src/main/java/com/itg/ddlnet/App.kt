@@ -3,6 +3,8 @@ package com.itg.ddlnet
 import android.app.Application
 import android.util.Log
 import com.itg.net.Net
+import com.itg.net.encrypt.Algorithm
+import com.itg.net.encrypt.EncryptMode
 import com.itg.net.logging.HttpLogger
 import com.itg.net.monitor.IMonitorReportHandler
 import com.itg.net.monitor.MonitorEvent
@@ -27,6 +29,16 @@ class App:Application() {
             maxConcurrentDownloads(1)
             enableHttpLog()
             baseUrl("http://47.76.59.147:8000/")
+            encrypt {
+                algorithm(Algorithm.AES_CBC_PKCS7)
+                secretKey("0123456789abcdef0123456789abcdef")
+                iv("abcdef9876543210")
+                encryptMode(EncryptMode.OPT_IN)
+                encryptPath(
+                    Regex("/api/secure-profile"),
+                    listOf("phone", "idCard", "token")
+                )
+            }
             businessInterceptor(object : BusinessResultInterceptor {
                 override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
                     val code = chain.envelope.code

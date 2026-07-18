@@ -48,6 +48,11 @@
                 style="@style/NetworkSceneButton"
                 android:text="net POST JSON callback" />
 
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_encrypt_scene"
+                style="@style/NetworkSceneButton"
+                android:text="field encrypt/decrypt JSON" />
+
             <TextView
                 style="@style/NetworkSceneSectionTitle"
                 android:text="Flow requests" />

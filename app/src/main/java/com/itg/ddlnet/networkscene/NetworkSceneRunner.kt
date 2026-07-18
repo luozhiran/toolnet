@@ -48,6 +48,7 @@ class NetworkSceneRunner(
     fun runAllScenes() {
         runNetGet()
         runNetPostJson()
+        runFieldEncryptScene()
         runFlowGet()
         runFlowPostJson()
         runNetDownload()
@@ -115,6 +116,42 @@ class NetworkSceneRunner(
 
                 override fun onConsumed(result: BusinessResult.Consumed) {
                     logger.append("net POST JSON: consumed ${result.reason.orEmpty()}")
+                }
+            })
+    }
+
+    fun runFieldEncryptScene() {
+        logger.append("field encrypt/decrypt: start")
+        logger.append("field encrypt/decrypt: phone/idCard/token will be encrypted before sending")
+        Net.instance.postJson()
+            .url(apiBaseUrl)
+            .path("api/secure-profile")
+            .addParam("name", "Android Demo")
+            .addParam("phone", "13800138000")
+            .addParam("idCard", "110101199001011234")
+            .addParam("token", "demo-token-${System.currentTimeMillis()}")
+            .addParam("scene", "field-encrypt")
+            .noUseGlobalParams()
+            .autoCancel(activity)
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(result: BusinessResult.Success) {
+                    logger.append("field encrypt/decrypt: success code=${result.httpCode} data=${result.dataRaw.shortBody(520)}")
+                }
+
+                override fun onBusinessError(error: BusinessResult.BusinessError) {
+                    logger.append("field encrypt/decrypt: business error code=${error.code.orEmpty()} message=${error.message.orEmpty()}")
+                }
+
+                override fun onHttpError(error: BusinessResult.HttpError) {
+                    logger.append("field encrypt/decrypt: http error code=${error.httpCode} body=${error.rawBody.shortBody(520)}")
+                }
+
+                override fun onNetworkError(error: BusinessResult.NetworkError) {
+                    logger.append("field encrypt/decrypt: network error ${error.error.message.orEmpty()}")
+                }
+
+                override fun onConsumed(result: BusinessResult.Consumed) {
+                    logger.append("field encrypt/decrypt: consumed ${result.reason.orEmpty()}")
                 }
             })
     }
