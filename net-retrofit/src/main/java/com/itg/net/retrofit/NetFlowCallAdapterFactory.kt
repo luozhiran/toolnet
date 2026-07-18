@@ -3,7 +3,9 @@ package com.itg.net.retrofit
 import com.itg.net.flow.NetFlowException
 import com.itg.net.flow.NetResponse
 import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.business.toBusinessResult
+import com.itg.net.request.business.toTypedBusinessResult
 import com.itg.net.request.result.NetResult
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -19,13 +21,14 @@ import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 
 /**
- * Retrofit CallAdapter.Factory that adapts Retrofit Call into Kotlin Flow.
+ * Retrofit Flow 适配器。
  *
- * Supported return types:
+ * 将 Retrofit Call 适配成 Kotlin Flow，并支持 Net 体系里的结构化结果类型：
  * - Flow<T>
  * - Flow<NetResponse<T>>
  * - Flow<NetResult>
  * - Flow<BusinessResult>
+ * - Flow<TypedBusinessResult<T>>
  */
 class NetFlowCallAdapterFactory : CallAdapter.Factory() {
 
@@ -43,10 +46,12 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
         }
 
         val responseType = getParameterUpperBound(0, returnType)
-        val mode = when (getRawType(responseType)) {
+        val responseRawType = getRawType(responseType)
+        val mode = when (responseRawType) {
             NetResponse::class.java -> ResultMode.NetResponse
             NetResult::class.java -> ResultMode.NetResult
             BusinessResult::class.java -> ResultMode.BusinessResult
+            TypedBusinessResult::class.java -> ResultMode.TypedBusinessResult
             else -> ResultMode.Body
         }
 
@@ -58,23 +63,35 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 getParameterUpperBound(0, responseType)
             }
             ResultMode.NetResult,
-            ResultMode.BusinessResult -> ResponseBody::class.java
+            ResultMode.BusinessResult,
+            ResultMode.TypedBusinessResult -> ResponseBody::class.java
             ResultMode.Body -> responseType
         }
 
-        return FlowCallAdapter<Any>(bodyType, mode)
+        val typedBusinessType = if (mode == ResultMode.TypedBusinessResult) {
+            check(responseType is ParameterizedType) {
+                "Flow<TypedBusinessResult<T>> must include the business data type"
+            }
+            getParameterUpperBound(0, responseType)
+        } else {
+            null
+        }
+
+        return FlowCallAdapter<Any>(bodyType, mode, typedBusinessType)
     }
 
     private enum class ResultMode {
         Body,
         NetResponse,
         NetResult,
-        BusinessResult
+        BusinessResult,
+        TypedBusinessResult
     }
 
     private class FlowCallAdapter<T>(
         private val bodyType: Type,
-        private val mode: ResultMode
+        private val mode: ResultMode,
+        private val typedBusinessType: Type?
     ) : CallAdapter<T, Flow<Any>> {
 
         override fun responseType(): Type = bodyType
@@ -93,6 +110,12 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                         ResultMode.BusinessResult -> {
                             trySend(response.toNetResult().toBusinessResult())
                         }
+                        ResultMode.TypedBusinessResult -> {
+                            val result = response.toNetResult()
+                                .toBusinessResult()
+                                .toTypedBusinessResult<Any>(typedBusinessType ?: Any::class.java)
+                            trySend(result)
+                        }
                     }
                     close()
                 }
@@ -107,6 +130,13 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                         }
                         ResultMode.BusinessResult -> {
                             trySend(NetResult.NetworkError(t.asIOException()).toBusinessResult())
+                            close()
+                        }
+                        ResultMode.TypedBusinessResult -> {
+                            val result = NetResult.NetworkError(t.asIOException())
+                                .toBusinessResult()
+                                .toTypedBusinessResult<Any>(typedBusinessType ?: Any::class.java)
+                            trySend(result)
                             close()
                         }
                         else -> close(NetFlowException(null, t.message))

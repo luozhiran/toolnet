@@ -7,6 +7,7 @@ import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.data.Task
 import com.itg.net.request.business.BusinessResult
 import com.itg.net.request.business.BusinessResultCallback
+import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.business.sendBusinessResult
 import com.itg.net.flow.DownloadPhase
 import com.itg.net.flow.flow
@@ -130,7 +131,6 @@ class NetworkSceneRunner(
                 .flowBusinessResult()
                 .catch { e -> logger.append("net-flow GET: failed ${e.message.orEmpty()}") }
                 .collect { result ->
-                    result.rawBody
                     when (result) {
                         is BusinessResult.Success -> logger.append("net-flow GET: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
                         is BusinessResult.BusinessError -> logger.append("net-flow GET: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
@@ -231,17 +231,18 @@ class NetworkSceneRunner(
     }
 
     fun runRetrofitFlow() {
-        logger.append("net-retrofit Business Flow: start")
+        logger.append("net-retrofit Typed Business Flow: start")
         lifecycleScope.launch {
             retrofitApi.getDataFlow()
-                .catch { e -> logger.append("net-retrofit Business Flow: failed ${e.message.orEmpty()}") }
+                .catch { e -> logger.append("net-retrofit Typed Business Flow: failed ${e.message.orEmpty()}") }
                 .collect { result ->
                     when (result) {
-                        is BusinessResult.Success -> logger.append("net-retrofit Business Flow: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
-                        is BusinessResult.BusinessError -> logger.append("net-retrofit Business Flow: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
-                        is BusinessResult.HttpError -> logger.append("net-retrofit Business Flow: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
-                        is BusinessResult.NetworkError -> logger.append("net-retrofit Business Flow: network error ${result.error.error.message.orEmpty()}")
-                        is BusinessResult.Consumed -> logger.append("net-retrofit Business Flow: consumed ${result.reason.orEmpty()}")
+                        is TypedBusinessResult.Success -> logger.append("net-retrofit Typed Business Flow: success data=${result.data}")
+                        is TypedBusinessResult.DataConvertError -> logger.append("net-retrofit Typed Business Flow: convert error ${result.error.message.orEmpty()}")
+                        is TypedBusinessResult.BusinessError -> logger.append("net-retrofit Typed Business Flow: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
+                        is TypedBusinessResult.HttpError -> logger.append("net-retrofit Typed Business Flow: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
+                        is TypedBusinessResult.NetworkError -> logger.append("net-retrofit Typed Business Flow: network error ${result.error.error.error.message.orEmpty()}")
+                        is TypedBusinessResult.Consumed -> logger.append("net-retrofit Typed Business Flow: consumed ${result.reason.orEmpty()}")
                     }
                 }
         }
@@ -260,6 +261,12 @@ class NetworkSceneRunner(
         ): Response<ResponseBody>
 
         @GET("api/data")
-        fun getDataFlow(): Flow<BusinessResult>
+        fun getDataFlow(): Flow<TypedBusinessResult<SceneData>>
     }
+
+    private data class SceneData(
+        val id: Int,
+        val name: String,
+        val timestamp: Long
+    )
 }

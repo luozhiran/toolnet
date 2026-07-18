@@ -1,9 +1,12 @@
 package com.itg.net.flow
 
 import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.business.toBusinessResult
+import com.itg.net.request.business.toTypedBusinessResult
 import com.itg.net.request.result.NetResult
 import com.itg.net.request.base.ParamsBuilder
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -125,6 +128,11 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
 
 fun <T : ParamsBuilder> T.flowBusinessResult(): Flow<BusinessResult> {
     return flowResult().map { result -> result.toBusinessResult() }
+}
+
+inline fun <reified R, T : ParamsBuilder> T.flowTypedBusinessResult(): Flow<TypedBusinessResult<R>> {
+    val type = object : TypeToken<R>() {}.type
+    return flowBusinessResult().map { result -> result.toTypedBusinessResult(type) }
 }
 
 /**

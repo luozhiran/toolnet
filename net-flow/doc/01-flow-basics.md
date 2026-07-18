@@ -92,6 +92,38 @@ lifecycleScope.launch {
 
 业务码解析器和责任链在 `Net.instance.configure { }` 中配置，详见 [net 09. HTTP 错误与网络异常处理](../../net/doc/09-error-handling.md)。
 
+### flowTypedBusinessResult() —— 业务数据直接转类型
+
+如果后端返回 `code/message/data` 包装，并且页面希望直接拿到业务模型，可以使用 `flowTypedBusinessResult<T>()`：
+
+```kotlin
+import com.itg.net.flow.flowTypedBusinessResult
+import com.itg.net.request.business.TypedBusinessResult
+
+data class UserInfo(
+    val id: Int,
+    val name: String
+)
+
+lifecycleScope.launch {
+    Net.instance.get()
+        .url("https://api.example.com/user/info")
+        .flowTypedBusinessResult<UserInfo>()
+        .collect { result ->
+            when (result) {
+                is TypedBusinessResult.Success -> render(result.data)
+                is TypedBusinessResult.DataConvertError -> showError("数据解析失败")
+                is TypedBusinessResult.BusinessError -> showError(result.message)
+                is TypedBusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
+                is TypedBusinessResult.NetworkError -> showError("网络不可用")
+                is TypedBusinessResult.Consumed -> Unit
+            }
+        }
+}
+```
+
+默认使用 Gson 转换 `ApiEnvelope.dataRaw`。转换失败会进入 `TypedBusinessResult.DataConvertError`，不会抛出到 Flow 外层。
+
 ### 与 DdCallback 对比
 
 ```kotlin
@@ -245,6 +277,8 @@ Net.instance.flowGetResponse(GsonNetConverter<User>(type = User::class.java)) {
 | `Net.flowPostJson { }` | `Flow<String>` | POST JSON 请求 |
 | `Net.flowPostForm { }` | `Flow<String>` | POST Form 请求 |
 | `ParamsBuilder.flowResult()` | `Flow<NetResult>` | 区分 2xx、4xx/5xx、网络异常 |
+| `ParamsBuilder.flowBusinessResult()` | `Flow<BusinessResult>` | 支持业务码责任链 |
+| `ParamsBuilder.flowTypedBusinessResult<T>()` | `Flow<TypedBusinessResult<T>>` | 业务成功时把 data 转成指定类型 |
 | `Net.flowGetResponse(converter) { }` | `Flow<NetResponse<T>>` | GET + 反序列化 |
 | `Net.flowPostJsonResponse(converter) { }` | `Flow<NetResponse<T>>` | POST JSON + 反序列化 |
 | `Net.flowDownload { }` | `Flow<DownloadProgress>` | 下载进度 |

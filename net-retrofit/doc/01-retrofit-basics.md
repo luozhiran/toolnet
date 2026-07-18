@@ -16,6 +16,7 @@
 import retrofit2.http.*
 import com.itg.net.flow.NetResponse
 import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.result.NetResult
 
 interface UserService {
@@ -60,6 +61,10 @@ interface UserService {
     // Flow + 业务码责任链
     @GET("user/info")
     fun userInfoBusiness(): Flow<BusinessResult>
+
+    // Flow + 业务码责任链 + data 自动转类型
+    @GET("user/info")
+    fun userInfoTypedBusiness(): Flow<TypedBusinessResult<UserInfo>>
 }
 ```
 
@@ -104,7 +109,7 @@ object ApiServices {
 |---|---|
 | OkHttpClient | `Net.instance.okhttpManager.okHttpClient`（继承全部拦截器/超时/缓存） |
 | Converter.Factory | `GsonConverterFactory.create()` |
-| CallAdapter.Factory | `NetFlowCallAdapterFactory()`（支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>`） |
+| CallAdapter.Factory | `NetFlowCallAdapterFactory()`（支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>` / `Flow<TypedBusinessResult<T>>`） |
 
 ### suspend 函数请求
 
@@ -229,6 +234,40 @@ lifecycleScope.launch {
 
 `BusinessResult` 使用 `Net.instance.configure { businessResultParser(...) }` 和 `addBusinessResultInterceptor(...)` 中的全局配置，详见 [net 09. HTTP 错误、网络异常与业务码处理](../../net/doc/09-error-handling.md)。
 
+#### Flow<TypedBusinessResult<T>>
+
+如果希望 Retrofit Service 直接返回已转换好的业务模型，声明 `Flow<TypedBusinessResult<T>>`：
+
+```kotlin
+import com.itg.net.request.business.TypedBusinessResult
+
+data class UserInfo(
+    val id: Int,
+    val name: String
+)
+
+interface UserService {
+    @GET("user/info")
+    fun userInfoTypedBusiness(): Flow<TypedBusinessResult<UserInfo>>
+}
+
+lifecycleScope.launch {
+    userService.userInfoTypedBusiness()
+        .collect { result ->
+            when (result) {
+                is TypedBusinessResult.Success -> render(result.data)
+                is TypedBusinessResult.DataConvertError -> showError("数据解析失败")
+                is TypedBusinessResult.BusinessError -> showError(result.message)
+                is TypedBusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
+                is TypedBusinessResult.NetworkError -> showError("网络不可用")
+                is TypedBusinessResult.Consumed -> Unit
+            }
+        }
+}
+```
+
+`TypedBusinessResult<T>` 会复用 `NetConfig` 里的 `ApiEnvelopeParser`、`BusinessResultInterceptor` 和 `BusinessDataConverter`。默认转换器是 Gson，只转换业务数据字段 `dataRaw`。
+
 ## 返回类型对比
 
 | Service 返回类型 | 非 2xx 行为 | 需要 CallAdapter |
@@ -240,6 +279,7 @@ lifecycleScope.launch {
 | `Flow<NetResponse<T>>` | 正常发送，.code 体现错误 | `NetFlowCallAdapterFactory` |
 | `Flow<NetResult>` | 发射 `Success` / `HttpError` / `NetworkError` | `NetFlowCallAdapterFactory` |
 | `Flow<BusinessResult>` | 发射业务责任链处理后的结果 | `NetFlowCallAdapterFactory` |
+| `Flow<TypedBusinessResult<T>>` | 业务成功时把 `data` 转成 `T`，转换失败发射 `DataConvertError` | `NetFlowCallAdapterFactory` |
 | `Call<T>` | Retrofit 原生 | 否 |
 
 ## 关键说明
@@ -248,8 +288,9 @@ lifecycleScope.launch {
 - Retrofit Service 自动使用 Net 库中配置的 OkHttpClient（包含所有拦截器、超时、缓存等）
 - `globalParams` 不会自动附加到 Retrofit 请求（需在接口中自行添加 `@Query` 参数）
 - `NetResponse<T>` 作为返回类型时，非 2xx 不会抛异常，可通过 `response.code` 自行判断
-- `Flow<T>`、`Flow<NetResponse<T>>`、`Flow<NetResult>` 和 `Flow<BusinessResult>` 依赖 `NetFlowCallAdapterFactory`（默认已注册）
+- `Flow<T>`、`Flow<NetResponse<T>>`、`Flow<NetResult>`、`Flow<BusinessResult>` 和 `Flow<TypedBusinessResult<T>>` 依赖 `NetFlowCallAdapterFactory`（默认已注册）
 - `Flow<BusinessResult>` 会复用 `NetConfig` 中配置的 `ApiEnvelopeParser` 和 `BusinessResultInterceptor`
+- `Flow<TypedBusinessResult<T>>` 会继续使用 `BusinessDataConverter` 将 `dataRaw` 转成 `T`
 
 ## 验证方式
 
@@ -258,5 +299,6 @@ lifecycleScope.launch {
 - 测试 `NetResponse<T>` 在非 2xx 时不抛异常
 - 测试 `Flow<NetResult>` 在 4xx/5xx 时发射 `NetResult.HttpError`
 - 测试 `Flow<BusinessResult>` 在 HTTP 200 + 业务失败码时发射 `BusinessResult.BusinessError` 或被责任链消费
+- 测试 `Flow<TypedBusinessResult<UserInfo>>` 在 HTTP 200 + 业务成功码时发射 `Success<UserInfo>`，模型不匹配时发射 `DataConvertError`
 
 [返回 README](../../README.md)

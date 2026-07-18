@@ -9,7 +9,9 @@ import com.itg.net.encrypt.EncryptConfig
 import com.itg.net.monitor.MonitorConfig
 import com.itg.net.request.business.ApiEnvelopeParser
 import com.itg.net.request.business.BusinessResultInterceptor
+import com.itg.net.request.business.BusinessDataConverter
 import com.itg.net.request.business.DefaultApiEnvelopeParser
+import com.itg.net.request.business.GsonBusinessDataConverter
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -74,6 +76,10 @@ class NetConfig {
     var businessResultParser: ApiEnvelopeParser = DefaultApiEnvelopeParser()
         private set
 
+    @Volatile
+    var businessDataConverter: BusinessDataConverter = GsonBusinessDataConverter()
+        private set
+
     fun app(application: Application): NetConfig {
         this.application = application
         pkgName = application.packageName
@@ -111,6 +117,11 @@ class NetConfig {
 
     fun businessResultParser(parser: ApiEnvelopeParser): NetConfig {
         businessResultParser = parser
+        return this
+    }
+
+    fun businessDataConverter(converter: BusinessDataConverter): NetConfig {
+        businessDataConverter = converter
         return this
     }
 

@@ -365,6 +365,124 @@ lifecycleScope.launch {
 }
 ```
 
+## 类型化业务结果
+
+如果页面不想每次手动把 `dataRaw` 通过 Gson 转成业务类，可以使用 `TypedBusinessResult<T>`。
+
+服务端响应：
+
+```json
+{
+  "code": "0",
+  "message": "ok",
+  "data": {
+    "id": 1,
+    "name": "Tom"
+  }
+}
+```
+
+业务模型：
+
+```kotlin
+data class UserInfo(
+    val id: Int,
+    val name: String
+)
+```
+
+Callback 用法：
+
+```kotlin
+import com.itg.net.request.business.TypedBusinessResult
+import com.itg.net.request.business.TypedBusinessResultCallback
+import com.itg.net.request.business.sendBusinessResult
+
+Net.instance.get()
+    .url("https://api.example.com/user/info")
+    .sendBusinessResult<UserInfo>(object : TypedBusinessResultCallback<UserInfo> {
+        override fun onSuccess(result: TypedBusinessResult.Success<UserInfo>) {
+            val user: UserInfo? = result.data
+            render(user)
+        }
+
+        override fun onDataConvertError(error: TypedBusinessResult.DataConvertError) {
+            showError("数据解析失败")
+        }
+
+        override fun onBusinessError(error: TypedBusinessResult.BusinessError) {
+            showError(error.message ?: "业务处理失败")
+        }
+
+        override fun onHttpError(error: TypedBusinessResult.HttpError) {
+            showError("HTTP ${error.httpCode}")
+        }
+
+        override fun onNetworkError(error: TypedBusinessResult.NetworkError) {
+            showError("网络不可用")
+        }
+
+        override fun onConsumed(result: TypedBusinessResult.Consumed) {
+            // 结果已被全局责任链消费，例如登录失效统一跳转。
+        }
+    })
+```
+
+类型化转换只转换 `ApiEnvelope.dataRaw`，不是转换完整 `rawBody`。也就是说上面的响应会把：
+
+```json
+{
+  "id": 1,
+  "name": "Tom"
+}
+```
+
+转换成 `UserInfo`。
+
+默认使用 `GsonBusinessDataConverter`。如果需要替换 Gson 实例或使用其他 JSON 库，可以配置：
+
+```kotlin
+import com.google.gson.GsonBuilder
+import com.itg.net.request.business.GsonBusinessDataConverter
+
+Net.instance.configure {
+    businessDataConverter(
+        GsonBusinessDataConverter(
+            GsonBuilder()
+                .setDateFormat("yyyy-MM-dd HH:mm:ss")
+                .create()
+        )
+    )
+}
+```
+
+如果使用 Moshi、Jackson 或自定义解析逻辑，可以实现 `BusinessDataConverter`：
+
+```kotlin
+import com.itg.net.request.business.BusinessDataConverter
+import java.lang.reflect.Type
+
+class CustomBusinessDataConverter : BusinessDataConverter {
+    override fun convert(raw: String?, type: Type): Any? {
+        if (raw.isNullOrBlank()) return null
+        // 使用你的 JSON 工具把 raw 转成 type。
+        return customJson.fromJson(raw, type)
+    }
+}
+```
+
+类型化结果的处理顺序：
+
+```text
+HTTP 2xx
+  -> ApiEnvelopeParser 解析 code/message/dataRaw
+  -> BusinessResultInterceptor 责任链
+  -> 业务成功时用 BusinessDataConverter 把 dataRaw 转成 T
+  -> TypedBusinessResult.Success<T>
+```
+
+转换失败不会抛出到 OkHttp 回调线程，而是进入 `TypedBusinessResult.DataConvertError`。
+
 执行顺序：
 
 ```text
@@ -395,6 +513,8 @@ Net.instance.get()
 - 不要只判断 `body != null`。错误响应也可能有 body，应该优先判断 HTTP 状态码。
 - 不要在 `onSuccess` 中处理登录过期。`401` 应该放在 `onHttpError` 中统一拦截。
 - 不要把 HTTP 2xx 内的业务码写进 OkHttp Interceptor。业务码属于业务协议层，应该放在 `BusinessResultInterceptor`。
+- 类型化结果默认只转换 `dataRaw`。如果你的后端没有 `data` 包装，可以自定义 `ApiEnvelopeParser`，让 `dataRaw = rawBody`。
+- 不要忽略 `onDataConvertError`。它表示 HTTP 和业务码都成功，但本地数据模型与实际 `data` 不匹配。
 - 旧版 `send(DdCallback)` 不会改变行为，迁移时可以逐个接口替换为 `sendResult()`。
 
 ## 验证方式
@@ -404,5 +524,6 @@ Net.instance.get()
 - 关闭网络或请求不可达地址，应进入 `onNetworkError`。
 - Flow 使用 `flowResult()` 时，三类结果都应在 `collect` 的 `when(result)` 中处理。
 - 自定义接口返回 `{"code":"401001","message":"登录已过期"}` 且 HTTP 状态为 200 时，应被登录失效拦截器消费，进入 `onConsumed` 或触发统一跳转逻辑。
+- 自定义接口返回 `{"code":"0","data":{"id":1,"name":"Tom"}}` 时，`sendBusinessResult<UserInfo>()` 或 `sendTypedBusinessResult<UserInfo>()` 应进入 `TypedBusinessResult.Success`，且 `result.data` 为 `UserInfo`。
 
 [返回 README](../../README.md)

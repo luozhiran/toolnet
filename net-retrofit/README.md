@@ -6,7 +6,7 @@
 
 - `NetRetrofit.Builder` — 快速构建 Retrofit 实例
 - `Net.retrofit` 入口 — 一行代码获取 Builder
-- `NetFlowCallAdapterFactory` — 支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>` 返回类型
+- `NetFlowCallAdapterFactory` — 支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>` / `Flow<TypedBusinessResult<T>>` 返回类型
 - 自动继承 Net 全局 OkHttpClient、拦截器、加密、监控
 - 支持自定义 Converter（Moshi/Jackson/Scalars）和 CallAdapter（RxJava）
 
@@ -58,3 +58,4 @@ lifecycleScope.launch {
 | `Flow<NetResponse<T>>` | 正常发送，.code 体现错误 |
 | `Flow<NetResult>` | 发射 `Success` / `HttpError` / `NetworkError` |
 | `Flow<BusinessResult>` | 发射业务责任链处理后的结果 |
+| `Flow<TypedBusinessResult<T>>` | 业务成功时把 `data` 直接转换成 `T` |
