@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".NetworkSceneActivity">
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_net_get"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net GET callback"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_net_post"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net POST JSON callback"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_flow_get"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net-flow GET"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_flow_post"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net-flow POST JSON"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_net_download"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net download callback"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_flow_download"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net-flow download"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_retrofit_suspend"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net-retrofit suspend"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_retrofit_flow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="net-retrofit Flow"
+        android:textAllCaps="false" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_run_all"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Run all scenes"
+        android:textAllCaps="false" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <TextView
+            android:id="@+id/tv_result"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textIsSelectable="true"
+            android:textSize="13sp"
+            tools:text="Network scene result" />
+    </ScrollView>
+
+</androidx.appcompat.widget.LinearLayoutCompat>
