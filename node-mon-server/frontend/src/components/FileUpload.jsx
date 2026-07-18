@@ -1,24 +1,85 @@
 import { useState } from 'react';
-import { uploadSingle, uploadMultiple } from '../api';
+import { uploadSingle, uploadMultiple, getDownloadUrl } from '../api';
 import ExampleModal from './ExampleModal';
 import { examples } from '../examples';
+
+// 文件类型图标
+function fileIcon(ext) {
+  const map = {
+    png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️', svg:'🖼️', webp:'🖼️',
+    pdf:'📕', zip:'📦', rar:'📦', '7z':'📦', tar:'📦', gz:'📦',
+    mp4:'🎬', mov:'🎬', avi:'🎬', mp3:'🎵', wav:'🎵',
+    json:'📋', xml:'📋', txt:'📄', log:'📄', md:'📝',
+    js:'💛', ts:'💙', html:'🌐', css:'🎨',
+  };
+  return map[(ext || '').toLowerCase()] || '📎';
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '未知';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+}
+
+function fullUrl(filename) {
+  return window.location.origin + getDownloadUrl(filename);
+}
+
+function FileResult({ file, onCopy }) {
+  const ext = (file.originalName || file.filename || '').split('.').pop();
+  return (
+    <div className="upload-result">
+      <span className="upload-result-icon">{fileIcon(ext)}</span>
+      <div className="upload-result-info">
+        <div className="upload-result-name">{file.originalName || file.filename}</div>
+        <div className="upload-result-meta">
+          大小 {formatSize(file.size)} · {file.mimetype || ''}
+        </div>
+        <div className="upload-result-url">
+          <code>{fullUrl(file.filename)}</code>
+          <button className="file-copy-btn" onClick={() => onCopy(file.filename)}>📋 复制</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function copyUrl(filename) {
+  navigator.clipboard.writeText(fullUrl(filename)).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = fullUrl(filename);
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  });
+}
 
 export default function FileUpload({ mode = 'both' }) {
   const showSingle = mode === 'single' || mode === 'both';
   const showMulti = mode === 'multi' || mode === 'both';
   const [singleFile, setSingleFile] = useState(null);
   const [extraField, setExtraField] = useState('');
-  const [singleResp, setSingleResp] = useState('');
+  const [singleResult, setSingleResult] = useState(null); // { file, ok }
+  const [singleRaw, setSingleRaw] = useState('');           // 原始 JSON
   const [multiFiles, setMultiFiles] = useState([]);
-  const [multiResp, setMultiResp] = useState('');
+  const [multiResults, setMultiResults] = useState(null);   // { files[], ok }
+  const [multiRaw, setMultiRaw] = useState('');             // 原始 JSON
   const [exampleKey, setExampleKey] = useState(null);
+  const [copiedFile, setCopiedFile] = useState(null);
 
   const showModal = (key) => setExampleKey(key);
   const closeModal = () => setExampleKey(null);
 
+  const doCopy = (filename) => {
+    copyUrl(filename);
+    setCopiedFile(filename);
+    setTimeout(() => setCopiedFile(null), 1500);
+  };
+
   const handleSingleUpload = async () => {
     if (!singleFile) { alert('请选择文件'); return; }
-    let extra = {};
+    const extra = {};
     const extraRaw = extraField.trim();
     if (extraRaw) {
       if (extraRaw.includes('=')) {
@@ -29,13 +90,25 @@ export default function FileUpload({ mode = 'both' }) {
       }
     }
     const res = await uploadSingle(singleFile, extra);
-    setSingleResp(res.ok ? JSON.stringify(res.data, null, 2) : `上传失败: ${res.data}`);
+    const raw = res.ok ? JSON.stringify(res.data, null, 2) : JSON.stringify(res.data, null, 2);
+    setSingleRaw(raw);
+    if (res.ok) {
+      setSingleResult({ file: res.data.data, ok: true });
+    } else {
+      setSingleResult({ ok: false, message: res.data?.message || res.data });
+    }
   };
 
   const handleMultiUpload = async () => {
     if (!multiFiles.length) { alert('请选择文件'); return; }
     const res = await uploadMultiple(multiFiles);
-    setMultiResp(res.ok ? JSON.stringify(res.data, null, 2) : `上传失败: ${res.data}`);
+    const raw = res.ok ? JSON.stringify(res.data, null, 2) : JSON.stringify(res.data, null, 2);
+    setMultiRaw(raw);
+    if (res.ok) {
+      setMultiResults({ files: res.data.data?.files || [], ok: true });
+    } else {
+      setMultiResults({ ok: false, message: res.data?.message || res.data });
+    }
   };
 
   return (
@@ -56,7 +129,28 @@ export default function FileUpload({ mode = 'both' }) {
             <input type="text" placeholder="例如: description=测试文件" value={extraField} onChange={(e) => setExtraField(e.target.value)} />
           </div>
           <button onClick={handleSingleUpload}>⬆️ 上传文件</button>
-          <div className="response-area"><pre>{singleResp || '等待上传...'}</pre></div>
+
+          {singleResult?.ok && singleResult.file && (
+            <div className="upload-results">
+              <div className="upload-results-title">✅ 上传成功</div>
+              <FileResult file={singleResult.file} onCopy={doCopy} />
+              <div className="upload-results-tip">
+                {copiedFile === singleResult.file.filename ? '✅ 已复制到剪贴板' : '点击 📋 复制下载地址'}
+              </div>
+            </div>
+          )}
+          {singleResult && !singleResult.ok && (
+            <div className="response-area"><pre>❌ 上传失败: {singleResult.message}</pre></div>
+          )}
+          {singleRaw && (
+            <details className="raw-json-details">
+              <summary>查看原始响应</summary>
+              <div className="response-area" style={{ marginTop: '0.5rem' }}><pre>{singleRaw}</pre></div>
+            </details>
+          )}
+          {!singleResult && (
+            <div className="response-area"><pre>等待上传...</pre></div>
+          )}
         </div>
       </div>
       )}
@@ -73,7 +167,30 @@ export default function FileUpload({ mode = 'both' }) {
             <input type="file" multiple onChange={(e) => setMultiFiles(Array.from(e.target.files))} />
           </div>
           <button onClick={handleMultiUpload}>⬆️ 上传多文件</button>
-          <div className="response-area"><pre>{multiResp || '等待上传...'}</pre></div>
+
+          {multiResults?.ok && (
+            <div className="upload-results">
+              <div className="upload-results-title">✅ 上传成功 · {multiResults.files.length} 个文件</div>
+              {multiResults.files.map(f => (
+                <FileResult key={f.filename} file={f} onCopy={doCopy} />
+              ))}
+              <div className="upload-results-tip">
+                {copiedFile ? '✅ 已复制到剪贴板' : '点击 📋 复制下载地址'}
+              </div>
+            </div>
+          )}
+          {multiResults && !multiResults.ok && (
+            <div className="response-area"><pre>❌ 上传失败: {multiResults.message}</pre></div>
+          )}
+          {multiRaw && (
+            <details className="raw-json-details">
+              <summary>查看原始响应</summary>
+              <div className="response-area" style={{ marginTop: '0.5rem' }}><pre>{multiRaw}</pre></div>
+            </details>
+          )}
+          {!multiResults && (
+            <div className="response-area"><pre>等待上传...</pre></div>
+          )}
         </div>
       </div>
       )}

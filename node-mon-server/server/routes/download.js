@@ -66,4 +66,24 @@ router.get('/:filename', (req, res) => {
     });
 });
 
+// 删除文件
+router.delete('/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filepath = path.join(config.upload.dest, filename);
+
+    fs.stat(filepath, (err, stats) => {
+        if (err || !stats.isFile()) {
+            return res.status(404).json({ code: 404, message: 'File not found' });
+        }
+        fs.unlink(filepath, (err) => {
+            if (err) {
+                logger.main(`删除文件失败: ${filename} - ${err.message}`);
+                return res.status(500).json({ code: 500, message: 'Failed to delete file' });
+            }
+            logger.main(`文件已删除: ${filename} (${(stats.size / 1024).toFixed(1)} KB)`);
+            res.json({ code: 200, message: 'File deleted successfully', data: { filename, size: stats.size } });
+        });
+    });
+});
+
 module.exports = router;

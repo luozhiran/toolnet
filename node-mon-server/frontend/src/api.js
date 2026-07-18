@@ -74,3 +74,8 @@ export const getFileList = () => request('/download/files');
 
 // 下载文件的URL（直接使用）
 export const getDownloadUrl = (filename) => `/download/${encodeURIComponent(filename)}`;
+
+// 删除文件
+export const deleteFile = (filename) => request(`/download/${encodeURIComponent(filename)}`, {
+  method: 'DELETE'
+});

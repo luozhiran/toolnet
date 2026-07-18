@@ -353,6 +353,24 @@ app.get('/download/:filename', (req, res) => {
     });
 });
 
+// 删除文件
+app.delete('/download/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filepath = path.join(config.upload.dest, filename);
+    fs.stat(filepath, (err, stats) => {
+        if (err || !stats.isFile()) {
+            return res.status(404).json({ code: 404, message: 'File not found' });
+        }
+        fs.unlink(filepath, (err) => {
+            if (err) {
+                return res.status(500).json({ code: 500, message: 'Failed to delete file' });
+            }
+            appDebug(`文件已删除: ${filename}`);
+            res.json({ code: 200, message: 'File deleted successfully', data: { filename } });
+        });
+    });
+});
+
 // ============= 生产环境：托管 React 前端 =============
 // 判断是否为生产环境（通过环境变量 NODE_ENV）
 if (process.env.NODE_ENV === 'production') {

@@ -111,9 +111,15 @@ body {
   line-height: 1.6;
 }
 
-/* ========== 侧边栏展开/折叠子项 ========== */
+/* ========== 侧边栏展开/折叠子项（浮层弹出） ========== */
 .sidebar-parent {
   position: relative;
+  cursor: pointer;
+}
+
+.sidebar-parent.popover-open {
+  background: #1e293b;
+  border-left-color: #3b82f6;
 }
 
 .sidebar-arrow {
@@ -123,25 +129,61 @@ body {
   transition: transform 0.15s ease;
 }
 
-.sidebar-children {
+/* 浮层弹出面板 — Portal 到 body，fixed 定位 */
+.sidebar-popover {
+  position: fixed;
+  left: 240px;
+  width: 200px;
+  background: #1e293b;
+  border-radius: 0 0.5rem 0.5rem 0;
+  box-shadow: 4px 4px 20px rgba(0,0,0,0.35);
+  z-index: 100;
   overflow: hidden;
+  padding: 0.25rem 0;
 }
 
-.sidebar-child {
-  padding-left: 3rem;
+.sidebar-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  transition: background 0.1s;
+  color: #cbd5e1;
 }
 
-.sidebar-child .sidebar-icon {
+.sidebar-popover-item:hover {
+  background: #334155;
+}
+
+.sidebar-popover-item.active {
+  background: #1e3a5f;
+  color: #f8fafc;
+}
+
+.sidebar-popover-item.active .sidebar-label {
+  color: #60a5fa;
+}
+
+.sidebar-popover-item .sidebar-icon {
   font-size: 1rem;
   width: 1.4rem;
+  text-align: center;
+  flex-shrink: 0;
 }
 
-.sidebar-child .sidebar-label {
-  font-size: 0.82rem;
+.sidebar-popover-item .sidebar-label {
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.sidebar-child .sidebar-desc {
+.sidebar-popover-item .sidebar-desc {
   font-size: 0.68rem;
+  color: #64748b;
+}
+
+.sidebar-popover-item.active .sidebar-desc {
+  color: #60a5fa;
 }
 
 /* ========== 主内容区 ========== */
@@ -150,6 +192,14 @@ body {
   padding: 2rem;
   max-width: 960px;
   min-width: 0;
+}
+
+.tab-page {
+  display: none;
+}
+
+.tab-page.active {
+  display: block;
 }
 
 /* ========== Card 组件样式 ========== */
@@ -234,6 +284,107 @@ button.secondary:hover {
   background: #475569;
 }
 
+/* ========== 上传结果展示 ========== */
+.upload-results {
+  margin-top: 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.upload-results-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #16a34a;
+  margin-bottom: 0.75rem;
+}
+
+.upload-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem;
+  background: white;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.5rem;
+}
+
+.upload-result:last-child {
+  margin-bottom: 0;
+}
+
+.upload-result-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: center;
+}
+
+.upload-result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-result-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-result-meta {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 0.15rem;
+}
+
+.upload-result-url {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.upload-result-url code {
+  flex: 1;
+  font-size: 0.68rem;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+
+.upload-results-tip {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.raw-json-details {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.raw-json-details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.raw-json-details summary:hover {
+  color: #334155;
+}
+
 /* ========== 响应区域 ========== */
 .response-area {
   background: #0f172a;
@@ -249,28 +400,241 @@ button.secondary:hover {
   margin-top: 1rem;
 }
 
-/* ========== 文件列表 ========== */
-.file-list {
-  background: #f1f5f9;
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  max-height: 250px;
-  overflow-y: auto;
-}
-.file-item {
-  padding: 0.5rem;
-  border-bottom: 1px solid #cbd5e1;
+/* ========== 文件管理 ========== */
+.file-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
-.download-link {
-  background: #22c55e;
-  color: white;
-  padding: 0.2rem 0.6rem;
+
+.download-inline {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.download-inline input {
+  flex: 1;
+  max-width: 320px;
+}
+
+/* 统计信息栏 */
+.file-stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #f8fafc 100%);
+  border: 1px solid #e0e7ff;
+  border-radius: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.file-stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0 1.25rem;
+}
+
+.file-stat-num {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #3b82f6;
+  letter-spacing: -0.02em;
+}
+
+.file-stat-label {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.file-stat-divider {
+  width: 1px;
+  height: 1.5rem;
+  background: #cbd5e1;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #94a3b8;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+}
+
+.empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.empty-desc {
+  font-size: 0.82rem;
+}
+
+/* 文件行 */
+.file-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  background: #f8fafc;
+  border-radius: 0.65rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.12s ease;
+}
+
+.file-row:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.file-icon-col {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.file-icon-emoji {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.file-info-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name-text {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+}
+
+.file-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.73rem;
+  color: #94a3b8;
+}
+
+.file-type-tag {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  text-decoration: none;
+  font-weight: 500;
+}
+
+.file-url-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.file-url-text {
+  flex: 1;
   font-size: 0.7rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+
+.file-copy-btn {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.3rem;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.file-copy-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.file-dl-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.5rem;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-size: 1rem;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+
+.file-dl-btn:hover {
+  background: #2563eb;
+  transform: scale(1.05);
+}
+
+.file-del-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+  margin: 0;
+}
+
+.file-del-btn:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  transform: scale(1.05);
 }
 
 /* ========== 通用工具样式 ========== */

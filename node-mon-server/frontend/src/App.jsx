@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import ApiTest from './components/ApiTest';
 import FileUpload from './components/FileUpload';
 import MixedUpload from './components/MixedUpload';
@@ -33,15 +34,53 @@ function findDefaultTab(tabs) {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState(findDefaultTab(TABS));
-  const [expanded, setExpanded] = useState(new Set(['api']));
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return localStorage.getItem('activeTab') || findDefaultTab(TABS); }
+    catch { return findDefaultTab(TABS); }
+  });
 
-  const toggleExpand = (key) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
+  // 持久化当前 tab
+  const switchTab = (key) => {
+    setActiveTab(key);
+    try { localStorage.setItem('activeTab', key); } catch {}
+  };
+  const [popoverKey, setPopoverKey] = useState(null);
+  const [popoverPos, setPopoverPos] = useState({ top: 0 });
+  const parentRefs = useRef({});
+
+  // 关闭浮层
+  const closePopover = useCallback(() => setPopoverKey(null), []);
+
+  // 点击页面其他地方关闭浮层
+  useEffect(() => {
+    if (!popoverKey) return;
+    const handleClick = (e) => {
+      // 浮层内部的点击不关闭
+      if (e.target.closest('.sidebar-popover')) return;
+      closePopover();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [popoverKey, closePopover]);
+
+  // 切换浮层
+  const togglePopover = (key) => {
+    if (popoverKey === key) {
+      closePopover();
+    } else {
+      const el = parentRefs.current[key];
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setPopoverPos({ top: rect.top });
+      }
+      setPopoverKey(key);
+    }
+  };
+
+  // 点击子项
+  const handleChildClick = (childKey) => {
+    switchTab(childKey);
+    closePopover();
   };
 
   // 根据 activeTab 找到对应的 tab 定义（可能是子项）
@@ -56,20 +95,29 @@ function App() {
     return null;
   };
 
-  const renderContent = () => {
+  // 根据 activeTab 算出顶层组件 key（用于显示/隐藏）
+  const activeComponentKey = (() => {
     const tab = findTab(activeTab);
-    if (!tab) return <ApiTest mode="data" />;
-    const comp = tab.component || tab.key;
-    switch (comp) {
-      case 'api':           return <ApiTest mode={tab.mode} />;
-      case 'upload-single': return <FileUpload mode="single" />;
-      case 'upload-multi':  return <FileUpload mode="multi" />;
-      case 'upload-mixed':  return <MixedUpload />;
-      case 'files':         return <FileManager />;
-      case 'chunk':         return <ChunkDownload />;
-      default:              return <ApiTest mode="data" />;
-    }
-  };
+    return tab ? (tab.component || tab.key) : 'api';
+  })();
+
+  // api 子项激活时传入正确的 mode
+  const apiMode = (() => {
+    const tab = findTab(activeTab);
+    return tab?.component === 'api' ? tab.mode : undefined;
+  })();
+
+  const activeParentTab = TABS.find(t => t.children && t.children.some(c => c.key === activeTab));
+
+  // 所有页面都渲染，用 CSS 控制显隐，保活组件状态
+  const PAGES = [
+    { key: 'api',           node: <ApiTest mode={activeComponentKey === 'api' ? apiMode : undefined} /> },
+    { key: 'upload-single', node: <FileUpload mode="single" /> },
+    { key: 'upload-multi',  node: <FileUpload mode="multi" /> },
+    { key: 'upload-mixed',  node: <MixedUpload /> },
+    { key: 'files',         node: <FileManager /> },
+    { key: 'chunk',         node: <ChunkDownload /> },
+  ];
 
   return (
     <div className="layout">
@@ -77,53 +125,26 @@ function App() {
         <div className="sidebar-header">🧪 测试服务器</div>
         {TABS.map(tab => {
           const hasChildren = tab.children && tab.children.length > 0;
-          const isExpanded = expanded.has(tab.key);
-          if (hasChildren) {
-            return (
-              <div key={tab.key}>
-                <div
-                  className={`sidebar-item sidebar-parent ${isExpanded ? 'expanded' : ''}`}
-                  onClick={() => toggleExpand(tab.key)}
-                >
-                  <span className="sidebar-icon">{tab.icon}</span>
-                  <div className="sidebar-text">
-                    <div className="sidebar-label">{tab.label}</div>
-                  </div>
-                  <span className="sidebar-arrow">{isExpanded ? '▼' : '▶'}</span>
-                </div>
-                {isExpanded && (
-                  <div className="sidebar-children">
-                    {tab.children.map(child => (
-                      <div
-                        key={child.key}
-                        className={`sidebar-item sidebar-child ${activeTab === child.key ? 'active' : ''}`}
-                        onClick={() => setActiveTab(child.key)}
-                      >
-                        <span className="sidebar-icon">{child.icon}</span>
-                        <div className="sidebar-text">
-                          <div className="sidebar-label">{child.label}</div>
-                          <div className="sidebar-desc">{child.desc}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          }
-          return (
+          const isPopoverOpen = popoverKey === tab.key;
+          const isParentActive = activeParentTab?.key === tab.key;
+
+          const item = (
             <div
               key={tab.key}
-              className={`sidebar-item ${activeTab === tab.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
+              ref={(el) => { parentRefs.current[tab.key] = el; }}
+              className={`sidebar-item${hasChildren ? ' sidebar-parent' : ''}${isPopoverOpen ? ' popover-open' : ''}${isParentActive && !isPopoverOpen ? ' active' : ''}${!hasChildren && activeTab === tab.key ? ' active' : ''}`}
+              onClick={() => hasChildren ? togglePopover(tab.key) : switchTab(tab.key)}
             >
               <span className="sidebar-icon">{tab.icon}</span>
               <div className="sidebar-text">
                 <div className="sidebar-label">{tab.label}</div>
-                <div className="sidebar-desc">{tab.desc}</div>
+                {!hasChildren && <div className="sidebar-desc">{tab.desc}</div>}
               </div>
+              {hasChildren && <span className="sidebar-arrow">{isPopoverOpen ? '▼' : '▶'}</span>}
             </div>
           );
+
+          return item;
         })}
         <div className="sidebar-footer">
           <div className="sidebar-tip">
@@ -133,8 +154,37 @@ function App() {
           </div>
         </div>
       </nav>
+
+      {/* 浮层子菜单 — Portal 到 body，fixed 定位 */}
+      {popoverKey && createPortal(
+        <div
+          className="sidebar-popover"
+          style={{ top: popoverPos.top }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {(TABS.find(t => t.key === popoverKey)?.children || []).map(child => (
+            <div
+              key={child.key}
+              className={`sidebar-popover-item ${activeTab === child.key ? 'active' : ''}`}
+              onClick={() => handleChildClick(child.key)}
+            >
+              <span className="sidebar-icon">{child.icon}</span>
+              <div className="sidebar-text">
+                <div className="sidebar-label">{child.label}</div>
+                <div className="sidebar-desc">{child.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+
       <main className="main-content">
-        {renderContent()}
+        {PAGES.map(p => (
+          <div key={p.key} className={`tab-page ${activeComponentKey === p.key ? 'active' : ''}`}>
+            {p.node}
+          </div>
+        ))}
       </main>
     </div>
   );
