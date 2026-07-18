@@ -123,12 +123,18 @@ export default function FileUpload({ mode = 'both' }) {
           <div className="form-group">
             <label>选择文件</label>
             <input type="file" onChange={(e) => setSingleFile(e.target.files[0])} />
+            {singleFile && (
+              <div className="selected-file">
+                📎 {singleFile.name} ({(singleFile.size / 1024).toFixed(1)} KB)
+                <button className="file-clear-btn" onClick={() => setSingleFile(null)}>✕</button>
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label>额外字段 (可选)</label>
             <input type="text" placeholder="例如: description=测试文件" value={extraField} onChange={(e) => setExtraField(e.target.value)} />
           </div>
-          <button onClick={handleSingleUpload}>⬆️ 上传文件</button>
+          <button onClick={handleSingleUpload} disabled={!singleFile}>⬆️ 上传文件</button>
 
           {singleResult?.ok && singleResult.file && (
             <div className="upload-results">
@@ -165,8 +171,14 @@ export default function FileUpload({ mode = 'both' }) {
           <div className="form-group">
             <label>选择多个文件</label>
             <input type="file" multiple onChange={(e) => setMultiFiles(Array.from(e.target.files))} />
+            {multiFiles.length > 0 && (
+              <div className="selected-file">
+                📎 已选 {multiFiles.length} 个文件 ({(multiFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(1)} KB)
+                <button className="file-clear-btn" onClick={() => setMultiFiles([])}>✕</button>
+              </div>
+            )}
           </div>
-          <button onClick={handleMultiUpload}>⬆️ 上传多文件</button>
+          <button onClick={handleMultiUpload} disabled={multiFiles.length === 0}>⬆️ 上传多文件</button>
 
           {multiResults?.ok && (
             <div className="upload-results">

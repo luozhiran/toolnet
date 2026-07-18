@@ -236,6 +236,33 @@ body {
   padding: 1.25rem;
 }
 
+.selected-file {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: #334155;
+  background: #f1f5f9;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-clear-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+}
+
+.file-clear-btn:hover {
+  color: #ef4444;
+}
+
 /* ========== 表单样式 ========== */
 .form-group {
   margin-bottom: 1rem;
@@ -276,6 +303,10 @@ button {
 }
 button:hover {
   background: #2563eb;
+}
+button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
 }
 button.secondary {
   background: #64748b;
