@@ -130,6 +130,7 @@ class NetworkSceneRunner(
                 .flowBusinessResult()
                 .catch { e -> logger.append("net-flow GET: failed ${e.message.orEmpty()}") }
                 .collect { result ->
+                    result.rawBody
                     when (result) {
                         is BusinessResult.Success -> logger.append("net-flow GET: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
                         is BusinessResult.BusinessError -> logger.append("net-flow GET: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
