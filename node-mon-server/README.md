@@ -1,296 +1,103 @@
-# 测试服务器 - 完整使用教程（React 版）
+# node-mon-server — 测试服务器
 
-一个基于 Express + Multer 后端 + React 前端的现代化测试服务器，支持：
-- REST API（GET/POST JSON、表单、路径参数、动态 Query）
-- 单/多文件上传（multipart/form-data）
-- 混合上传（文件 + 文本 + JSON + 表单字段）
-- 文件下载（支持断点续传、分片下载演示）
-- 每个功能附带 **Android OkHttp 示例代码**（一键查看）
+一个基于 Express + Multer 后端 + React 前端的测试服务器，供客户端（Android/iOS/Web）开发调试使用。支持 REST API、文件上传/下载、断点续传，每个端点附带 OkHttp 示例代码。
 
----
+## 使用场景总览
 
-## 目录
-
-1. [快速开始](#快速开始)
-2. [项目结构](#项目结构)
-3. [功能端点一览](#功能端点一览)
-4. [启动开发环境](#启动开发环境)
-5. [详细使用示例](#详细使用示例)
-6. [查看 OkHttp 示例](#查看-okhttp-示例)
-7. [生产环境部署](#生产环境部署)
-8. [常见问题](#常见问题)
-
----
+| 使用场景 | 推荐做法 | 适用条件/支持范围 | 什么情况下使用 | 为什么可以用 |
+| --- | --- | --- | --- | --- |
+| [快速启动服务](./server/doc/01-quick-start.md) | `npm run dev` 一键启动，或分别启动前后端 | 开发环境，Node.js v16+ | 第一次使用，想快速看到效果 | 根 package.json 已配置 concurrently 并行启动脚本 |
+| [测试 REST API](./server/doc/02-api-testing.md) | `GET /api/data`, `GET /api/echo`, `GET /api/user/:id`, `POST /api/json`, `POST /api/form` | 所有平台，无需认证 | 客户端需要调试 HTTP 请求（GET/POST JSON、表单、Query、路径参数） | Express 路由 + JSON/urlencoded 中间件，返回标准 `{code, message, data}` 格式 |
+| [测试文件上传](./server/doc/03-file-upload.md) | `POST /upload/single`, `POST /upload/multiple`, `POST /upload/mixed` | 所有平台，最大 10MB/文件，最多 5 个文件 | 客户端需要调试 multipart/form-data 上传，包括文件+文本+JSON 混合上传 | Multer 中间件处理 multipart 解析，diskStorage 持久化到 uploads/ 目录 |
+| [测试文件下载](./server/doc/04-file-download.md) | `GET /download/files`（列表），`GET /download/:filename`（下载，支持 Range 断点续传），`GET /download/static/:filename`（静态文件） | 所有平台，Range 请求返回 206，完整请求返回 200 | 客户端需要测试下载、断点续传、分片下载合并 | Express 静态文件中间件 + 手动 Range 解析，`fs.createReadStream` 流式返回 |
+| [使用调试日志](./server/doc/05-debug-logging.md) | `DEBUG=app:* node server.js` 或 `DEBUG=app:request,app:upload node server.js` | 开发环境，所有路由 | 排查请求/响应内容、上传过程、性能瓶颈 | `debug` 模块按命名空间分级输出，零侵入，生产环境关闭 |
+| [修改配置](./server/doc/06-configuration.md) | 编辑 `server/config/index.js` 或设置环境变量 `PORT`, `HOST` | 所有环境 | 需要改端口、上传限制、性能阈值 | 配置集中在 config/index.js，环境变量可覆盖 |
+| [部署到生产环境](./server/doc/07-deployment.md) | `npm run build:client && NODE_ENV=production node server/server.js` | 生产环境，需预先构建前端 | 需要在服务器上对外提供测试服务 | Express 在生产模式下托管前端构建产物，单一端口对外 |
+| [使用 React 测试 UI](./frontend/doc/01-test-ui.md) | `cd frontend && npm run dev`，浏览器访问 `http://localhost:5173` | 开发环境，需要浏览器 | 想要可视化界面测试所有端点，而非命令行 curl | Vite + React 构建，通过代理转发 API 请求到后端 |
+| [查看 OkHttp 示例代码](./frontend/doc/02-code-examples.md) | 在 React UI 中点击绿色"📱 示例"按钮，或直接查看 `frontend/src/examples.js` | 所有平台 | Android 开发者需要 OkHttp/Kotlin 参考代码 | 每个端点有对应的 OkHttp 示例，涵盖 GET/POST/上传/下载/断点续传 |
+| [扩展新接口](./server/doc/02-api-testing.md#扩展新接口) | 在 `server/routes/` 对应文件添加路由，在 `frontend/src/api.js` 添加调用方法 | 开发环境，需了解 Express 和 React | 需要新增自定义测试端点 | 路由按功能拆分，模块化组织，添加新路由不影响现有功能 |
 
 ## 快速开始
 
-### 1. 克隆/创建项目
+### 环境要求
 
-按照项目架构文档创建目录和文件，或直接下载源码包。
+- Node.js v16+
+- npm 或 yarn
 
-### 2. 安装依赖
+### 安装
 
-#### 后端依赖
 ```bash
-cd server
-npm init -y
-npm install express multer cors debug
-npm install -D nodemon   # 可选
+# 克隆项目后
+cd node-mon-server
+npm install          # 安装后端依赖 + 构建前端
 ```
 
-#### 前端依赖
+### 启动开发环境
+
+**方式一：一键启动（推荐）**
+
 ```bash
-cd frontend
-npm install
+npm run dev
 ```
 
-### 3. 启动开发环境
+后端启动在 `http://localhost:3000`，前端启动在 `http://localhost:5173`。
 
-#### 方式一：分别启动（推荐）
+**方式二：分别启动**
+
 ```bash
-# 终端1：后端
+# 终端1：后端（带调试日志）
 cd server
-DEBUG=app:* nodemon server.js
+DEBUG=app:* npx nodemon server.js
 
 # 终端2：前端
 cd frontend
 npm run dev
 ```
-浏览器访问 \`http://localhost:5173\`。
 
-#### 方式二：一键启动（根目录配置后）
-```bash
-npm run dev
-```
+打开浏览器访问 `http://localhost:5173` 即可使用测试面板。
 
----
+### 只用后端（不用前端 UI）
 
-## 功能端点一览
-
-| 功能 | 方法 | 端点 | 说明 | 前端测试组件 |
-|------|------|------|------|--------------|
-| 无参 GET | GET | \`/api/data\` | 返回固定 JSON | \`ApiTest\` - 获取数据 |
-| Query 参数 GET | GET | \`/api/echo\` | 接收任意 Query 参数并回显 | \`ApiTest\` - Echo 请求 |
-| 路径参数 + Query | GET | \`/api/user/:id\` | 演示路径参数和可选 Query | \`ApiTest\` - 获取用户信息 |
-| 提交 JSON | POST | \`/api/json\` | 接收 JSON body，回显数据 | \`ApiTest\` - 提交 JSON |
-| 提交表单 | POST | \`/api/form\` | 接收 \`application/x-www-form-urlencoded\` | \`ApiTest\` - 提交表单 |
-| 单文件上传 | POST | \`/upload/single\` | field 名称 \`file\`，支持额外字段 | \`FileUpload\` - 单文件上传 |
-| 多文件上传 | POST | \`/upload/multiple\` | field 名称 \`files\`，最多 5 个 | \`FileUpload\` - 多文件上传 |
-| 混合上传 | POST | \`/upload/mixed\` | 同时上传文件、文本、JSON、表单字段 | \`MixedUpload\` |
-| 获取文件列表 | GET | \`/download/files\` | 返回 \`uploads/\` 目录中的文件信息 | \`FileManager\` - 刷新列表 |
-| 下载文件 | GET | \`/download/:filename\` | 支持断点续传（Range） | \`FileManager\` - 直接下载 / 列表下载 |
-| 静态文件服务 | GET | \`/download/static/:filename\` | 访问 \`public/\` 目录中的文件（如 zip/png） | 直接 URL 访问 |
-| 分片下载演示 | - | (前端实现) | 利用 Range 请求分片下载并合并，模拟断点续传 | \`ChunkDownload\` |
-
----
-
-## 启动开发环境
-
-### 配置前端代理
-
-\`frontend/vite.config.js\` 内容：
-
-```javascript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      '/api': 'http://localhost:3000',
-      '/upload': 'http://localhost:3000',
-      '/download': 'http://localhost:3000'
-    }
-  }
-})
-```
-
-### 运行
-
-```bash
-# 后端终端
-cd server
-DEBUG=app:* nodemon server.js
-
-# 前端终端
-cd frontend
-npm run dev
-```
-访问 \`http://localhost:5173\`。
-
----
-
-## 详细使用示例
-
-### API 测试示例
-
-#### 1. GET /api/data（无参数）
-**curl**：
-```bash
-curl http://localhost:3000/api/data
-```
-**前端操作**：点击“获取数据”按钮。
-
-#### 2. GET /api/echo（带 Query 参数）
-**curl**：
-```bash
-curl "http://localhost:3000/api/echo?name=张三&age=25"
-```
-**前端操作**：动态添加参数名/值，点击“发送 Echo 请求”。
-
-#### 3. GET /api/user/:id（路径参数 + Query）
-**curl**：
-```bash
-curl "http://localhost:3000/api/user/123?name=李四"
-```
-**前端操作**：输入用户ID和可选 Query 参数，点击“获取用户信息”。
-
-#### 4. POST /api/json（发送 JSON）
-**curl**：
-```bash
-curl -X POST http://localhost:3000/api/json \\
-  -H "Content-Type: application/json" \\
-  -d '{"message":"Hello"}'
-```
-**前端操作**：编辑 JSON 文本框，点击“提交 JSON”。
-
-#### 5. POST /api/form（表单）
-**curl**：
-```bash
-curl -X POST http://localhost:3000/api/form \\
-  -d "username=alice&password=123456"
-```
-**前端操作**：动态添加表单字段，点击“提交表单”。
-
-### 文件上传示例
-
-#### 6. 单文件上传
-**curl**：
-```bash
-curl -X POST http://localhost:3000/upload/single \\
-  -F "file=@/path/to/test.png" \\
-  -F "description=测试图片"
-```
-**前端操作**：选择文件，填写额外字段，点击“上传文件”。
-
-#### 7. 多文件上传
-**curl**：
-```bash
-curl -X POST http://localhost:3000/upload/multiple \\
-  -F "files=@/path/to/file1.zip" \\
-  -F "files=@/path/to/file2.png"
-```
-**前端操作**：选择多个文件，点击“上传多文件”。
-
-#### 8. 混合上传（文件+文本+JSON+表单）
-**curl**：
-```bash
-curl -X POST http://localhost:3000/upload/mixed \\
-  -F "files=@/path/to/photo.png" \\
-  -F "content=Hello World" \\
-  -F 'jsonData={"action":"upload"}' \\
-  -F "extraKey=extraValue"
-```
-**前端操作**：选择文件，填写文本、JSON 和表单字段，点击“混合上传”。
-
-### 文件下载示例
-
-#### 9. 获取文件列表
-**curl**：
-```bash
-curl http://localhost:3000/download/files
-```
-**前端操作**：点击“刷新文件列表”。
-
-#### 10. 下载完整文件
-**curl**：
-```bash
-curl -O http://localhost:3000/download/1705314600000-123-test.png
-```
-**前端操作**：点击文件列表中的“下载”链接或手动输入文件名后下载。
-
-### 断点续传演示
-
-#### 11. 分片下载并合并（模拟断点续传）
-**原理**：前端发送多个 \`Range\` 请求（如 \`Range: bytes=0-1048575\`），服务端返回 \`206 Partial Content\`，前端收集分片后合并下载。
-
-**curl 模拟分片下载**：
-```bash
-# 下载第一片
-curl -H "Range: bytes=0-1048575" http://localhost:3000/download/example.zip -o chunk1
-# 下载第二片
-curl -H "Range: bytes=1048576-2097151" http://localhost:3000/download/example.zip -o chunk2
-# 合并
-cat chunk1 chunk2 > example.zip
-```
-**前端操作**：选择已上传的文件，设置分片数量，点击“分片下载并合并”。
-
----
-
-## 查看 OkHttp 示例
-
-在每个功能区域旁边都有一个绿色的 **“📱 示例”** 按钮，点击后弹出模态框，显示对应的 Android OkHttp 代码（Kotlin）。示例涵盖所有上述接口，包括文件上传和断点续传。
-
-> 代码中的 IP 地址 \`192.168.1.100\` 请替换为您的服务器实际 IP。
-
----
-
-## 生产环境部署
-
-### 1. 构建前端
-```bash
-cd frontend
-npm run build
-```
-产物位于 \`frontend/dist\`。
-
-### 2. 启动后端（生产模式）
 ```bash
 cd server
-NODE_ENV=production node server.js
+DEBUG=app:* node server.js
 ```
-访问 \`http://<服务器IP>:3000\` 即可使用完整应用。
 
----
+然后用 curl 或其他 HTTP 客户端直接请求 `http://localhost:3000` 的各个端点。
 
-## 常见问题
+## 文档目录
 
-### 1. 前端启动失败，提示 \`Module not found\`
-进入 \`frontend\` 目录执行 \`npm install\`，若仍有问题则删除 \`node_modules\` 重装。
+| 文档 | 内容 |
+| --- | --- |
+| [arch.md](./arch.md) | 项目架构文档：技术栈、目录结构、模块职责、调试命名空间、扩展指南 |
+| [server/doc/01. 快速启动](./server/doc/01-quick-start.md) | 后端环境准备、安装依赖、启动方式、环境变量说明、健康检查 |
+| [server/doc/02. REST API 测试](./server/doc/02-api-testing.md) | 全部 API 端点详解、curl 示例、请求/响应格式、扩展新接口 |
+| [server/doc/03. 文件上传](./server/doc/03-file-upload.md) | 单文件/多文件/混合上传、字段名规范、大小限制、Multer 错误处理 |
+| [server/doc/04. 文件下载](./server/doc/04-file-download.md) | 文件列表、完整下载、Range 断点续传、静态文件服务、分片下载 |
+| [server/doc/05. 调试日志](./server/doc/05-debug-logging.md) | DEBUG 命名空间、日志输出格式、按模块过滤、性能监控日志 |
+| [server/doc/06. 配置参考](./server/doc/06-configuration.md) | 全部配置项说明、环境变量覆盖、上传限制、性能阈值、MIME 过滤 |
+| [server/doc/07. 生产部署](./server/doc/07-deployment.md) | 构建前端、生产模式启动、静态文件托管、防火墙配置 |
+| [frontend/doc/01. React 测试 UI](./frontend/doc/01-test-ui.md) | 前端启动、代理配置、组件说明、测试面板操作指南 |
+| [frontend/doc/02. OkHttp 示例代码](./frontend/doc/02-code-examples.md) | 所有 OkHttp 示例索引、如何替换 IP 地址、代码结构说明 |
 
-### 2. 点击示例按钮无反应或报错
-检查 \`frontend/src/examples.js\` 是否存在且语法正确（注意模板字符串中的 \`\\${}\` 已转义）。查看浏览器控制台错误。
+## 项目结构
 
-### 3. 上传文件提示 \`413 Payload Too Large\`
-修改 \`server.js\` 中的 \`config.upload.limits.fileSize\`（单位字节），重启后端。
-
-### 4. 局域网其他设备无法访问前端
-- 后端已监听 \`0.0.0.0\`。
-- 前端开发服务器默认仅监听 \`localhost\`，可在 \`vite.config.js\` 中添加 \`server.host: '0.0.0.0'\`。
-- 防火墙开放端口 3000 和 5173。
-
-### 5. 分片下载合并后文件损坏
-检查后端是否返回 \`206\` 状态码，以及前端合并顺序是否正确（按索引合并 \`Uint8Array\`）。
-
----
-
-## 许可证
-
-MIT
-
----
-
-<div align="center">
-🎉 祝您使用愉快！
-</div>`;
-  const blob = new Blob([content], { type: 'text/markdown' });
-  const a = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  a.href = url;
-  a.download = '测试服务器使用教程.md';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-})();
+```text
+node-mon-server/
+├── server/                  # 后端
+│   ├── server.js            # 应用入口
+│   ├── config/index.js      # 集中配置
+│   ├── routes/              # 路由（api, upload, download）
+│   ├── middleware/           # 中间件（debug, errorHandler, performance, responseInterceptor）
+│   ├── utils/               # 工具（fileHelper, logger）
+│   └── uploads/             # 上传文件存储（自动创建）
+├── frontend/                # React 前端
+│   ├── src/
+│   │   ├── components/      # ApiTest, FileUpload, MixedUpload, FileManager, ChunkDownload 等
+│   │   ├── api.js           # API 调用封装
+│   │   ├── examples.js      # OkHttp 示例代码
+│   │   └── App.jsx          # 主应用
+│   └── vite.config.js       # Vite 配置（含 API 代理）
+├── public/                  # 静态文件（test.html 等）
+└── package.json             # 根工程脚本
+```
