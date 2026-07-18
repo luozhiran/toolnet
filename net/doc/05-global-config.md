@@ -27,6 +27,11 @@
 | `useCacheControl(cache)` | 可选 | null | 设置 OkHttp 缓存（需传入 `okhttp3.Cache` 实例） |
 | `encrypt { }` | 可选 | — | 字段级加解密配置（详见 [07-字段加密](./07-field-encryption.md)） |
 | `monitor { }` | 可选 | — | 网络监控上报配置（详见 [08-网络监控](./08-network-monitor.md)） |
+| `businessResultParser(parser)` | 可选 | `DefaultApiEnvelopeParser()` | 业务协议解析器，将原始响应解析为 ApiEnvelope（详见 [09-错误处理](./09-error-handling.md)） |
+| `businessDataConverter(converter)` | 可选 | `GsonBusinessDataConverter()` | 业务数据转换器，将 dataRaw 转为目标类型（详见 [09-错误处理](./09-error-handling.md)） |
+| `addBusinessResultInterceptor(interceptor)` | 可选 | — | 添加业务结果拦截器（责任链，详见 [09-错误处理](./09-error-handling.md)） |
+| `clearBusinessResultInterceptors()` | 可选 | — | 清空所有业务结果拦截器 |
+| `getBusinessResultInterceptors()` | 只读 | — | 获取所有已注册业务结果拦截器 |
 
 ### 完整配置示例
 
@@ -78,6 +83,15 @@ Net.instance.configure {
         reportUrl("https://monitor.example.com/api/v1/report")
         reportMode(ReportMode.FAILURE_ONLY)
     }
+
+    // 业务结果处理
+    businessResultParser(customApiEnvelopeParser)  // 自定义业务协议解析
+    businessDataConverter(
+        GsonBusinessDataConverter(
+            GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss").create()
+        )
+    )
+    addBusinessResultInterceptor(loginExpiredInterceptor)  // 登录失效全局拦截
 }
 ```
 

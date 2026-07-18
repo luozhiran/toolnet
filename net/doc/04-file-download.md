@@ -151,6 +151,10 @@ if (Net.instance.isDownloadQueued("https://example.com/file.zip")) {
 | `bindActivity(activity)` | 绑定 FragmentActivity 生命周期 |
 | `listener(callback)` | 下载进度监听器 |
 | `noUseGlobalParams()` | 跳过全局参数 |
+| `monitor()` | 强制对本下载任务开启监控上报 |
+| `skipMonitor()` | 强制跳过本下载任务的监控上报 |
+| `monitorExtra(extra)` | 设置下载监控业务附加字段，透传到 MonitorEvent.extra |
+| `setProgressCallback(callback)` | 设置内部进度回调（供 net-flow 等扩展模块使用） |
 | `start(): Task` | 启动下载，返回 Task 实例 |
 
 ## 辅助工具
@@ -180,6 +184,45 @@ val percent = TaskTools.getDownloadProgress(task)  // 返回 0..100
 - `IProgressCallback` 回调在后台线程执行，更新 UI 需切换到主线程
 - 使用 Flow 方式获取下载进度可自动在主线程接收，详见 [08-下载进度 Flow](../../net-flow/doc/02-flow-download.md)
 - `onFinish` 在无论成功失败都会触发（但重试中的临时 `onFail` 不会触发），适合做清理工作
+
+## 下载监控
+
+当全局监控开启（`monitor { enabled(true) }`）时，下载任务会自动上报**下载阶段**的监控事件，与 HTTP 层的 `MonitorInterceptor` 事件互补：
+
+- **HTTP 层事件**（MonitorInterceptor）：上报 DNS/连接/HTTP 状态码等网络层信息
+- **下载阶段事件**（BaseRequest.reportDownloadEvent）：上报流读取、磁盘写入、MD5 校验等下载层信息
+
+下载事件的核心字段：
+
+| 监控字段 | 说明 |
+|---|---|
+| `eventStage = "DOWNLOAD"` | 区分 HTTP 层和下载层事件 |
+| `downloadSize` | 已下载字节数 |
+| `contentLength` | 文件总大小 |
+| `isAppend` | 是否断点续传 |
+| `retryCount` | 当前重试次数 |
+| `downloadSpeed` | 平均下载速度（bytes/s） |
+| `downloadError` | 下载阶段独立错误类型（NONE / DOWNLOAD_STREAM_ERROR / DISK_WRITE_ERROR / MD5_MISMATCH / CANCELLED） |
+
+下载监控单任务控制：
+
+```kotlin
+// 强制监控关键下载
+Net.instance.newDownload()
+    .savePath(path).url(url)
+    .monitor()                            // 无视全局 enabled=false
+    .monitorExtra("scene=ota;version=2.3") // 附加业务数据
+    .listener(callback)
+    .start()
+
+// 跳过心跳/轮询下载的监控
+Net.instance.newDownload()
+    .savePath(cachePath).url(heartbeatUrl)
+    .skipMonitor()  // 无视全局 enabled=true，不产生监控事件
+    .start()
+```
+
+> 下载监控事件仅在下载失败时上报（与 `MonitorConfig.reportMode` 一致），成功时不产生下载事件。
 
 ## 验证方式
 

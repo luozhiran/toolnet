@@ -273,6 +273,67 @@ Net.instance.get()
     .send(callback)
 ```
 
+### Handler 回调
+
+适用于需要在特定线程（如主线程 Looper）接收结果的场景：
+
+```kotlin
+val handler = Handler(Looper.getMainLooper()) {
+    when (it.what) {
+        SUCCESS_WHAT -> {
+            val body = it.obj as? String
+            updateUI(body)
+            true
+        }
+        ERROR_WHAT -> {
+            val error = it.obj as? String
+            showError(error)
+            true
+        }
+        else -> false
+    }
+}
+
+Net.instance.get()
+    .url("https://api.example.com/data")
+    .send(handler, SUCCESS_WHAT, ERROR_WHAT)
+```
+
+> `what` 为成功时的 Message.what，`errorWhat` 为失败时的 Message.what。`msg.obj` 为响应体字符串（成功）或错误消息（失败）。
+
+### buildCall() — 构建 Call 但不发送
+
+适用于需要自行管理 OkHttp Call 生命周期的场景（如配合其他异步框架）：
+
+```kotlin
+val call: Call? = Net.instance.get()
+    .url("https://api.example.com/data")
+    .buildCall()  // 构建 OkHttp Call，不执行 enqueue
+
+if (call != null) {
+    call.enqueue(object : okhttp3.Callback {
+        override fun onFailure(call: Call, e: IOException) { /* ... */ }
+        override fun onResponse(call: Call, response: Response) { /* ... */ }
+    })
+}
+```
+
+> `buildCall()` 仅供扩展模块（如 net-flow）和高级场景使用。普通业务代码推荐使用 `send()` 或 `sendResult()`。
+
+### 监控业务附加字段
+
+为监控事件添加业务自定义数据，原样透传到后端：
+
+```kotlin
+Net.instance.postJson()
+    .url("https://api.example.com/order/create")
+    .addParam("amount", "100")
+    .monitorExtra("orderId=ORD-2024001;scene=checkout")  // 透传到 MonitorEvent.extra
+    .send(callback)
+```
+
+> `monitorExtra` 不会影响请求本身，只会在监控上报时附加到 `MonitorEvent.extra` 字段。需要全局开启监控（`monitor { enabled(true) }`）才生效。
+
 ## 请求类型速查
 
 | 方法 | 返回类型 | Content-Type | 说明 |
