@@ -1,75 +1,71 @@
 # 5. 全局配置详解
 
-`NetConfig` 中所有可配置项的详细说明和完整示例。
+说明 `NetConfig` 中可配置项的用途和推荐写法。
 
-## 适用条件
+## 适用场景
 
-- 需要在 `Application.onCreate()` 中进行全局配置
-- 需要定制 OkHttp 行为（超时、缓存、拦截器等）
+- 需要在 `Application.onCreate()` 中初始化网络库
+- 需要统一配置 Base URL、全局参数、日志、缓存、拦截器、下载并发数
+- 需要统一配置业务码解析、业务数据转换或业务责任链
 
-## 推荐做法
+## 配置项
 
-### NetConfig 所有配置项
+当前模块还没有对外发布，`NetConfig` 只保留语义化 API，不再保留旧命名兼容方法。
 
-| 方法 | 类型 | 默认值 | 说明 |
+| 配置目标 | 写法 | 默认值 | 说明 |
 |---|---|---|---|
-| `app(application)` | 必选 | — | 设置 Application 实例 |
-| `url(url)` | 可选 | null | 全局 Base URL |
-| `setGlobalParams(key, value)` | 可选 | — | 添加全局参数（多次调用可添加多个） |
-| `removeGlobalParam(key)` | 可选 | — | 移除单个全局参数 |
-| `clearGlobalParams()` | 可选 | — | 清空所有全局参数 |
-| `maxDownloadNum(max)` | 可选 | 3 | 最大并行下载数（自动限制 ≥1） |
-| `useHttpLog(bool)` | 可选 | false | 是否开启 HTTP 日志（写入文件） |
-| `log(path)` | 可选 | null | 自定义日志文件路径 |
-| `okHttpClient(client)` | 可选 | null | 自定义 OkHttpClient（不设置则使用库内置默认） |
-| `addInterceptor(interceptor)` | 可选 | — | 添加 OkHttp 拦截器（可多次调用） |
-| `getInterceptors()` | 只读 | — | 获取所有已注册拦截器 |
-| `useCacheControl(cache)` | 可选 | null | 设置 OkHttp 缓存（需传入 `okhttp3.Cache` 实例） |
-| `encrypt { }` | 可选 | — | 字段级加解密配置（详见 [07-字段加密](./07-field-encryption.md)） |
-| `monitor { }` | 可选 | — | 网络监控上报配置（详见 [08-网络监控](./08-network-monitor.md)） |
-| `businessResultParser(parser)` | 可选 | `DefaultApiEnvelopeParser()` | 业务协议解析器，将原始响应解析为 ApiEnvelope（详见 [09-错误处理](./09-error-handling.md)） |
-| `businessDataConverter(converter)` | 可选 | `GsonBusinessDataConverter()` | 业务数据转换器，将 dataRaw 转为目标类型（详见 [09-错误处理](./09-error-handling.md)） |
-| `addBusinessResultInterceptor(interceptor)` | 可选 | — | 添加业务结果拦截器（责任链，详见 [09-错误处理](./09-error-handling.md)） |
-| `clearBusinessResultInterceptors()` | 可选 | — | 清空所有业务结果拦截器 |
-| `getBusinessResultInterceptors()` | 只读 | — | 获取所有已注册业务结果拦截器 |
+| Application | `application(application)` | — | 设置 Application 实例 |
+| Base URL | `baseUrl(url)` | null | 全局 Base URL |
+| 单个全局参数 | `globalParam(key, value)` | — | 添加或覆盖一个全局参数 |
+| 批量全局参数 | `globalParams(map)` | — | 批量添加或覆盖全局参数 |
+| 移除全局参数 | `removeGlobalParams(vararg)` | — | 移除一个或多个全局参数 |
+| 清空全局参数 | `clearGlobalParameters()` | — | 清空所有全局参数 |
+| 最大并行下载数 | `maxConcurrentDownloads(max)` | 3 | 小于 1 时自动修正为 1 |
+| HTTP 日志 | `enableHttpLog()` / `disableHttpLog()` | false | 是否开启 HTTP 日志 |
+| 日志路径 | `logPath(path)` | null | 自定义日志目录或日志文件路径 |
+| OkHttpClient | `client(client)` | null | 自定义 OkHttpClient |
+| OkHttp 拦截器 | `interceptor(interceptor)` | — | 添加 OkHttp 拦截器 |
+| 批量 OkHttp 拦截器 | `interceptors(list)` | — | 批量添加 OkHttp 拦截器 |
+| 读取 OkHttp 拦截器 | `interceptors()` | — | 获取已注册拦截器快照 |
+| HTTP 缓存 | `cache(cache)` | null | 设置 OkHttp 缓存 |
+| 读取 HTTP 缓存 | `cache()` | null | 获取当前缓存配置 |
+| 字段加解密 | `encrypt { }` | null | 详见 [07-字段加密](./07-field-encryption.md) |
+| 网络监控 | `monitor { }` | null | 详见 [08-网络监控](./08-network-monitor.md) |
+| 业务协议解析 | `businessEnvelopeParser(parser)` | `DefaultApiEnvelopeParser()` | 将原始响应解析为 `ApiEnvelope` |
+| 业务数据转换 | `businessConverter(converter)` | `GsonBusinessDataConverter()` | 将 `dataRaw` 转成目标类型 |
+| 业务责任链 | `businessInterceptor(interceptor)` | — | 添加业务结果拦截器 |
+| 批量业务责任链 | `businessInterceptors(list)` | — | 批量添加业务结果拦截器 |
+| 清空业务责任链 | `clearBusinessInterceptors()` | — | 清空所有业务结果拦截器 |
+| 读取业务责任链 | `businessInterceptors()` | — | 获取业务结果拦截器快照 |
 
-### 完整配置示例
+## 完整示例
 
 ```kotlin
-Net.instance.configure {
-    // 必选
-    app(application)
+Net.configure {
+    application(this@App)
+    baseUrl("https://api.example.com/")
 
-    // 网络
-    url("https://api.example.com")
+    globalParam("platform", "android")
+    globalParams(
+        mapOf(
+            "version" to BuildConfig.VERSION_NAME,
+            "channel" to "official"
+        )
+    )
 
-    // 全局参数
-    setGlobalParams("platform", "android")
-    setGlobalParams("version", BuildConfig.VERSION_NAME)
-    setGlobalParams("channel", "official")
+    maxConcurrentDownloads(5)
+    enableHttpLog(BuildConfig.DEBUG)
+    logPath("/sdcard/myapp/logs")
 
-    // 下载
-    maxDownloadNum(5)
-
-    // 日志
-    useHttpLog(BuildConfig.DEBUG)
-
-    // 自定义 OkHttpClient
-    okHttpClient(
+    client(
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
     )
+    interceptor(authInterceptor)
+    cache(Cache(File(cacheDir, "http_cache"), 50 * 1024 * 1024))
 
-    // 拦截器
-    addInterceptor(authInterceptor)
-    addInterceptor(loggingInterceptor)
-
-    // 缓存
-    useCacheControl(Cache(File(cacheDir, "http_cache"), 50 * 1024 * 1024))
-
-    // 字段加密
     encrypt {
         algorithm(Algorithm.AES_GCM_NO_PADDING)
         secretKey("my-32-byte-secret-key!!123456")
@@ -77,37 +73,36 @@ Net.instance.configure {
         encryptField("password")
     }
 
-    // 网络监控
     monitor {
-        enabled(BuildConfig.DEBUG.not())
+        enabled(true)
         reportUrl("https://monitor.example.com/api/v1/report")
         reportMode(ReportMode.FAILURE_ONLY)
     }
 
-    // 业务结果处理
-    businessResultParser(customApiEnvelopeParser)  // 自定义业务协议解析
-    businessDataConverter(
+    businessEnvelopeParser(customApiEnvelopeParser)
+    businessConverter(
         GsonBusinessDataConverter(
             GsonBuilder().setDateFormat("yyyy-MM-dd HH:mm:ss").create()
         )
     )
-    addBusinessResultInterceptor(loginExpiredInterceptor)  // 登录失效全局拦截
+    businessInterceptor(loginExpiredInterceptor)
 }
 ```
 
 ## 关键说明
 
-- `configure {}` 建议只调用一次，在 `Application.onCreate()` 中完成
-- 自定义 `okHttpClient` 后，通过 `addInterceptor` 添加的拦截器仍然会添加到该 client 上
-- 全局参数（`globalParams`）会自动附加到所有请求 URL 上（作为 Query 参数），单个请求可通过 `noUseGlobalParams()` 跳过
-- Retrofit 模块的请求会自动继承 OkHttpClient 和拦截器配置，但不会自动附加 `globalParams`（Retrofit 接口需自行传参）
-- `maxDownloadNum` 最小值为 1，传入更小的值会被自动修正
-- `encrypt {}` 和 `monitor {}` 是可选 DSL 闭包，不配置则功能不生效
+- `configure {}` 建议只在 `Application.onCreate()` 中调用一次。
+- `application(...)` 是基础配置，日志目录、主线程 Handler、包名相关能力都依赖它。
+- `client(...)` 配置自定义 OkHttpClient 后，库会优先使用该客户端。
+- `interceptor(...)`、`cache(...)`、`enableHttpLog(...)` 只会参与库默认创建的 OkHttpClient；如果传入完全自定义的 `client(...)`，这些能力需要调用方在自定义 client 中自行配置。
+- `globalParams` 会自动附加到普通请求，单个请求可通过 `noUseGlobalParams()` 跳过。
+- Retrofit 模块复用 OkHttpClient 和拦截器能力，但不会自动把 `globalParams` 注入到 Retrofit 接口参数中。
+- `businessEnvelopeParser(...)` 负责解析业务信封，`businessInterceptor(...)` 负责统一处理登录失效、权限不足等业务状态。
 
 ## 验证方式
 
-- 编译通过并运行 App，确认 `configure {}` 无异常
-- 检查日志确认拦截器生效
-- 发一个请求确认全局参数自动附加到 URL 上
+- 编译通过：`./gradlew :net:compileDebugKotlin`
+- 运行 App，确认 `Net.configure {}` 无异常
+- 发送一个请求，确认 Base URL、全局参数、日志和业务责任链按预期生效
 
 [返回 README](../../README.md)

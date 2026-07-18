@@ -10,7 +10,7 @@ fun <T> BusinessResult.toTypedBusinessResult(type: Type): TypedBusinessResult<T>
     return when (this) {
         is BusinessResult.Success -> {
             runCatching {
-                Net.instance.ddNetConfig.businessDataConverter.convert(dataRaw, type) as? T
+                Net.instance.ddNetConfig.businessConverter.convert(dataRaw, type) as? T
             }.fold(
                 onSuccess = { data ->
                     TypedBusinessResult.Success(

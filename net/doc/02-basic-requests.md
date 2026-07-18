@@ -252,7 +252,7 @@ Net.instance.get()
 | `CHECK_CACHE` | maxAge=0，先验证缓存有效性 |
 | `getCacheControlForSecond(n)` | 缓存 n 秒 |
 
-> 使用缓存需要先在 `configure {}` 中通过 `useCacheControl(Cache)` 开启。
+> 使用缓存需要先在 `configure {}` 中通过 `cache(Cache)` 开启。
 
 ### 跳过全局参数
 
@@ -361,7 +361,7 @@ Net.instance.postJson()
 
 ## 验证方式
 
-- 通过 `PrintLog.logr()` 查看请求日志（需开启 `useHttpLog(true)`）
+- 通过 `PrintLog.logr()` 查看请求日志（需开启 `enableHttpLog(true)`）
 - 通过 OkHttp Logging Interceptor 查看原始请求/响应
 - 在回调中打印 `code` 和 `result` 确认响应正确
 

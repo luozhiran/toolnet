@@ -139,7 +139,7 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
  * 将当前请求构建器转为业务结果流。
  *
  * 这个方法在 [flowResult] 的基础上增加业务协议处理：
- * - HTTP 2xx 会先通过 `NetConfig.businessResultParser` 解析成 [com.itg.net.request.business.ApiEnvelope]
+ * - HTTP 2xx 会先通过 `NetConfig.businessEnvelopeParser` 解析成 [com.itg.net.request.business.ApiEnvelope]
  * - 然后执行 `NetConfig` 中注册的 [com.itg.net.request.business.BusinessResultInterceptor] 责任链
  * - 业务成功发射 [BusinessResult.Success]
  * - 业务失败发射 [BusinessResult.BusinessError]
@@ -160,7 +160,7 @@ fun <T : ParamsBuilder> T.flowBusinessResult(): Flow<BusinessResult> {
  *
  * 这个方法在 [flowBusinessResult] 的基础上继续把业务成功时的
  * [com.itg.net.request.business.ApiEnvelope.dataRaw] 转换为调用方声明的类型 [R]。
- * 默认转换器是 `GsonBusinessDataConverter`，可通过 `NetConfig.businessDataConverter(...)`
+ * 默认转换器是 `GsonBusinessDataConverter`，可通过 `NetConfig.businessConverter(...)`
  * 替换为自定义转换器。
  *
  * 转换成功时发射 [TypedBusinessResult.Success]，其中 `data` 类型为 [R]。

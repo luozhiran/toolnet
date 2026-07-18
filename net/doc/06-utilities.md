@@ -60,7 +60,7 @@ Net.instance.get()
     .send(callback)
 ```
 
-> 需先在全局配置中通过 `useCacheControl(Cache)` 开启缓存。
+> 需先在全局配置中通过 `cache(Cache)` 开启缓存。
 
 ### CacheFactory — 缓存实例创建
 
@@ -71,7 +71,7 @@ Net.instance.get()
 
 ```kotlin
 // 在 configure {} 中使用
-useCacheControl(CacheFactory.getCache(this@MyApp, 50 * 1024 * 1024))
+cache(CacheFactory.getCache(this@MyApp, 50 * 1024 * 1024))
 ```
 
 ### PrintLog — 调试日志

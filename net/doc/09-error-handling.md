@@ -177,8 +177,8 @@ import com.itg.net.Net
 import com.itg.net.request.business.BusinessResult
 import com.itg.net.request.business.BusinessResultInterceptor
 
-Net.instance.configure {
-    addBusinessResultInterceptor(object : BusinessResultInterceptor {
+Net.configure {
+    businessInterceptor(object : BusinessResultInterceptor {
         override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
             val code = chain.envelope.code
             if (code == "TOKEN_EXPIRED" || code == "401001") {
@@ -326,8 +326,8 @@ import com.itg.net.request.business.ApiEnvelope
 import com.itg.net.request.business.ApiEnvelopeParser
 import org.json.JSONObject
 
-Net.instance.configure {
-    businessResultParser(object : ApiEnvelopeParser {
+Net.configure {
+    businessEnvelopeParser(object : ApiEnvelopeParser {
         override fun parse(rawBody: String?): ApiEnvelope {
             val json = JSONObject(rawBody.orEmpty())
             val code = json.optString("bizCode")
@@ -445,8 +445,8 @@ Net.instance.get()
 import com.google.gson.GsonBuilder
 import com.itg.net.request.business.GsonBusinessDataConverter
 
-Net.instance.configure {
-    businessDataConverter(
+Net.configure {
+    businessConverter(
         GsonBusinessDataConverter(
             GsonBuilder()
                 .setDateFormat("yyyy-MM-dd HH:mm:ss")

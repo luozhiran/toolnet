@@ -20,14 +20,14 @@ class App:Application() {
     override fun onCreate() {
         super.onCreate()
 
-        Net.instance.ddNetConfig
-            .app(this)
-            .setGlobalParams("ab","bai")
-            .setGlobalParams("43","af")
-            .maxDownloadNum(1)
-            .useHttpLog(true)
-            .url("http://47.76.59.147:8000/")
-            .addBusinessResultInterceptor(object : BusinessResultInterceptor {
+        Net.configure {
+            application(this@App)
+            globalParam("ab", "bai")
+            globalParam("43", "af")
+            maxConcurrentDownloads(1)
+            enableHttpLog()
+            baseUrl("http://47.76.59.147:8000/")
+            businessInterceptor(object : BusinessResultInterceptor {
                 override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
                     val code = chain.envelope.code
                     if (code == "TOKEN_EXPIRED" || code == "401001") {
@@ -41,7 +41,7 @@ class App:Application() {
                     return chain.proceed()
                 }
             })
-            .monitor {
+            monitor {
                 enabled = false
                 reportMode= ReportMode.FAILURE_ONLY
                 reportHandler = object : IMonitorReportHandler {
@@ -60,6 +60,7 @@ class App:Application() {
 
                 }
             }
+        }
 
         val retrofit = Net.instance.retrofit
             .baseUrl("https://api.example.com/")

@@ -179,7 +179,7 @@ val percent = TaskTools.getDownloadProgress(task)  // 返回 0..100
 
 ## 关键说明
 
-- 下载默认最大并行数为 3，可在 `configure {}` 中通过 `maxDownloadNum()` 调整
+- 下载默认最大并行数为 3，可在 `configure {}` 中通过 `maxConcurrentDownloads()` 调整
 - 断点续传依赖服务器支持 HTTP Range 请求（返回 206 Partial Content）
 - `IProgressCallback` 回调在后台线程执行，更新 UI 需切换到主线程
 - 使用 Flow 方式获取下载进度可自动在主线程接收，详见 [08-下载进度 Flow](../../net-flow/doc/02-flow-download.md)

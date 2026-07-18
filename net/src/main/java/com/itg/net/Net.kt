@@ -3,17 +3,20 @@ package com.itg.net
 import com.itg.net.config.NetConfig
 import com.itg.net.client.OkHttpManager
 import com.itg.net.download.Download
+import com.itg.net.download.TaskBuilder
 import com.itg.net.request.create
 import com.itg.net.request.get.Get
 import com.itg.net.request.post.multipart.PostMul
 import com.itg.net.request.base.ParamsBuilder
 import com.itg.net.request.post.content.PostContent
 import com.itg.net.request.post.file.PostFile
+import com.itg.net.request.post.file.PostResumeFile
 import com.itg.net.request.post.form.PostForm
 import com.itg.net.request.post.json.PostJson
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.data.Task
 import com.itg.net.util.PrintLog
+import okhttp3.OkHttpClient
 
 /**
  * JSON 请求的 Content-Type
@@ -51,10 +54,10 @@ enum class ModeType { PostFile, PostForm, PostJson, PostMul, Get, PostResume, Po
  * ## 使用示例
  * ```
  * // 初始化配置
- * Net.instance.configure {
- *     app(application)
- *     url("https://api.example.com")
- *     setGlobalParams("token", "xxx")
+ * Net.configure {
+ *     application(application)
+ *     baseUrl("https://api.example.com")
+ *     globalParam("token", "xxx")
  * }
  *
  * // GET 请求
@@ -95,6 +98,80 @@ class Net {
          */
         @JvmStatic
         val instance: Net by lazy { Net() }
+
+        /**
+         * 语义化配置入口。
+         *
+         * 等价于 `Net.instance.configure { }`，适合在 Application 中直接调用。
+         */
+        fun configure(block: NetConfig.() -> Unit): Net = instance.configure(block)
+
+        /**
+         * 创建 GET 请求。
+         *
+         * 等价于 `Net.instance.get()`。
+         */
+        fun get(): Get = instance.get()
+
+        /**
+         * 创建 JSON POST 请求。
+         *
+         * 等价于 `Net.instance.postJson()`。
+         */
+        fun postJson(): PostJson = instance.postJson()
+
+        /**
+         * 创建 Form POST 请求。
+         *
+         * 等价于 `Net.instance.postForm()`。
+         */
+        fun postForm(): PostForm = instance.postForm()
+
+        /**
+         * 创建 multipart/form-data 请求。
+         *
+         * 等价于 `Net.instance.postMultipart()`。
+         */
+        fun postMultipart(): PostMul = instance.postMultipart()
+
+        /**
+         * 创建单文件上传请求。
+         *
+         * 等价于 `Net.instance.postFile()`。
+         */
+        fun postFile(): PostFile = instance.postFile()
+
+        /**
+         * 创建自定义请求体请求。
+         *
+         * 等价于 `Net.instance.postContent()`。
+         */
+        fun postContent(): PostContent = instance.postContent()
+
+        /**
+         * 创建下载任务。
+         *
+         * 等价于 `Net.instance.download()`。
+         */
+        fun download(): TaskBuilder = instance.download()
+
+        /**
+         * 取消所有普通网络请求。
+         *
+         * 等价于 `Net.instance.cancelAllRequests()`。
+         */
+        fun cancelAllRequests() {
+            instance.cancelAllRequests()
+        }
+
+        /**
+         * 按请求 tag 取消普通网络请求。
+         *
+         * 等价于 `Net.instance.cancelRequest(tag)`。
+         */
+        fun cancelRequest(tag: Any?) {
+            instance.cancelRequest(tag)
+        }
     }
 
     /**
@@ -103,14 +180,31 @@ class Net {
     val ddNetConfig: NetConfig by lazy { NetConfig() }
 
     /**
+     * 更语义化的配置别名。
+     *
+     * 与 [ddNetConfig] 指向同一个实例。新代码推荐使用 [config]，
+     * 旧代码继续使用 [ddNetConfig] 不受影响。
+     */
+    val config: NetConfig
+        get() = ddNetConfig
+
+    /**
      * OkHttp 客户端管理器，基于 [ddNetConfig] 构建 OkHttpClient 实例
      */
     val okhttpManager: OkHttpManager by lazy { OkHttpManager(ddNetConfig) }
 
     /**
+     * 当前 Net 使用的 OkHttpClient。
+     *
+     * 适合需要和第三方库共享网络栈时使用，例如 Retrofit、自定义下载器等。
+     */
+    val okHttpClient: OkHttpClient
+        get() = okhttpManager.okHttpClient
+
+    /**
      * 下载管理器单例，用于创建和管理下载任务（模块内部使用）
      */
-    private val download: Download by lazy { Download.instance }
+    private val downloadManager: Download by lazy { Download.instance }
 
     /**
      * DSL 方式配置网络库参数
@@ -133,6 +227,13 @@ class Net {
         PrintLog.logr("创建 ${type.name} 类型")
         return create(type)
     }
+
+    /**
+     * [builder] 的语义化别名。
+     *
+     * 当调用方需要根据枚举动态创建请求时，`request(type)` 比 `builder(type)` 更容易理解。
+     */
+    fun request(type: ModeType): ParamsBuilder = builder(type)
 
     /**
      * 创建 GET 请求构建器
@@ -171,10 +272,33 @@ class Net {
     fun postContent() = builder(ModeType.PostContent) as PostContent
 
     /**
+     * 创建断点续传上传请求构建器
+     * @return [PostResumeFile] 实例，支持设置续传偏移量
+     */
+    fun postResumeFile() = builder(ModeType.PostResume) as PostResumeFile
+
+    /**
      * 创建新的下载任务构建器
      * @return [TaskBuilder] 实例，用于配置并启动下载任务
      */
-    fun newDownload() = download.taskBuilder()
+    fun newDownload() = downloadManager.taskBuilder()
+
+    /**
+     * [newDownload] 的语义化别名。
+     *
+     * 新代码推荐使用 `download()` 表达“创建下载任务”。
+     */
+    fun download() = newDownload()
+
+    /**
+     * [postFile] 的语义化别名。
+     */
+    fun uploadFile() = postFile()
+
+    /**
+     * [postMultipart] 的语义化别名。
+     */
+    fun uploadMultipart() = postMultipart()
 
     // ==================== 下载相关 API ====================
 
@@ -184,7 +308,7 @@ class Net {
      * @param listener 下载进度回调
      */
     fun addGlobalDownloadListener(listener: IProgressCallback) {
-        download.setGlobalProgressListener(listener)
+        downloadManager.setGlobalProgressListener(listener)
     }
 
     /**
@@ -193,7 +317,7 @@ class Net {
      * @param listener 下载进度回调
      */
     fun removeGlobalDownloadListener(listener: IProgressCallback) {
-        download.removeGlobalProgressListener(listener)
+        downloadManager.removeGlobalProgressListener(listener)
     }
 
     /**
@@ -206,7 +330,7 @@ class Net {
      * @param task 下载任务
      */
     fun removeDownloadListeners(task: Task) {
-        download.removeAllProgressListener(task)
+        downloadManager.removeAllProgressListener(task)
     }
 
     /**
@@ -216,7 +340,7 @@ class Net {
      * @param listener 要移除的监听器
      */
     fun removeDownloadListener(task: Task, listener: IProgressCallback) {
-        download.removeProgressListener(task, listener)
+        downloadManager.removeProgressListener(task, listener)
     }
 
     /**
@@ -226,7 +350,7 @@ class Net {
      * @return true 表示正在下载或排队中
      */
     fun isDownloadQueued(url: String): Boolean {
-        return download.isQueued(url)
+        return downloadManager.isQueued(url)
     }
 
     /**
@@ -237,8 +361,13 @@ class Net {
      * @param url 下载地址，为 null 则无操作
      */
     fun cancelDownload(url: String?) {
-        download.cancel(url)
+        downloadManager.cancel(url)
     }
+
+    /**
+     * [cancelDownload] 的语义化别名，根据 URL 取消下载任务。
+     */
+    fun cancelDownloadByUrl(url: String?) = cancelDownload(url)
 
     /**
      * 根据 [Task] 取消下载任务
@@ -248,8 +377,13 @@ class Net {
      * @param task 下载任务，为 null 则无操作
      */
     fun cancelDownload(task: Task?) {
-        download.cancel(task)
+        downloadManager.cancel(task)
     }
+
+    /**
+     * [cancelDownload] 的语义化别名，根据任务对象取消下载任务。
+     */
+    fun cancelDownloadTask(task: Task?) = cancelDownload(task)
 
     // ==================== 普通请求取消 API ====================
 
@@ -264,6 +398,11 @@ class Net {
             it.cancel()
         }
     }
+
+    /**
+     * [cancelAll] 的语义化别名，取消所有普通网络请求。
+     */
+    fun cancelAllRequests() = cancelAll()
 
     /**
      * 取消所有匹配指定 tag 的请求（包括排队中和执行中的）
@@ -283,6 +422,11 @@ class Net {
             }
         }
     }
+
+    /**
+     * [cancelTag] 的语义化别名，按请求 tag 取消普通网络请求。
+     */
+    fun cancelRequest(tag: Any?) = cancelTag(tag)
 
     /**
      * [cancelTag] 的别名，取消所有匹配指定 tag 的请求

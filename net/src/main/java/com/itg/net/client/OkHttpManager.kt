@@ -43,7 +43,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         }
     }
 
-    var okHttpClient: OkHttpClient = ddNetConfig.getOkHttpClient() ?: run {
+    var okHttpClient: OkHttpClient = ddNetConfig.client() ?: run {
         createDefaultClient(ddNetConfig)
     }
 
@@ -85,8 +85,8 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         builder.connectTimeout(15, TimeUnit.SECONDS)
         builder.readTimeout(20, TimeUnit.SECONDS)
         builder.writeTimeout(35, TimeUnit.SECONDS)
-        ddNetConfig.getInterceptors().forEach { builder.addInterceptor(it) }
-        ddNetConfig.getCache()?.let {
+        ddNetConfig.interceptors().forEach { builder.addInterceptor(it) }
+        ddNetConfig.cache()?.let {
             builder.cache(it)
         }
         // 字段加解密拦截器（在日志拦截器之前注册，日志中显示密文）
@@ -122,7 +122,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
                 // No report target configured.
             }
         }
-        if (ddNetConfig.useHttpLog()) {
+        if (ddNetConfig.isHttpLogEnabled) {
             builder.addNetworkInterceptor(HttpLogger())
         }
 

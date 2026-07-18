@@ -232,7 +232,7 @@ lifecycleScope.launch {
 }
 ```
 
-`BusinessResult` 使用 `Net.instance.configure { businessResultParser(...) }` 和 `addBusinessResultInterceptor(...)` 中的全局配置，详见 [net 09. HTTP 错误、网络异常与业务码处理](../../net/doc/09-error-handling.md)。
+`BusinessResult` 使用 `Net.configure { businessEnvelopeParser(...) }` 和 `businessInterceptor(...)` 中的全局配置，详见 [net 09. HTTP 错误、网络异常与业务码处理](../../net/doc/09-error-handling.md)。
 
 #### Flow<TypedBusinessResult<T>>
 

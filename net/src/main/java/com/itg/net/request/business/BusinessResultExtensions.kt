@@ -10,9 +10,9 @@ fun NetResult.toBusinessResult(): BusinessResult {
     return when (this) {
         is NetResult.Success -> {
             val config = Net.instance.ddNetConfig
-            val envelope = config.businessResultParser.parse(body)
+            val envelope = config.businessEnvelopeParser.parse(body)
             BusinessResultChain(
-                interceptors = config.getBusinessResultInterceptors(),
+                interceptors = config.businessInterceptors(),
                 response = this,
                 envelope = envelope
             ).proceed()

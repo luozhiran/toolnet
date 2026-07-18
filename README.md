@@ -14,25 +14,25 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 
 | 使用场景 | 推荐做法 | 适用条件/支持范围 | 什么情况下使用 | 为什么可以用 |
 |---|---|---|---|---|
-| [快速开始与初始化](./net/doc/01-quick-start.md) | `Net.instance.configure { }` DSL 全局配置 | Android 5.0+，Kotlin/Java | 首次集成 Net 库，需要初始化 | `NetConfig` DSL 统一入口，一次配置全局生效 |
+| [快速开始与初始化](./net/doc/01-quick-start.md) | `Net.configure { application(...); baseUrl(...) }` DSL 全局配置 | Android 5.0+，Kotlin/Java | 首次集成 Net 库，需要初始化 | `NetConfig` DSL 统一入口，一次配置全局生效 |
 | [发送 GET/POST 请求](./net/doc/02-basic-requests.md) | `get()` / `postJson()` / `postForm()` / `postFile()` / `postMultipart()` / `postContent()` / `builder(ModeType.PostResume)` | GET、POST JSON、Form、文件上传、Multipart 混合、自定义 Content-Type、断点续传上传 | 发送各类 HTTP 请求，上传文件，提交表单 | Builder 模式链式调用，底层通过 OkHttp 执行 |
 | [Handler 回调接收结果](./net/doc/02-basic-requests.md) | `send(handler, what, errorWhat)` | 需要在特定 Looper 线程接收结果 | 不想手写 DdCallback，直接通过 Handler Message 在主线程处理成功/失败 | 内部构造 OkHttp Callback，收到响应后通过 Handler.sendMessage 分发 |
 | [构建 Call 不发送](./net/doc/02-basic-requests.md) | `buildCall()` | 需自行管理 OkHttp Call 生命周期 | 扩展模块（net-flow）或需手动 enqueue/execute 场景 | 复用 Builder 的参数组装逻辑，开放 OkHttp Call 给调用方 |
 | [监控业务附加字段](./net/doc/02-basic-requests.md) | `builder.monitorExtra("orderId=123")` | 全局监控已开启 | 需要在监控事件中携带业务标识（订单号、场景等） | 通过 OkHttp Typed Tag 透传到 MonitorEvent.extra |
 | [区分 HTTP 错误、网络异常与业务码](./net/doc/09-error-handling.md) | `sendResult()` / `sendBusinessResult()` / `sendTypedBusinessResult<T>()` | 适用于回调模式、Flow 模式和 Retrofit Flow | 需要把 4xx/5xx、断网超时、登录失效等业务码分开处理，或把 `data` 直接转成业务类 | HTTP 层先分流，再通过业务责任链统一处理 `code/status`，成功后可用 Gson 转成 `T` |
-| [自定义业务协议解析](./net/doc/09-error-handling.md) | `businessResultParser(customParser)` | 后端业务协议与默认 `code/message/data` 不同 | 后端用 `bizCode/bizMsg/payload` 等非标准字段 | 实现 `ApiEnvelopeParser` 接口替换默认解析器 |
-| [自定义业务数据转换器](./net/doc/09-error-handling.md) | `businessDataConverter(moshiConverter)` | 不想用 Gson，需要 Moshi/Jackson 等 | 替换 JSON 库或自定义反序列化逻辑 | 实现 `BusinessDataConverter` 接口替换默认 Gson 转换 |
+| [自定义业务协议解析](./net/doc/09-error-handling.md) | `businessEnvelopeParser(customParser)` | 后端业务协议与默认 `code/message/data` 不同 | 后端用 `bizCode/bizMsg/payload` 等非标准字段 | 实现 `ApiEnvelopeParser` 接口替换默认解析器 |
+| [自定义业务数据转换器](./net/doc/09-error-handling.md) | `businessConverter(moshiConverter)` | 不想用 Gson，需要 Moshi/Jackson 等 | 替换 JSON 库或自定义反序列化逻辑 | 实现 `BusinessDataConverter` 接口替换默认 Gson 转换 |
 | [取消请求与生命周期](./net/doc/03-cancel-requests.md) | `cancel(tag)` / `autoCancel(activity)` / 协程取消 / `cancelAll()` / `cancelFirstTag(tag)` | 回调模式和 Flow 模式均支持 | 页面销毁时避免无效回调，手动取消请求 | LifecycleEventObserver 或协程结构化并发 |
 | [文件下载](./net/doc/04-file-download.md) | `newDownload()` + `IProgressCallback` | 普通下载、断点续传需服务器支持 Range | 下载大文件、需要进度回调、支持断点续传 | OkHttp 下载 + 断点续传请求头 + 下载队列管理 |
 | [断点续传下载](./net/doc/04-file-download.md) | `newDownload().supportCheckpoint().start()` | 服务器需支持 Range 请求（返回 206） | 大文件下载中断后从断点继续 | 首次请求获取已接收偏移量，以 Range 头续传 |
 | [下载 + Activity 生命周期](./net/doc/04-file-download.md) | `newDownload().bindActivity(activity).start()` | FragmentActivity | Activity 销毁时自动取消下载并释放监听器 | LifecycleEventObserver 监听 ON_DESTROY |
 | [下载监控事件](./net/doc/04-file-download.md) | `newDownload().monitor().monitorExtra(...)` + 全局 `monitor { enabled(true) }` | 下载任务 | 需要监控下载速度、流读取错误、磁盘写入错误、MD5 校验失败 | BaseRequest 在流读写各阶段调用 reportDownloadEvent，eventStage="DOWNLOAD" |
-| [全局配置](./net/doc/05-global-config.md) | `NetConfig` DSL 配置 Base URL/全局参数/拦截器/缓存/最大并行下载数/业务结果处理器 | 所有配置集中管理 | 需要统一配置网络行为 | `Net.instance` 单例持有全局配置，所有请求继承 |
+| [全局配置](./net/doc/05-global-config.md) | `application` / `baseUrl` / `globalParam` / `interceptor` / `httpCache` / `businessInterceptor` | 所有配置集中管理 | 需要统一配置网络行为 | `Net` 单例持有全局配置，所有请求继承 |
 | [工具类](./net/doc/06-utilities.md) | `StrTools` / `TaskTools` / `CacheControlFactory` / `JsonTools` / `PrintLog` | 无特殊限制 | 需要 MD5、JSON 合并、进度计算、调试日志等辅助功能 | 内置工具类覆盖常见网络开发需求 |
-| [HTTP 日志](./net/doc/05-global-config.md) | `NetConfig.useHttpLog(true)` + `log(path)` | 开发/测试环境 | 调试时需要查看完整的 HTTP 请求/响应内容 | HttpLogger 作为 NetworkInterceptor 打印方法、URL、状态码、耗时、Headers、Body 预览 |
-| [HTTP 缓存](./net/doc/05-global-config.md) | `useCacheControl(Cache(dir, size))` + `addCacheControl(cacheControl)` | 需缓存 GET 响应以减少网络请求 | 设置 OkHttp Cache，通过 CacheControl 控制策略 |
-| [全局参数管理](./net/doc/05-global-config.md) | `setGlobalParams(key, value)` / `noUseGlobalParams()` / `removeGlobalParam(key)` / `clearGlobalParams()` | 所有请求自动附带 token、版本号等公共参数 | 全局参数在 URL 拼接或 Body 构建时自动注入，单请求可跳过 |
-| [自定义 OkHttpClient](./net/doc/05-global-config.md) | `NetConfig.okHttpClient(customClient)` | 需完全控制 OkHttp 配置（证书固定、代理、DNS） | 直接注入构建好的 OkHttpClient |
+| [HTTP 日志](./net/doc/05-global-config.md) | `enableHttpLog(true)` + `logPath(path)` | 开发/测试环境 | 调试时需要查看完整的 HTTP 请求/响应内容 | HttpLogger 作为 NetworkInterceptor 打印方法、URL、状态码、耗时、Headers、Body 预览 |
+| [HTTP 缓存](./net/doc/05-global-config.md) | `cache(Cache(dir, size))` + `addCacheControl(cacheControl)` | 需缓存 GET 响应以减少网络请求 | 设置 OkHttp Cache，通过 CacheControl 控制策略 |
+| [全局参数管理](./net/doc/05-global-config.md) | `globalParam(key, value)` / `globalParams(map)` / `removeGlobalParams(key)` / `clearGlobalParameters()` | 所有请求自动附带 token、版本号等公共参数 | 全局参数在 URL 拼接或 Body 构建时自动注入，单请求可跳过 |
+| [自定义 OkHttpClient](./net/doc/05-global-config.md) | `client(customClient)` | 需完全控制 OkHttp 配置（证书固定、代理、DNS） | 直接注入构建好的 OkHttpClient |
 | [字段加密 — 全局配置](./net/doc/07-field-encryption.md) | `encrypt { algorithm(...); secretKey(...); encryptField("password") }` | AES 对称加密，对 JSON/Form Body 中匹配字段透明加解密 | 保护密码、手机号、银行卡号等敏感字段 | EncryptInterceptor 在 OkHttp 拦截器层工作 |
 | [字段加密 — 加密模式](./net/doc/07-field-encryption.md) | `OPT_OUT`（全量+skipPath排除）/ `OPT_IN`（仅encryptPath生效） | 根据接口加密比例选择 | 大部分接口需要加密选 OPT_OUT，少数接口需要选 OPT_IN | 单请求可通过 `.encrypt()` / `.skipEncrypt()` 覆盖 |
 | [字段加密 — 规则匹配](./net/doc/07-field-encryption.md) | `encryptField(name)` / `encryptPattern(regex)` / `encryptPath(pathRegex, fields)` / `decryptField(name)` | 字段名精确匹配、正则匹配、路径+字段组合 | 不同接口加密不同字段 | 规则支持双向/仅请求/仅响应三种方向 |
@@ -81,9 +81,9 @@ class MyApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        Net.instance.configure {
-            app(this@MyApp)
-            url("https://api.example.com")
+        Net.configure {
+            application(this@MyApp)
+            baseUrl("https://api.example.com")
         }
     }
 }

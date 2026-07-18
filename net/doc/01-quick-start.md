@@ -45,35 +45,35 @@ class MyApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        Net.instance.configure {
+        Net.configure {
             // 【必选】传入 Application 实例
-            app(this@MyApp)
+            application(this@MyApp)
 
             // 【可选】全局 Base URL，后续可用 path() 拼接相对路径
-            url("https://api.example.com")
+            baseUrl("https://api.example.com")
 
             // 【可选】全局参数，所有请求自动附带
-            setGlobalParams("platform", "android")
-            setGlobalParams("version", BuildConfig.VERSION_NAME)
+            globalParam("platform", "android")
+            globalParam("version", BuildConfig.VERSION_NAME)
 
             // 【可选】最大并行下载数，默认 3，最小 1
-            maxDownloadNum(5)
+            maxConcurrentDownloads(5)
 
             // 【可选】HTTP 日志（请求/响应体写入文件）
-            useHttpLog(BuildConfig.DEBUG)
+            enableHttpLog(BuildConfig.DEBUG)
 
             // 【可选】自定义日志文件目录
-            log("/sdcard/myapp/logs")
+            logPath("/sdcard/myapp/logs")
 
             // 【可选】自定义 OkHttpClient
-            okHttpClient(myCustomOkHttpClient)
+            client(myCustomOkHttpClient)
 
             // 【可选】HTTP 缓存
-            useCacheControl(Cache(File(cacheDir, "http_cache"), 50 * 1024 * 1024))
+            cache(Cache(File(cacheDir, "http_cache"), 50 * 1024 * 1024))
 
             // 【可选】添加拦截器
-            addInterceptor(authInterceptor)
-            addInterceptor(loggingInterceptor)
+            interceptor(authInterceptor)
+            interceptor(loggingInterceptor)
 
             // 【可选】字段加密配置（详见 07-字段加密）
             encrypt {
@@ -101,9 +101,9 @@ class MyApp : Application() {
 class MyApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        Net.instance.configure {
-            app(this@MyApp)
-            url("https://api.example.com")
+        Net.configure {
+            application(this@MyApp)
+            baseUrl("https://api.example.com")
         }
     }
 }
@@ -122,8 +122,8 @@ Net.instance.get()
 - `configure {}` 采用 Kotlin DSL 风格，闭包内 `this` 为 `NetConfig` 实例
 - 所有功能统一通过 `Net.instance` 单例入口访问
 - 全局配置建议在 `Application.onCreate()` 中一次性完成，避免多次调用
-- `app()` 为必选配置，否则部分功能（如缓存、日志）无法正常工作
-- 全局参数（`setGlobalParams`）会自动附加到所有请求，单个请求可通过 `noUseGlobalParams()` 跳过
+- `application()` 为基础配置，否则部分功能（如缓存、日志）无法正常工作
+- 全局参数（`globalParam` / `globalParams`）会自动附加到所有请求，单个请求可通过 `noUseGlobalParams()` 跳过
 
 ## 模块关系
 

@@ -15,9 +15,9 @@
 ## 快速开始
 
 ```kotlin
-Net.instance.configure {
-    app(this@MyApp)
-    url("https://api.example.com")
+Net.configure {
+    application(this@MyApp)
+    baseUrl("https://api.example.com")
 }
 
 Net.instance.get()

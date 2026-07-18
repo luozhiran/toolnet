@@ -261,7 +261,7 @@ val phone = EncryptUtil.decrypt(
 
 ## 验证方式
 
-- 开启 `useHttpLog(true)`，在日志中确认请求体中的敏感字段已加密
+- 开启 `enableHttpLog(true)`，在日志中确认请求体中的敏感字段已加密
 - 使用 `EncryptUtil.encrypt` 和 `EncryptUtil.decrypt` 进行独立的加解密验证
 - 确认 `.skipEncrypt()` 的请求体中敏感字段为明文
 
