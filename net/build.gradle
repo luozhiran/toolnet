@@ -29,11 +29,14 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+    buildFeatures {
+        buildConfig true
+    }
     publishing {
         singleVariant('release')
     }
-    lintOptions {
-        disable 'GradleDependency'
+    lint {
+        disable += ['GradleDependency']
     }
 }
 

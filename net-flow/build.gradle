@@ -25,8 +25,8 @@ android {
     publishing {
         singleVariant('release')
     }
-    lintOptions {
-        disable 'GradleDependency'
+    lint {
+        disable += ['GradleDependency']
     }
 }
 

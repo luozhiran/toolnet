@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    namespace 'com.itg.ddlnet'
     compileSdk 31
 
     defaultConfig {
