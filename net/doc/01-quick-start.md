@@ -1,0 +1,147 @@
+# 1. 快速开始与初始化
+
+如何在 Android 项目中集成 Net 网络请求库并完成初始化配置。
+
+## 适用条件
+
+- Android 项目使用 Gradle 构建
+- 最低 SDK 版本 ≥ 21
+- 使用 Kotlin 或 Java
+
+## 推荐做法
+
+### 依赖引入
+
+在 `settings.gradle` 中确认模块已包含：
+
+```groovy
+include ':net'
+include ':net-flow'      // 可选，需要 Kotlin Flow 时引入
+include ':net-retrofit'   // 可选，需要 Retrofit 声明式 API 时引入
+```
+
+在 app 模块 `build.gradle` 中添加依赖：
+
+```groovy
+dependencies {
+    // 核心库（必选）
+    implementation project(':net')
+
+    // Kotlin Flow 扩展（可选）
+    implementation project(':net-flow')
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // Retrofit 声明式 API（可选）
+    implementation project(':net-retrofit')
+}
+```
+
+### 初始化配置
+
+在 `Application.onCreate()` 中进行一次性全局配置：
+
+```kotlin
+class MyApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+
+        Net.instance.configure {
+            // 【必选】传入 Application 实例
+            app(this@MyApp)
+
+            // 【可选】全局 Base URL，后续可用 path() 拼接相对路径
+            url("https://api.example.com")
+
+            // 【可选】全局参数，所有请求自动附带
+            setGlobalParams("platform", "android")
+            setGlobalParams("version", BuildConfig.VERSION_NAME)
+
+            // 【可选】最大并行下载数，默认 3，最小 1
+            maxDownloadNum(5)
+
+            // 【可选】HTTP 日志（请求/响应体写入文件）
+            useHttpLog(BuildConfig.DEBUG)
+
+            // 【可选】自定义日志文件目录
+            log("/sdcard/myapp/logs")
+
+            // 【可选】自定义 OkHttpClient
+            okHttpClient(myCustomOkHttpClient)
+
+            // 【可选】HTTP 缓存
+            useCacheControl(Cache(File(cacheDir, "http_cache"), 50 * 1024 * 1024))
+
+            // 【可选】添加拦截器
+            addInterceptor(authInterceptor)
+            addInterceptor(loggingInterceptor)
+
+            // 【可选】字段加密配置（详见 07-字段加密）
+            encrypt {
+                algorithm(Algorithm.AES_GCM_NO_PADDING)
+                secretKey("my-32-byte-secret-key!!123456")
+                iv("1234567890abcdef")
+                encryptField("password")
+            }
+
+            // 【可选】网络监控配置（详见 08-网络监控）
+            monitor {
+                enabled(true)
+                reportUrl("https://monitor.example.com/api/v1/report")
+                reportMode(ReportMode.FAILURE_ONLY)
+            }
+        }
+    }
+}
+```
+
+## 可复制 Demo
+
+```kotlin
+// 最小初始化
+class MyApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Net.instance.configure {
+            app(this@MyApp)
+            url("https://api.example.com")
+        }
+    }
+}
+
+// 发起第一个请求验证配置正确
+Net.instance.get()
+    .url("https://api.example.com/ping")
+    .send(object : DdCallback {
+        override fun onFailure(er: String?) { Log.e("TAG", "初始化失败: $er") }
+        override fun onResponse(result: String?, code: Int) { Log.d("TAG", "初始化成功") }
+    })
+```
+
+## 关键说明
+
+- `configure {}` 采用 Kotlin DSL 风格，闭包内 `this` 为 `NetConfig` 实例
+- 所有功能统一通过 `Net.instance` 单例入口访问
+- 全局配置建议在 `Application.onCreate()` 中一次性完成，避免多次调用
+- `app()` 为必选配置，否则部分功能（如缓存、日志）无法正常工作
+- 全局参数（`setGlobalParams`）会自动附加到所有请求，单个请求可通过 `noUseGlobalParams()` 跳过
+
+## 模块关系
+
+```
+app
+└── implementation project(':net-retrofit')
+    ├── api project(':net-flow')
+    │   ├── api project(':net')
+    │   │   ├── OkHttp 4.9.2
+    │   │   └── AndroidX appcompat / core-ktx
+    │   └── kotlinx-coroutines 1.7.3 + Gson
+    └── Retrofit 2.9.0 + converter-gson + converter-scalars
+```
+
+## 验证方式
+
+- 编译通过：`./gradlew :app:assembleDebug`
+- 运行时确认 `Net.instance.configure {}` 无异常
+- 发一个测试请求确认能收到回调
+
+[返回 README](../../README.md)
