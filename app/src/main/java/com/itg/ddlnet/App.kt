@@ -7,6 +7,8 @@ import com.itg.net.logging.HttpLogger
 import com.itg.net.monitor.IMonitorReportHandler
 import com.itg.net.monitor.MonitorEvent
 import com.itg.net.monitor.ReportMode
+import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.BusinessResultInterceptor
 import com.itg.net.retrofit.retrofit
 import okhttp3.OkHttpClient
 import retrofit2.converter.gson.GsonConverterFactory
@@ -25,6 +27,20 @@ class App:Application() {
             .maxDownloadNum(1)
             .useHttpLog(true)
             .url("http://47.76.59.147:8000/")
+            .addBusinessResultInterceptor(object : BusinessResultInterceptor {
+                override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
+                    val code = chain.envelope.code
+                    if (code == "TOKEN_EXPIRED" || code == "401001") {
+                        Log.w("BusinessResult", "login expired, navigate to login here")
+                        return BusinessResult.Consumed(
+                            reason = "login expired",
+                            httpCode = chain.response.code,
+                            rawBody = chain.response.body
+                        )
+                    }
+                    return chain.proceed()
+                }
+            })
             .monitor {
                 enabled = false
                 reportMode= ReportMode.FAILURE_ONLY

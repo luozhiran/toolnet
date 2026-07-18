@@ -1,10 +1,13 @@
 package com.itg.net.flow
 
+import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.toBusinessResult
 import com.itg.net.request.result.NetResult
 import com.itg.net.request.base.ParamsBuilder
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Response
@@ -118,6 +121,10 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
     awaitClose {
         call.cancel()
     }
+}
+
+fun <T : ParamsBuilder> T.flowBusinessResult(): Flow<BusinessResult> {
+    return flowResult().map { result -> result.toBusinessResult() }
 }
 
 /**

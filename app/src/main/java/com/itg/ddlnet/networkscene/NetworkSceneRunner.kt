@@ -5,13 +5,13 @@ import androidx.lifecycle.LifecycleCoroutineScope
 import com.itg.net.Net
 import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.data.Task
+import com.itg.net.request.business.BusinessResult
+import com.itg.net.request.business.BusinessResultCallback
+import com.itg.net.request.business.sendBusinessResult
 import com.itg.net.flow.DownloadPhase
 import com.itg.net.flow.flow
-import com.itg.net.flow.flowResult
+import com.itg.net.flow.flowBusinessResult
 import com.itg.net.flow.flowString
-import com.itg.net.request.result.NetResult
-import com.itg.net.request.result.NetResultCallback
-import com.itg.net.request.result.sendResult
 import com.itg.net.retrofit.retrofit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -63,17 +63,25 @@ class NetworkSceneRunner(
             .addParam("scene", "net-get")
             .noUseGlobalParams()
             .autoCancel(activity)
-            .sendResult(object : NetResultCallback {
-                override fun onSuccess(result: NetResult.Success) {
-                    logger.append("net GET: success code=${result.code} body=${result.body.shortBody()}")
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(result: BusinessResult.Success) {
+                    logger.append("net GET: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
                 }
 
-                override fun onHttpError(error: NetResult.HttpError) {
-                    logger.append("net GET: http error code=${error.code} body=${error.body.shortBody()}")
+                override fun onBusinessError(error: BusinessResult.BusinessError) {
+                    logger.append("net GET: business error code=${error.code.orEmpty()} message=${error.message.orEmpty()}")
                 }
 
-                override fun onNetworkError(error: NetResult.NetworkError) {
-                    logger.append("net GET: network error ${error.message.orEmpty()}")
+                override fun onHttpError(error: BusinessResult.HttpError) {
+                    logger.append("net GET: http error code=${error.httpCode} body=${error.rawBody.shortBody()}")
+                }
+
+                override fun onNetworkError(error: BusinessResult.NetworkError) {
+                    logger.append("net GET: network error ${error.error.message.orEmpty()}")
+                }
+
+                override fun onConsumed(result: BusinessResult.Consumed) {
+                    logger.append("net GET: consumed ${result.reason.orEmpty()}")
                 }
             })
     }
@@ -87,17 +95,25 @@ class NetworkSceneRunner(
             .addParam("time", System.currentTimeMillis())
             .noUseGlobalParams()
             .autoCancel(activity)
-            .sendResult(object : NetResultCallback {
-                override fun onSuccess(result: NetResult.Success) {
-                    logger.append("net POST JSON: success code=${result.code} body=${result.body.shortBody()}")
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(result: BusinessResult.Success) {
+                    logger.append("net POST JSON: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
                 }
 
-                override fun onHttpError(error: NetResult.HttpError) {
-                    logger.append("net POST JSON: http error code=${error.code} body=${error.body.shortBody()}")
+                override fun onBusinessError(error: BusinessResult.BusinessError) {
+                    logger.append("net POST JSON: business error code=${error.code.orEmpty()} message=${error.message.orEmpty()}")
                 }
 
-                override fun onNetworkError(error: NetResult.NetworkError) {
-                    logger.append("net POST JSON: network error ${error.message.orEmpty()}")
+                override fun onHttpError(error: BusinessResult.HttpError) {
+                    logger.append("net POST JSON: http error code=${error.httpCode} body=${error.rawBody.shortBody()}")
+                }
+
+                override fun onNetworkError(error: BusinessResult.NetworkError) {
+                    logger.append("net POST JSON: network error ${error.error.message.orEmpty()}")
+                }
+
+                override fun onConsumed(result: BusinessResult.Consumed) {
+                    logger.append("net POST JSON: consumed ${result.reason.orEmpty()}")
                 }
             })
     }
@@ -111,13 +127,15 @@ class NetworkSceneRunner(
                 .addParam("scene", "net-flow-get")
                 .addParam("client", "android")
                 .noUseGlobalParams()
-                .flowResult()
+                .flowBusinessResult()
                 .catch { e -> logger.append("net-flow GET: failed ${e.message.orEmpty()}") }
                 .collect { result ->
                     when (result) {
-                        is NetResult.Success -> logger.append("net-flow GET: success code=${result.code} body=${result.body.shortBody()}")
-                        is NetResult.HttpError -> logger.append("net-flow GET: http error code=${result.code} body=${result.body.shortBody()}")
-                        is NetResult.NetworkError -> logger.append("net-flow GET: network error ${result.message.orEmpty()}")
+                        is BusinessResult.Success -> logger.append("net-flow GET: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
+                        is BusinessResult.BusinessError -> logger.append("net-flow GET: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
+                        is BusinessResult.HttpError -> logger.append("net-flow GET: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
+                        is BusinessResult.NetworkError -> logger.append("net-flow GET: network error ${result.error.message.orEmpty()}")
+                        is BusinessResult.Consumed -> logger.append("net-flow GET: consumed ${result.reason.orEmpty()}")
                     }
                 }
         }

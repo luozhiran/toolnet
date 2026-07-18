@@ -6,6 +6,7 @@
 
 - `flowString()` — 将任意请求转为 `Flow<String>`，非 2xx 会进入 `catch`
 - `flowResult()` — 将请求转为 `Flow<NetResult>`，明确区分成功、HTTP 错误和网络异常
+- `flowBusinessResult()` — 将请求转为 `Flow<BusinessResult>`，支持业务码责任链
 - `flowResponse(converter)` — 含反序列化的 `Flow<NetResponse<T>>`
 - `TaskBuilder.flow()` — 下载进度 `Flow<DownloadProgress>`
 - `NetConverter<T>` 接口 + `GsonNetConverter<T>` 实现

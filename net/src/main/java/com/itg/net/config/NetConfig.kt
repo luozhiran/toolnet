@@ -7,6 +7,9 @@ import android.util.Log
 import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
 import com.itg.net.encrypt.EncryptConfig
 import com.itg.net.monitor.MonitorConfig
+import com.itg.net.request.business.ApiEnvelopeParser
+import com.itg.net.request.business.BusinessResultInterceptor
+import com.itg.net.request.business.DefaultApiEnvelopeParser
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -42,6 +45,8 @@ class NetConfig {
 
     private val interceptors: MutableList<Interceptor> = CopyOnWriteArrayList()
 
+    private val businessResultInterceptors: MutableList<BusinessResultInterceptor> = CopyOnWriteArrayList()
+
     @Volatile
     private var okHttpClient: OkHttpClient? = null
 
@@ -63,6 +68,10 @@ class NetConfig {
      */
     @Volatile
     var monitorConfig: MonitorConfig? = null
+        private set
+
+    @Volatile
+    var businessResultParser: ApiEnvelopeParser = DefaultApiEnvelopeParser()
         private set
 
     fun app(application: Application): NetConfig {
@@ -98,6 +107,25 @@ class NetConfig {
 
     fun getInterceptors(): List<Interceptor> {
         return interceptors.toList()
+    }
+
+    fun businessResultParser(parser: ApiEnvelopeParser): NetConfig {
+        businessResultParser = parser
+        return this
+    }
+
+    fun addBusinessResultInterceptor(interceptor: BusinessResultInterceptor): NetConfig {
+        businessResultInterceptors.add(interceptor)
+        return this
+    }
+
+    fun clearBusinessResultInterceptors(): NetConfig {
+        businessResultInterceptors.clear()
+        return this
+    }
+
+    fun getBusinessResultInterceptors(): List<BusinessResultInterceptor> {
+        return businessResultInterceptors.toList()
     }
 
     val uiHandler: Handler

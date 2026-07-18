@@ -66,6 +66,32 @@ lifecycleScope.launch {
 
 更完整的错误处理策略见 [net 09. HTTP 错误与网络异常处理](../../net/doc/09-error-handling.md)。
 
+### flowBusinessResult() —— 支持业务码责任链
+
+如果 HTTP 2xx 响应体里还有业务码，例如 `code=401001` 表示登录失效，使用 `flowBusinessResult()`：
+
+```kotlin
+import com.itg.net.flow.flowBusinessResult
+import com.itg.net.request.business.BusinessResult
+
+lifecycleScope.launch {
+    Net.instance.get()
+        .url("https://api.example.com/user/info")
+        .flowBusinessResult()
+        .collect { result ->
+            when (result) {
+                is BusinessResult.Success -> updateUI(result.dataRaw)
+                is BusinessResult.BusinessError -> showError(result.message)
+                is BusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
+                is BusinessResult.NetworkError -> showError("网络不可用")
+                is BusinessResult.Consumed -> Unit
+            }
+        }
+}
+```
+
+业务码解析器和责任链在 `Net.instance.configure { }` 中配置，详见 [net 09. HTTP 错误与网络异常处理](../../net/doc/09-error-handling.md)。
+
 ### 与 DdCallback 对比
 
 ```kotlin
