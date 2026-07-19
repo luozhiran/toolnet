@@ -89,7 +89,10 @@ abstract class PostFileBuilder : ParamsBuilder() {
         return UrlTools.getSpliceUrl(totalParamsMap, url ?: "")
     }
 
-    override fun autoCancel(activity: Activity?): PostFileBuilder = this
+    override fun autoCancel(activity: Activity?): PostFileBuilder {
+        super.autoCancel(activity)
+        return this
+    }
 
     override fun addCacheControl(cacheControl: CacheControl): PostFileBuilder {
         this.cacheControl = cacheControl

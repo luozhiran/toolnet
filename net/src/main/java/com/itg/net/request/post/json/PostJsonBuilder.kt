@@ -151,6 +151,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     }
 
     override fun autoCancel(activity: Activity?): PostJsonBuilder {
+        super.autoCancel(activity)
         return this
     }
     override fun addCacheControl(cacheControl: CacheControl): PostJsonBuilder {

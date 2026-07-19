@@ -350,23 +350,18 @@ class TaskBuilder {
         }
 
         // 校验请求地址是否正在下载中
-        if (taskState.exitRunningUrl(task.url)) {
-            removeActivityLifecycleObserver()
-            return task
-        }
         // 校验请求地址是否已经在等待队列中
-        if (taskState.exitWaitUrl(task.url)) {
-            removeActivityLifecycleObserver()
-            return task
-        }
         holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
         task.progressCallback = progressCallback
         // 根据是否开启断点续传选择下载方式
-        if (taskState.isBreakpointContinuation(task)) {
+        val accepted = if (taskState.isBreakpointContinuation(task)) {
             Download.instance.dispatchTool.appendDownload(task)
-            return task
+        } else {
+            Download.instance.dispatchTool.download(task)
         }
-        Download.instance.dispatchTool.download(task)
+        if (!accepted) {
+            removeActivityLifecycleObserver()
+        }
         return task
     }
 

@@ -60,15 +60,16 @@ abstract class GetGenerator: ParamsBuilder(), SentBuilder, GetBuilder {
         val totalParamsMap = mutableMapOf<String,Any?>()
         if (!this.noGlobalParams) {
             totalParamsMap.putAll(Net.instance.ddNetConfig.globalParams)
-            urlParamsMap?.let {
-                totalParamsMap.putAll(it)
-            }
+        }
+        urlParamsMap?.let {
+            totalParamsMap.putAll(it)
         }
         return UrlTools.getSpliceUrl(totalParamsMap,this.url?:"")
     }
 
 
     override fun autoCancel(activity: Activity?): GetGenerator {
+        super.autoCancel(activity)
         return this
     }
 

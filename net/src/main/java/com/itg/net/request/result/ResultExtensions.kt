@@ -17,8 +17,7 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
         return
     }
 
-    PrincipalLife.observeActivityLife(call, autoCancelActivity)
-    autoCancelActivity = null
+    PrincipalLife.observeActivityLife(call, consumeAutoCancelActivity())
     PrintLog.logr("start request ${call.request().url}")
 
     call.enqueue(object : Callback {

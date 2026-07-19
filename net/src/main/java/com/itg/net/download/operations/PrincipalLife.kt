@@ -15,13 +15,13 @@ import java.util.WeakHashMap
 
 object PrincipalLife {
     private val callWeakHash by lazy { WeakHashMap<Activity, MutableList<Call>>() }
+    private val observerWeakHash by lazy { WeakHashMap<Activity, LifecycleEventObserver>() }
     private val lockCall = LockData()
-
 
     fun observeActivityLife(call: Call?, activity: Activity?) {
         if (call == null || activity == null) return
         val componentActivity = activity as? ComponentActivity ?: return
-        PrintLog.logr("绑定 Activity ${call.request().url}")
+
         var needObserve = false
         synchronized(lockCall) {
             val taskList = callWeakHash.getOrPut(activity) {
@@ -31,55 +31,69 @@ object PrincipalLife {
             if (!taskList.contains(call)) {
                 taskList.add(call)
             }
+            needObserve = needObserve && !observerWeakHash.containsKey(activity)
         }
-        if (needObserve) {
-            ThreadTool.runOnUIThread {
-                componentActivity.lifecycle.addObserver(object : LifecycleEventObserver {
-                    override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-                        if (event == Lifecycle.Event.ON_DESTROY) {
-                            PrintLog.logr("监听销毁【Lifecycle.Event.ON_DESTROY】 Activity 开始释放资源")
-                            val ownerActivity = source as? Activity ?: return
-                            ThreadTool.runOnExecutor {
-                                PrintLog.logr("${PrintLog.SUB_CONTENT_START}获取Activity实例捆绑Call对象实例${PrintLog.SUB_CONTENT_END}")
-                                val calls = synchronized(lockCall) {
-                                    callWeakHash.remove(ownerActivity)?.toList().orEmpty()
-                                }
-                                if (calls.isNullOrEmpty()) {
-                                    PrintLog.logr("${PrintLog.SUB_CONTENT_START}Activity实例未绑定Call实例${PrintLog.SUB_CONTENT_END}")
-                                } else {
-                                    PrintLog.logr("${PrintLog.SUB_CONTENT_START}Activity实例绑定 ${calls.size} 个call实例对象${PrintLog.SUB_CONTENT_END}")
-                                }
-                                calls.forEach {
-                                    PrintLog.logr("${PrintLog.SUB_CONTENT_START}activity销毁，取消Activity绑定的所有Call请求${PrintLog.SUB_CONTENT_END}")
-                                    it.cancel()
-                                }
-                                ThreadTool.runOnUIThread {
-                                    source.lifecycle.removeObserver(this)
-                                    PrintLog.logr("activity销毁资源释放完成")
-                                }
-                            }
+
+        if (!needObserve) return
+
+        ThreadTool.runOnUIThread {
+            val shouldAddObserver = synchronized(lockCall) {
+                callWeakHash.containsKey(activity) && !observerWeakHash.containsKey(activity)
+            }
+            if (!shouldAddObserver) return@runOnUIThread
+
+            val observer = object : LifecycleEventObserver {
+                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                    if (event != Lifecycle.Event.ON_DESTROY) return
+
+                    val ownerActivity = source as? Activity ?: return
+                    ThreadTool.runOnExecutor {
+                        val calls = synchronized(lockCall) {
+                            observerWeakHash.remove(ownerActivity)
+                            callWeakHash.remove(ownerActivity)?.toList().orEmpty()
                         }
+                        calls.forEach { it.cancel() }
+                        ThreadTool.runOnUIThread {
+                            source.lifecycle.removeObserver(this)
+                        }
+                        PrintLog.logr("activity destroyed, canceled ${calls.size} lifecycle-bound calls")
                     }
-                })
+                }
             }
 
+            synchronized(lockCall) {
+                observerWeakHash[activity] = observer
+            }
+            componentActivity.lifecycle.addObserver(observer)
         }
     }
 
     fun removeCall(call: Call?) {
         if (call == null) return
-        PrintLog.logr("请求完成 手动释放 Activity捆绑的 Call实例 call ${call.request().url}")
+        val observersToRemove = mutableListOf<Pair<Activity, LifecycleEventObserver>>()
+
         synchronized(lockCall) {
             val iterator = callWeakHash.iterator()
             while (iterator.hasNext()) {
-                val entryValue = iterator.next().value
-                entryValue.remove(call)
-                if (entryValue.isEmpty()) {
+                val entry = iterator.next()
+                val calls = entry.value
+                calls.remove(call)
+                if (calls.isEmpty()) {
+                    observerWeakHash.remove(entry.key)?.let { observer ->
+                        observersToRemove.add(entry.key to observer)
+                    }
                     iterator.remove()
                 }
             }
         }
-        PrintLog.logr("请求完成 手动释放完成 ${call.request().url}")
+
+        if (observersToRemove.isNotEmpty()) {
+            ThreadTool.runOnUIThread {
+                observersToRemove.forEach { (activity, observer) ->
+                    (activity as? ComponentActivity)?.lifecycle?.removeObserver(observer)
+                }
+            }
+        }
     }
 
     fun debugPrint() {
@@ -88,6 +102,4 @@ object PrincipalLife {
         }
         Log.i(DOWNLOAD_DEBUG_TAG, "lifecycle-bound request count=$size")
     }
-
-
 }

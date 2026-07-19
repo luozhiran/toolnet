@@ -8,11 +8,49 @@ import com.itg.net.download.data.Task
 import com.itg.net.util.PrintLog
 
 class TaskState {
+    enum class ScheduleResult {
+        RUNNING,
+        WAITING,
+        REJECTED
+    }
 
     private val waitingTasks: MutableList<Task> by lazy { mutableListOf() }
     private val waitingTaskUrls: MutableSet<String> by lazy { mutableSetOf() }
     private val runningTasks: MutableList<Task> by lazy { mutableListOf() }
     private val runningTaskUrls: MutableSet<String> by lazy { mutableSetOf() }
+
+    @Synchronized
+    fun scheduleTask(task: Task): ScheduleResult {
+        val url = task.url?.takeIf { it.isNotBlank() }
+        if (url == null || waitingTaskUrls.contains(url) || runningTaskUrls.contains(url)) {
+            HoldActivityCallbackMap.removeProgressCallback(task)
+            return ScheduleResult.REJECTED
+        }
+        return if (runningTasks.size < maxDownloadSize()) {
+            runningTasks.add(task)
+            runningTaskUrls.add(url)
+            ScheduleResult.RUNNING
+        } else {
+            waitingTasks.add(task)
+            waitingTaskUrls.add(url)
+            ScheduleResult.WAITING
+        }
+    }
+
+    @Synchronized
+    fun pollNextTaskToRun(): Task? {
+        if (!runningQueueCanAcceptTask() || waitingTasks.isEmpty()) return null
+        val task = waitingTasks.removeAt(0)
+        val url = task.url?.takeIf { it.isNotBlank() }
+        if (url == null) {
+            HoldActivityCallbackMap.removeProgressCallback(task)
+            return null
+        }
+        waitingTaskUrls.remove(url)
+        runningTasks.add(task)
+        runningTaskUrls.add(url)
+        return task
+    }
 
     @Synchronized
     fun addWaitTask(task: Task): Boolean {

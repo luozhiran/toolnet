@@ -88,6 +88,7 @@ abstract class PostMulGenerator : PostMulBuilderImpl() {
     }
 
     override fun autoCancel(activity: Activity?): PostMulGenerator {
+        super.autoCancel(activity)
         return this
     }
 

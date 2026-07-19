@@ -182,4 +182,10 @@ abstract class ParamsBuilder : Builder, SentBuilder {
         return this
     }
 
+    internal fun consumeAutoCancelActivity(): Activity? {
+        val activity = autoCancelActivity
+        autoCancelActivity = null
+        return activity
+    }
+
 }

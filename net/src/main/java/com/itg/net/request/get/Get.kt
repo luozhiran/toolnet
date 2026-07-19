@@ -13,7 +13,6 @@ class Get : GetGenerator() {
 
     override fun autoCancel(activity: Activity?): Get {
         super.autoCancel(activity)
-        sendTool.autoCancel(activity)
         return this
     }
 
@@ -26,7 +25,7 @@ class Get : GetGenerator() {
             null,
             cacheControl, encryptFlag, monitorFlag, monitorExtra
         ) { builder -> builder.get() }
-        sendTool.send(callback, call)
+        sendTool.send(callback, call, consumeAutoCancelActivity())
     }
 
     override fun send(handler: Handler?, what: Int, errorWhat: Int) {
@@ -37,7 +36,7 @@ class Get : GetGenerator() {
             null,
             cacheControl, encryptFlag, monitorFlag, monitorExtra
         ) { builder -> builder.get() }
-        sendTool.send(handler,what,errorWhat, call)
+        sendTool.send(handler,what,errorWhat, call, consumeAutoCancelActivity())
 
     }
 
@@ -49,7 +48,7 @@ class Get : GetGenerator() {
             null,
             cacheControl, encryptFlag, monitorFlag, monitorExtra
         ) { builder -> builder.get() }
-        sendTool.send(response, call)
+        sendTool.send(response, call, consumeAutoCancelActivity())
     }
 
     override fun buildCall(): Call? {

@@ -10,6 +10,7 @@ abstract class PostJsonGenerator: PostJsonBuilder() {
 
 
     override fun autoCancel(activity: Activity?): PostJsonGenerator {
+        super.autoCancel(activity)
         return this
     }
 

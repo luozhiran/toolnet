@@ -97,6 +97,7 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     }
 
     override fun autoCancel(activity: Activity?): PostFormBuilder {
+        super.autoCancel(activity)
         return this
     }
 

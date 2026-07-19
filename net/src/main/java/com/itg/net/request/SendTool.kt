@@ -14,13 +14,6 @@ import okhttp3.*
 import java.io.IOException
 
 class SendTool {
-    private var activity:Activity? = null
-
-    fun autoCancel(activity: Activity?): SendTool {
-        this.activity = activity
-        return this
-    }
-
     fun combineParamsAndRCall(
         headers: Headers?,
         url: String?,
@@ -71,13 +64,12 @@ class SendTool {
     }
 
 
-    fun send(callback: DdCallback?, call: Call?) {
+    fun send(callback: DdCallback?, call: Call?, autoCancelActivity: Activity?) {
         if (call == null) {
             callback?.onFailure("url is error,please check url")
             return
         }
-        PrincipalLife.observeActivityLife(call, this.activity)
-        this.activity = null
+        PrincipalLife.observeActivityLife(call, autoCancelActivity)
         PrintLog.logr("开始发起请求 ${call.request().url}")
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -105,7 +97,7 @@ class SendTool {
         })
     }
 
-    fun send(handler: Handler?, what: Int, errorWhat: Int, call: Call?) {
+    fun send(handler: Handler?, what: Int, errorWhat: Int, call: Call?, autoCancelActivity: Activity?) {
         if (call == null) {
             val msg = Message.obtain()
             msg.what = errorWhat
@@ -113,8 +105,7 @@ class SendTool {
             handler?.sendMessage(msg)
             return
         }
-        PrincipalLife.observeActivityLife(call, this.activity)
-        this.activity = null
+        PrincipalLife.observeActivityLife(call, autoCancelActivity)
         PrintLog.logr("开始发起请求 ${call.request().url}")
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -148,11 +139,10 @@ class SendTool {
         })
     }
 
-    fun send(callback: Callback?, call: Call?) {
+    fun send(callback: Callback?, call: Call?, autoCancelActivity: Activity?) {
         call ?: return
         callback ?: return
-        PrincipalLife.observeActivityLife(call, this.activity)
-        this.activity = null
+        PrincipalLife.observeActivityLife(call, autoCancelActivity)
         PrintLog.logr("开始发起请求 ${call.request().url}")
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

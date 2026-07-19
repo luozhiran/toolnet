@@ -31,32 +31,30 @@ class DispatchTool : Dispatch {
         handler = Handler(thread.looper) { execNextDownloadRequest(it) }
     }
 
-    override fun download(task: Task) {
-        if (taskStateInstance.runningQueueCanAcceptTask()) {
-            synchronized(lock) {
-                if (taskStateInstance.runningQueueCanAcceptTask()) {
-                    immediatelyDownload(task)
-                    return
-                }
+    override fun download(task: Task): Boolean {
+        return when (taskStateInstance.scheduleTask(task)) {
+            TaskState.ScheduleResult.RUNNING -> {
+                logisticsDownload(task)
+                true
             }
+            TaskState.ScheduleResult.WAITING -> true
+            TaskState.ScheduleResult.REJECTED -> false
         }
-        pendingDownload(task)
     }
 
     /**
      * 断点续传下载
      * @param task DTask
      */
-    override fun appendDownload(task: Task) {
-        if (taskStateInstance.runningQueueCanAcceptTask()) {
-            synchronized(lock) {
-                if (taskStateInstance.runningQueueCanAcceptTask()) {
-                    immediatelyBreakpointContinuationRequest(task)
-                    return
-                }
+    override fun appendDownload(task: Task): Boolean {
+        return when (taskStateInstance.scheduleTask(task)) {
+            TaskState.ScheduleResult.RUNNING -> {
+                logisticsBreakpointContinuation(task)
+                true
             }
+            TaskState.ScheduleResult.WAITING -> true
+            TaskState.ScheduleResult.REJECTED -> false
         }
-        pendingDownload(task)
     }
 
     fun continueDownload() {
@@ -71,14 +69,11 @@ class DispatchTool : Dispatch {
      * 从任务队列中获取下载任务
      */
     private fun downloadNextTask() {
-        synchronized(lock) {
-            if (!taskStateInstance.runningQueueCanAcceptTask()) return
-            val task = taskStateInstance.getTaskFromWaitQueue(null) ?: return
-            if (taskStateInstance.isBreakpointContinuation(task)) {
-                immediatelyBreakpointContinuationRequest(task)
-            } else {
-                immediatelyDownload(task)
-            }
+        val task = taskStateInstance.pollNextTaskToRun() ?: return
+        if (taskStateInstance.isBreakpointContinuation(task)) {
+            logisticsBreakpointContinuation(task)
+        } else {
+            logisticsDownload(task)
         }
     }
 

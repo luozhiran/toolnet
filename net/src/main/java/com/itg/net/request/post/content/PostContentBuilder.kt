@@ -67,7 +67,10 @@ abstract class PostContentBuilder : ParamsBuilder() {
         return UrlTools.getSpliceUrl(totalParamsMap.takeIf { it.isNotEmpty() }, this.url ?: "")
     }
 
-    override fun autoCancel(activity: Activity?): PostContentBuilder = this
+    override fun autoCancel(activity: Activity?): PostContentBuilder {
+        super.autoCancel(activity)
+        return this
+    }
 
     override fun addCacheControl(cacheControl: CacheControl): PostContentBuilder {
         this.cacheControl = cacheControl

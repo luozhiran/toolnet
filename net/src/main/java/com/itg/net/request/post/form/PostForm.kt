@@ -11,18 +11,17 @@ class PostForm: PostFormBuilder() {
 
     override fun autoCancel(activity: Activity?): PostForm {
         super.autoCancel(activity)
-        sendTool.autoCancel(activity)
         return this
     }
 
     override fun send(callback: DdCallback?) {
         val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl, encryptFlag, monitorFlag, monitorExtra)
-        sendTool.send(callback, call)
+        sendTool.send(callback, call, consumeAutoCancelActivity())
     }
 
     override fun send(handler: Handler?, what: Int, errorWhat: Int) {
         val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(), cacheControl, encryptFlag, monitorFlag, monitorExtra)
-        sendTool.send(handler,what,errorWhat,call)
+        sendTool.send(handler,what,errorWhat,call, consumeAutoCancelActivity())
     }
 
     override fun buildCall(): Call? {

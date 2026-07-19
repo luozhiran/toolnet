@@ -7,6 +7,7 @@ import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
@@ -119,7 +120,11 @@ class MonitorInterceptor(
 
         if (executor != null) {
             // Handler 未声明为异步（如同步文件 I/O），使用独立线程隔离
-            executor!!.submit(dispatcher)
+            try {
+                executor!!.submit(dispatcher)
+            } catch (e: RejectedExecutionException) {
+                Log.w(TAG, "Monitor event dispatch rejected", e)
+            }
         } else {
             // Handler 已声明为异步（如 DefaultMonitorReportHandler / Firebase SDK），
             // 内联调用避免不必要的线程切换开销

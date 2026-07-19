@@ -431,7 +431,7 @@ class EncryptInterceptor(
         val limit = config.maxBodyBytes
         if (limit <= 0L) return false
         val length = body.contentLength()
-        return length > limit
+        return length < 0L || length > limit
     }
 
     private fun exceedsBodyLimit(bodyString: String): Boolean {
