@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace 'com.itg.ddlnet'
-    compileSdk 31
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.itg.ddlnet"

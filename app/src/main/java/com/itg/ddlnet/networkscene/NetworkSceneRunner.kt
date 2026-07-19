@@ -5,6 +5,8 @@ import androidx.lifecycle.LifecycleCoroutineScope
 import com.itg.net.Net
 import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.data.Task
+import com.itg.net.ModeType
+import com.itg.net.request.base.DdCallback
 import com.itg.net.request.business.BusinessResult
 import com.itg.net.request.business.BusinessResultCallback
 import com.itg.net.request.business.TypedBusinessResult
@@ -12,27 +14,33 @@ import com.itg.net.request.business.TypedBusinessResultCallback
 import com.itg.net.request.business.sendBusinessResult
 import com.itg.net.request.business.sendTypedBusinessResult
 import com.itg.net.flow.DownloadPhase
+import com.itg.net.flow.NetResponse
+import com.itg.net.flow.converter.GsonNetConverter
 import com.itg.net.flow.flow
+import com.itg.net.flow.flowDownload
+import com.itg.net.flow.flowGet
+import com.itg.net.flow.flowGetResponse
 import com.itg.net.flow.flowBusinessResult
+import com.itg.net.flow.flowPostJson
+import com.itg.net.flow.flowPostJsonResponse
 import com.itg.net.flow.flowResponse
 import com.itg.net.flow.flowResult
 import com.itg.net.flow.flowString
 import com.itg.net.flow.flowTypedBusinessResult
-import com.itg.net.retrofit.retrofit
-import com.itg.net.request.get.Get
 import com.itg.net.request.result.NetResult
 import com.itg.net.request.result.NetResultCallback
 import com.itg.net.request.result.sendResult
-import kotlinx.coroutines.flow.Flow
+import com.itg.net.retrofit.retrofit
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import okhttp3.CacheControl
-import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class NetworkSceneRunner(
@@ -67,6 +75,35 @@ class NetworkSceneRunner(
         runGlobalParamsAndPathScene()
         runCacheAndMonitorExtraScene()
         runHttpErrorResult()
+        runResponseTooLarge()
+        runInterceptorError()
+        runDdCallbackBasic()
+        runHandlerCallback()
+        runBuildCall()
+        runOkHttpCallback()
+        runPostFileUpload()
+        runPostResumeUpload()
+        runFlowString()
+        runFlowGetConvenience()
+        runFlowPostJsonConvenience()
+        runFlowGetResponse()
+        runFlowPostJsonResponse()
+        runFlowDownloadConvenience()
+        runNetDownloadBindActivity()
+        runNetDownloadMd5()
+        runNetDownloadMonitorExtra()
+        runNetDownloadSkipMonitor()
+        runGlobalDownloadListener()
+        runCancelByTag()
+        runCancelFirstTag()
+        runCancelAll()
+        runRetrofitSuspend()
+        runRetrofitNetResponse()
+        runRetrofitNetResult()
+        runRetrofitFlow()
+        runFlushMonitor()
+        runCustomInterceptor()
+        runEncryptOptIn()
         runFlowGet()
         runFlowPostJson()
         runFlowResult()
@@ -74,8 +111,6 @@ class NetworkSceneRunner(
         runFlowResponse()
         runNetDownload()
         runFlowDownload()
-        runRetrofitSuspend()
-        runRetrofitFlow()
     }
 
     fun runNetGet() {
@@ -330,7 +365,9 @@ class NetworkSceneRunner(
                         is BusinessResult.Success -> logger.append("net-flow GET: success code=${result.httpCode} data=${result.dataRaw.shortBody()}")
                         is BusinessResult.BusinessError -> logger.append("net-flow GET: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
                         is BusinessResult.HttpError -> logger.append("net-flow GET: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
+                        is BusinessResult.ResponseTooLarge -> logger.append("net-flow GET: response too large ${result.error.message}")
                         is BusinessResult.NetworkError -> logger.append("net-flow GET: network error ${result.error.message.orEmpty()}")
+                        is BusinessResult.InterceptorError -> logger.append("net-flow GET: interceptor error ${result.error.message.orEmpty()}")
                         is BusinessResult.Consumed -> logger.append("net-flow GET: consumed ${result.reason.orEmpty()}")
                     }
                 }
@@ -367,6 +404,7 @@ class NetworkSceneRunner(
                     when (result) {
                         is NetResult.Success -> logger.append("net-flow flowResult: success code=${result.code} body=${result.body.shortBody()}")
                         is NetResult.HttpError -> logger.append("net-flow flowResult: http error code=${result.code} body=${result.body.shortBody(420)}")
+                        is NetResult.ResponseTooLarge -> logger.append("net-flow flowResult: response too large ${result.message}")
                         is NetResult.NetworkError -> logger.append("net-flow flowResult: network error ${result.message.orEmpty()}")
                     }
                 }
@@ -388,7 +426,9 @@ class NetworkSceneRunner(
                         is TypedBusinessResult.DataConvertError -> logger.append("net-flow typed business: convert error ${result.error.message.orEmpty()}")
                         is TypedBusinessResult.BusinessError -> logger.append("net-flow typed business: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
                         is TypedBusinessResult.HttpError -> logger.append("net-flow typed business: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
+                        is TypedBusinessResult.ResponseTooLarge -> logger.append("net-flow typed business: response too large ${result.error.error.message}")
                         is TypedBusinessResult.NetworkError -> logger.append("net-flow typed business: network error ${result.error.error.message.orEmpty()}")
+                        is TypedBusinessResult.InterceptorError -> logger.append("net-flow typed business: interceptor error ${result.error.error.message.orEmpty()}")
                         is TypedBusinessResult.Consumed -> logger.append("net-flow typed business: consumed ${result.reason.orEmpty()}")
                     }
                 }
@@ -494,12 +534,354 @@ class NetworkSceneRunner(
                         is TypedBusinessResult.DataConvertError -> logger.append("net-retrofit Typed Business Flow: convert error ${result.error.message.orEmpty()}")
                         is TypedBusinessResult.BusinessError -> logger.append("net-retrofit Typed Business Flow: business error code=${result.code.orEmpty()} message=${result.message.orEmpty()}")
                         is TypedBusinessResult.HttpError -> logger.append("net-retrofit Typed Business Flow: http error code=${result.httpCode} body=${result.rawBody.shortBody()}")
+                        is TypedBusinessResult.ResponseTooLarge -> logger.append("net-retrofit Typed Business Flow: response too large ${result.error.error.message}")
                         is TypedBusinessResult.NetworkError -> logger.append("net-retrofit Typed Business Flow: network error ${result.error.error.error.message.orEmpty()}")
+                        is TypedBusinessResult.InterceptorError -> logger.append("net-retrofit Typed Business Flow: interceptor error ${result.error.error.message.orEmpty()}")
                         is TypedBusinessResult.Consumed -> logger.append("net-retrofit Typed Business Flow: consumed ${result.reason.orEmpty()}")
                     }
                 }
         }
     }
+
+    // ==================== New scenes: callback variants ====================
+
+    fun runDdCallbackBasic() {
+        logger.append("DdCallback basic: start")
+        Net.instance.get()
+            .url(apiBaseUrl).path("api/echo")
+            .addParam("scene", "dd-callback-basic").noUseGlobalParams()
+            .autoCancel(activity)
+            .send(object : DdCallback {
+                override fun onFailure(er: String?) { logger.append("DdCallback basic: failure ${er.orEmpty()}") }
+                override fun onResponse(result: String?, code: Int) { logger.append("DdCallback basic: code=$code body=${result.shortBody()}") }
+            })
+    }
+
+    fun runHandlerCallback() {
+        logger.append("Handler callback: start")
+        val handler = android.os.Handler(android.os.Looper.getMainLooper()) { msg ->
+            when (msg.what) {
+                1 -> { logger.append("Handler callback: success body=${(msg.obj as? String).shortBody()}"); true }
+                2 -> { logger.append("Handler callback: error ${msg.obj}"); true }
+                else -> false
+            }
+        }
+        Net.instance.get()
+            .url(apiBaseUrl).path("api/echo")
+            .addParam("scene", "handler-callback").noUseGlobalParams()
+            .autoCancel(activity)
+            .send(handler, 1, 2)
+    }
+
+    fun runBuildCall() {
+        logger.append("buildCall: start")
+        val call = Net.instance.get()
+            .url(apiBaseUrl).path("api/echo")
+            .addParam("scene", "build-call").noUseGlobalParams()
+            .buildCall()
+        if (call != null) {
+            call.enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: IOException) { logger.append("buildCall: failure ${e.message}") }
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    logger.append("buildCall: code=${response.code} body=${response.body?.string().shortBody()}")
+                    response.close()
+                }
+            })
+        } else { logger.append("buildCall: call is null (invalid url)") }
+    }
+
+    fun runOkHttpCallback() {
+        logger.append("OkHttp raw callback: start")
+        Net.instance.get()
+            .url(apiBaseUrl).path("api/echo")
+            .addParam("scene", "okhttp-callback").noUseGlobalParams()
+            .send(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: IOException) { logger.append("OkHttp callback: failure ${e.message}") }
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    logger.append("OkHttp callback: code=${response.code} body=${response.body?.string().shortBody()}")
+                    response.close()
+                }
+            }, task = null)
+    }
+
+    // ==================== POST file upload ====================
+
+    fun runPostFileUpload() {
+        val file = File(activity.cacheDir, "upload-sample.txt").also { it.writeText("Net upload test ${System.currentTimeMillis()}") }
+        logger.append("PostFile upload: start file=${file.name} size=${file.length()}")
+        val request = Net.instance.postFile()
+        request.url(apiBaseUrl).path("api/form")
+        request.addFile(file)
+        request.noUseGlobalParams().autoCancel(activity)
+            .sendBusinessResult(logBusinessCallback("PostFile upload"))
+    }
+
+    fun runPostResumeUpload() {
+        val file = File(activity.cacheDir, "resume-upload.bin").also { it.writeText("X".repeat(1024 * 100)) }
+        logger.append("PostResumeFile: start size=${file.length()} offset=1024")
+        val request = Net.instance.postResumeFile()
+        request.url(apiBaseUrl).path("api/form")
+        request.addFile(file)
+        request.addResumeFileOffset(1024L)
+        request.noUseGlobalParams().autoCancel(activity)
+            .sendBusinessResult(logBusinessCallback("PostResumeFile"))
+    }
+
+    // ==================== Error handling: ResponseTooLarge & InterceptorError ====================
+
+    fun runResponseTooLarge() {
+        logger.append("ResponseTooLarge: start")
+        Net.instance.get()
+            .url(apiBaseUrl).path("api/data")
+            .addParam("scene", "response-too-large").noUseGlobalParams().autoCancel(activity)
+            .sendResult(object : NetResultCallback {
+                override fun onSuccess(result: NetResult.Success) { logger.append("ResponseTooLarge: success code=${result.code}") }
+                override fun onHttpError(error: NetResult.HttpError) { logger.append("ResponseTooLarge: http error code=${error.code}") }
+                override fun onResponseTooLarge(error: NetResult.ResponseTooLarge) { logger.append("ResponseTooLarge: len=${error.contentLength} max=${error.maxBytes}") }
+                override fun onNetworkError(error: NetResult.NetworkError) { logger.append("ResponseTooLarge: network error ${error.message}") }
+            })
+    }
+
+    fun runInterceptorError() {
+        logger.append("InterceptorError: start")
+        Net.instance.get()
+            .url(apiBaseUrl).path("api/echo")
+            .addParam("scene", "interceptor-error").noUseGlobalParams().autoCancel(activity)
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(result: BusinessResult.Success) { logger.append("InterceptorError: success") }
+                override fun onBusinessError(error: BusinessResult.BusinessError) { logger.append("InterceptorError: business error") }
+                override fun onHttpError(error: BusinessResult.HttpError) { logger.append("InterceptorError: http error") }
+                override fun onNetworkError(error: BusinessResult.NetworkError) { logger.append("InterceptorError: network error") }
+                override fun onInterceptorError(error: BusinessResult.InterceptorError) { logger.append("InterceptorError: caught index=${error.index} err=${error.error.message}") }
+                override fun onResponseTooLarge(error: BusinessResult.ResponseTooLarge) { logger.append("InterceptorError: too large") }
+                override fun onConsumed(result: BusinessResult.Consumed) { logger.append("InterceptorError: consumed") }
+            })
+    }
+
+    // ==================== Flow convenience methods ====================
+
+    fun runFlowString() {
+        logger.append("net-flow flowString: start")
+        lifecycleScope.launch {
+            Net.instance.get()
+                .url(apiBaseUrl).path("api/echo").addParam("scene", "flow-string").noUseGlobalParams()
+                .flowString()
+                .catch { e -> logger.append("flowString: failed ${e.message.orEmpty()}") }
+                .collect { body -> logger.append("flowString: body=${body.shortBody()}") }
+        }
+    }
+
+    fun runFlowGetConvenience() {
+        logger.append("flowGet convenience: start")
+        lifecycleScope.launch {
+            Net.instance.flowGet { url(apiBaseUrl).path("api/echo").addParam("scene", "flow-get-convenience").noUseGlobalParams() }
+                .catch { e -> logger.append("flowGet: failed ${e.message.orEmpty()}") }
+                .collect { body -> logger.append("flowGet: body=${body.shortBody()}") }
+        }
+    }
+
+    fun runFlowPostJsonConvenience() {
+        logger.append("flowPostJson convenience: start")
+        lifecycleScope.launch {
+            Net.instance.flowPostJson { url(apiBaseUrl).path("api/json").addParam("scene", "flow-post-json-convenience").addParam("time", System.currentTimeMillis()).noUseGlobalParams() }
+                .catch { e -> logger.append("flowPostJson: failed ${e.message.orEmpty()}") }
+                .collect { body -> logger.append("flowPostJson: body=${body.shortBody()}") }
+        }
+    }
+
+    fun runFlowGetResponse() {
+        logger.append("flowGetResponse (deserialize): start")
+        lifecycleScope.launch {
+            Net.instance.flowGetResponse(GsonNetConverter<SceneData>(type = SceneData::class.java)) {
+                url(apiBaseUrl).path("api/data").addParam("scene", "flow-get-response").noUseGlobalParams()
+            }
+                .catch { e -> logger.append("flowGetResponse: failed ${e.message.orEmpty()}") }
+                .collect { response -> logger.append("flowGetResponse: code=${response.code} ok=${response.isSuccessful} body=${response.body}") }
+        }
+    }
+
+    fun runFlowPostJsonResponse() {
+        logger.append("flowPostJsonResponse (deserialize): start")
+        lifecycleScope.launch {
+            Net.instance.flowPostJsonResponse(GsonNetConverter<SceneData>(type = SceneData::class.java)) {
+                url(apiBaseUrl).path("api/json").addParam("scene", "flow-post-json-response").addParam("time", System.currentTimeMillis()).noUseGlobalParams()
+            }
+                .catch { e -> logger.append("flowPostJsonResponse: failed ${e.message.orEmpty()}") }
+                .collect { response -> logger.append("flowPostJsonResponse: code=${response.code} ok=${response.isSuccessful} body=${response.body}") }
+        }
+    }
+
+    fun runFlowDownloadConvenience() {
+        val file = File(activity.cacheDir, "flow-convenience-dl.bin")
+        logger.append("flowDownload convenience: start ${file.absolutePath}")
+        lifecycleScope.launch {
+            Net.instance.flowDownload { url(downloadUrl).savePath(file.absolutePath).overwrite(true).retryCount(1).noUseGlobalParams() }
+                .catch { e -> logger.append("flowDownload: failed ${e.message.orEmpty()}") }
+                .collect { progress ->
+                    when (progress.phase) {
+                        DownloadPhase.Connecting -> logger.append("flowDownload: connecting")
+                        DownloadPhase.Downloading -> logger.append("flowDownload: ${progress.task.downloadSize}/${progress.task.contentLength}")
+                        DownloadPhase.Complete -> logger.append("flowDownload: complete")
+                        DownloadPhase.Failed -> logger.append("flowDownload: failed")
+                    }
+                }
+        }
+    }
+
+    // ==================== Download variants ====================
+
+    fun runNetDownloadBindActivity() {
+        val file = File(activity.cacheDir, "bind-activity-dl.bin")
+        logger.append("download bindActivity: start")
+        Net.instance.newDownload().url(downloadUrl).savePath(file.absolutePath).overwrite(true).retryCount(1)
+            .bindActivity(activity).noUseGlobalParams()
+            .listener(object : AbstractProgressCallback() {
+                override fun onConnecting(task: Task) { logger.append("bindActivity dl: connecting") }
+                override fun onProgress(task: Task, complete: Boolean) {
+                    if (complete) logger.append("bindActivity dl: complete") else logger.append("bindActivity dl: ${task.downloadSize}/${task.contentLength}")
+                }
+                override fun onFail(error: String?, task: Task) { logger.append("bindActivity dl: failed ${error.orEmpty()}") }
+                override fun onFinish(task: Task) { logger.append("bindActivity dl: finish") }
+            }).start()
+    }
+
+    fun runNetDownloadMd5() {
+        val file = File(activity.cacheDir, "md5-check-dl.bin")
+        logger.append("download with MD5: start")
+        Net.instance.newDownload().url(downloadUrl).savePath(file.absolutePath).overwrite(true).retryCount(1)
+            .noUseGlobalParams()
+            .listener(object : AbstractProgressCallback() {
+                override fun onProgress(task: Task, complete: Boolean) {
+                    if (complete) logger.append("md5 dl: complete (md5=${task.md5})") else logger.append("md5 dl: ${task.downloadSize}/${task.contentLength}")
+                }
+                override fun onFail(error: String?, task: Task) { logger.append("md5 dl: failed ${error.orEmpty()}") }
+            }).start()
+    }
+
+    fun runNetDownloadMonitorExtra() {
+        val file = File(activity.cacheDir, "monitor-dl.bin")
+        logger.append("download monitor extra: start")
+        Net.instance.newDownload().url(downloadUrl).savePath(file.absolutePath).overwrite(true).retryCount(1)
+            .noUseGlobalParams().monitor().monitorExtra("scene=download-monitor;version=1.0")
+            .listener(object : AbstractProgressCallback() {
+                override fun onProgress(task: Task, complete: Boolean) {
+                    if (complete) logger.append("monitor dl: complete") else logger.append("monitor dl: ${task.downloadSize}/${task.contentLength}")
+                }
+            }).start()
+    }
+
+    fun runNetDownloadSkipMonitor() {
+        val file = File(activity.cacheDir, "skip-monitor-dl.bin")
+        logger.append("download skipMonitor: start")
+        Net.instance.newDownload().url(downloadUrl).savePath(file.absolutePath).overwrite(true).retryCount(1)
+            .noUseGlobalParams().skipMonitor()
+            .listener(object : AbstractProgressCallback() {
+                override fun onProgress(task: Task, complete: Boolean) {
+                    if (complete) logger.append("skipMonitor dl: complete") else logger.append("skipMonitor dl: ${task.downloadSize}/${task.contentLength}")
+                }
+            }).start()
+    }
+
+    fun runGlobalDownloadListener() {
+        val file = File(activity.cacheDir, "global-listener-dl.bin")
+        logger.append("global download listener: start")
+        val global = object : AbstractProgressCallback() {
+            override fun onConnecting(task: Task) { logger.append("global: connecting ${task.url}") }
+            override fun onProgress(task: Task, complete: Boolean) { if (complete) logger.append("global: complete ${task.url}") }
+            override fun onFinish(task: Task) {
+                Net.instance.removeGlobalDownloadListener(this)
+                logger.append("global: removed after finish")
+            }
+        }
+        Net.instance.addGlobalDownloadListener(global)
+        Net.instance.newDownload().url(downloadUrl).savePath(file.absolutePath).overwrite(true).retryCount(1).noUseGlobalParams().start()
+    }
+
+    // ==================== Cancel variants ====================
+
+    fun runCancelByTag() {
+        val tag = "cancel-tag-${System.currentTimeMillis()}"
+        logger.append("cancel by tag: tag=$tag")
+        Net.instance.get().url(apiBaseUrl).path("api/echo").addParam("scene", "cancel-by-tag").addTag(tag).noUseGlobalParams()
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(result: BusinessResult.Success) { logger.append("cancel by tag: success (not cancelled)") }
+                override fun onBusinessError(error: BusinessResult.BusinessError) {}
+                override fun onHttpError(error: BusinessResult.HttpError) {}
+                override fun onNetworkError(error: BusinessResult.NetworkError) { logger.append("cancel by tag: cancelled") }
+                override fun onConsumed(result: BusinessResult.Consumed) {}
+            })
+        Net.instance.cancel(tag)
+    }
+
+    fun runCancelFirstTag() {
+        val tag = "cancel-first-${System.currentTimeMillis()}"
+        logger.append("cancelFirstTag: tag=$tag (3 requests, cancels first)")
+        repeat(3) { i ->
+            Net.instance.get().url(apiBaseUrl).path("api/echo").addParam("scene", "cancel-first-$i").addTag(tag).noUseGlobalParams().autoCancel(activity)
+                .sendBusinessResult(logBusinessCallback("cancelFirstTag #$i"))
+        }
+        logger.append("cancelFirstTag: found=${Net.instance.cancelFirstTag(tag)}")
+    }
+
+    fun runCancelAll() {
+        logger.append("cancelAll: start")
+        repeat(2) { i -> Net.instance.get().url(apiBaseUrl).path("api/echo").addParam("scene", "cancel-all-$i").noUseGlobalParams().sendBusinessResult(logBusinessCallback("cancelAll #$i")) }
+        Net.instance.cancelAll()
+        logger.append("cancelAll: done")
+    }
+
+    // ==================== Retrofit: NetResponse, NetResult ====================
+
+    fun runRetrofitNetResponse() {
+        logger.append("retrofit NetResponse: start")
+        lifecycleScope.launch {
+            try {
+                val r = retrofitApi.getEcho("retrofit-net-response", "android")
+                logger.append("retrofit NetResponse: code=${r.code()} ok=${r.isSuccessful} body=${r.body()?.string().shortBody()}")
+            } catch (e: Exception) { logger.append("retrofit NetResponse: failed ${e.message.orEmpty()}") }
+        }
+    }
+
+    fun runRetrofitNetResult() {
+        logger.append("retrofit NetResult Flow: start")
+        lifecycleScope.launch {
+            retrofitApi.getNetResult("retrofit-net-result")
+                .catch { e -> logger.append("retrofit NetResult: failed ${e.message.orEmpty()}") }
+                .collect { r ->
+                    when (r) {
+                        is NetResult.Success -> logger.append("retrofit NetResult: success code=${r.code} body=${r.body.shortBody()}")
+                        is NetResult.HttpError -> logger.append("retrofit NetResult: http error code=${r.code}")
+                        is NetResult.NetworkError -> logger.append("retrofit NetResult: network error ${r.message}")
+                        is NetResult.ResponseTooLarge -> logger.append("retrofit NetResult: too large")
+                    }
+                }
+        }
+    }
+
+    // ==================== Advanced ====================
+
+    fun runFlushMonitor() {
+        logger.append("flushMonitor: flushing buffered events")
+        Net.instance.flushMonitor()
+        logger.append("flushMonitor: done")
+    }
+
+    fun runCustomInterceptor() {
+        logger.append("custom interceptor: adding X-Demo header")
+        Net.instance.get().url(apiBaseUrl).path("api/echo").addParam("scene", "custom-interceptor")
+            .addHeader("X-Demo", "interceptor-test").noUseGlobalParams().autoCancel(activity)
+            .sendBusinessResult(logBusinessCallback("custom interceptor"))
+    }
+
+    fun runEncryptOptIn() {
+        logger.append("encrypt OPT_IN mode: encryptPath /api/json only")
+        Net.instance.postJson().url(apiBaseUrl).path("api/json")
+            .addParam("scene", "encrypt-optin").addParam("phone", "13800138000").addParam("name", "demo")
+            .noUseGlobalParams().autoCancel(activity)
+            .sendBusinessResult(logBusinessCallback("encrypt OPT_IN"))
+    }
+
+    // ==================== Helpers ====================
 
     private fun logBusinessCallback(sceneName: String): BusinessResultCallback {
         return object : BusinessResultCallback {
@@ -535,10 +917,15 @@ class NetworkSceneRunner(
         suspend fun getEcho(
             @Query("scene") scene: String,
             @Query("client") client: String
-        ): Response<ResponseBody>
+        ): Response<okhttp3.ResponseBody>
 
         @GET("api/data")
-        fun getDataFlow(): Flow<TypedBusinessResult<SceneData>>
+        fun getDataFlow(): kotlinx.coroutines.flow.Flow<TypedBusinessResult<SceneData>>
+
+        @GET("api/data")
+        fun getNetResult(
+            @Query("scene") scene: String
+        ): kotlinx.coroutines.flow.Flow<NetResult>
     }
 
     private data class SceneData(

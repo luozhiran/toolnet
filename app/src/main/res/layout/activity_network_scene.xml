@@ -36,6 +36,30 @@
 
             <TextView
                 style="@style/NetworkSceneSectionTitle"
+                android:text="Callback variants" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_dd_callback"
+                style="@style/NetworkSceneButton"
+                android:text="DdCallback basic" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_handler_callback"
+                style="@style/NetworkSceneButton"
+                android:text="Handler callback" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_build_call"
+                style="@style/NetworkSceneButton"
+                android:text="buildCall (raw OkHttp)" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_okhttp_callback"
+                style="@style/NetworkSceneButton"
+                android:text="send(OkHttp Callback)" />
+
+            <TextView
+                style="@style/NetworkSceneSectionTitle"
                 android:text="Callback requests" />
 
             <androidx.appcompat.widget.AppCompatButton
@@ -92,9 +116,58 @@
                 style="@style/NetworkSceneButton"
                 android:text="sendResult HTTP error" />
 
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_response_too_large"
+                style="@style/NetworkSceneButton"
+                android:text="ResponseTooLarge demo" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_interceptor_error"
+                style="@style/NetworkSceneButton"
+                android:text="InterceptorError demo" />
+
+            <TextView
+                style="@style/NetworkSceneSectionTitle"
+                android:text="POST file upload" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_post_file"
+                style="@style/NetworkSceneButton"
+                android:text="PostFile upload" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_post_resume"
+                style="@style/NetworkSceneButton"
+                android:text="PostResumeFile upload" />
+
             <TextView
                 style="@style/NetworkSceneSectionTitle"
                 android:text="Flow requests" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_string"
+                style="@style/NetworkSceneButton"
+                android:text="flowString basic" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_get_conv"
+                style="@style/NetworkSceneButton"
+                android:text="flowGet convenience" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_post_conv"
+                style="@style/NetworkSceneButton"
+                android:text="flowPostJson convenience" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_get_resp"
+                style="@style/NetworkSceneButton"
+                android:text="flowGetResponse (deserialize)" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_post_resp"
+                style="@style/NetworkSceneButton"
+                android:text="flowPostJsonResponse" />
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_flow_get"
@@ -131,9 +204,58 @@
                 android:text="net download callback" />
 
             <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_net_dl_bind"
+                style="@style/NetworkSceneButton"
+                android:text="download + bindActivity" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_net_dl_md5"
+                style="@style/NetworkSceneButton"
+                android:text="download + MD5 check" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_net_dl_monitor"
+                style="@style/NetworkSceneButton"
+                android:text="download + monitor extra" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_net_dl_skip_monitor"
+                style="@style/NetworkSceneButton"
+                android:text="download + skipMonitor" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_global_dl_listener"
+                style="@style/NetworkSceneButton"
+                android:text="global download listener" />
+
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_flow_download"
                 style="@style/NetworkSceneButton"
                 android:text="net-flow download" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flow_dl_conv"
+                style="@style/NetworkSceneButton"
+                android:text="flowDownload convenience" />
+
+            <TextView
+                style="@style/NetworkSceneSectionTitle"
+                android:text="Cancel" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_cancel_tag"
+                style="@style/NetworkSceneButton"
+                android:text="cancel by tag" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_cancel_first"
+                style="@style/NetworkSceneButton"
+                android:text="cancelFirstTag" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_cancel_all"
+                style="@style/NetworkSceneButton"
+                android:text="cancelAll" />
 
             <TextView
                 style="@style/NetworkSceneSectionTitle"
@@ -145,9 +267,38 @@
                 android:text="net-retrofit suspend" />
 
             <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_retrofit_response"
+                style="@style/NetworkSceneButton"
+                android:text="net-retrofit NetResponse" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_retrofit_net_result"
+                style="@style/NetworkSceneButton"
+                android:text="net-retrofit NetResult" />
+
+            <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btn_retrofit_flow"
                 style="@style/NetworkSceneButton"
                 android:text="net-retrofit Flow" />
+
+            <TextView
+                style="@style/NetworkSceneSectionTitle"
+                android:text="Advanced" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_flush_monitor"
+                style="@style/NetworkSceneButton"
+                android:text="flushMonitor" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_custom_interceptor"
+                style="@style/NetworkSceneButton"
+                android:text="custom interceptor" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btn_encrypt_optin"
+                style="@style/NetworkSceneButton"
+                android:text="encrypt OPT_IN mode" />
 
             <TextView
                 style="@style/NetworkSceneSectionTitle"
