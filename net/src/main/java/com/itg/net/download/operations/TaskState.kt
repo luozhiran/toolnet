@@ -1,8 +1,7 @@
 package com.itg.net.download.operations
 
-import android.util.Log
 import com.itg.net.Net
-import com.itg.net.download.data.DOWNLOAD_DEBUG_TAG
+import com.itg.net.download.Download
 import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
 import com.itg.net.download.data.Task
 import com.itg.net.util.PrintLog
@@ -69,13 +68,13 @@ class TaskState {
         if (waitingTasks.remove(task)) {
             task.url?.let { waitingTaskUrls.remove(it) }
         }
-        HoldActivityCallbackMap.removeProgressCallback(task)
+        Download.instance.listenerRegistry.removeTaskListeners(task)
     }
 
     @Synchronized
     fun deleteWaitTask(url: String?) {
         removeTaskByUrl(waitingTasks, waitingTaskUrls, url)?.let {
-            HoldActivityCallbackMap.removeProgressCallback(it)
+            Download.instance.listenerRegistry.removeTaskListeners(it)
         }
     }
 
@@ -99,13 +98,13 @@ class TaskState {
         if (runningTasks.remove(task)) {
             task.url?.let { runningTaskUrls.remove(it) }
         }
-        HoldActivityCallbackMap.removeProgressCallback(task)
+        Download.instance.listenerRegistry.removeTaskListeners(task)
     }
 
     @Synchronized
     fun deleteRunningTask(url: String?) {
         removeTaskByUrl(runningTasks, runningTaskUrls, url)?.let {
-            HoldActivityCallbackMap.removeProgressCallback(it)
+            Download.instance.listenerRegistry.removeTaskListeners(it)
         }
     }
 

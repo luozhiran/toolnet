@@ -4,8 +4,8 @@ import com.itg.net.Net
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.data.Task
 import com.itg.net.download.dispatcher.DispatchTool
-import com.itg.net.download.operations.GlobalDownloadProgressCache
-import com.itg.net.download.operations.HoldActivityCallbackMap
+import com.itg.net.download.operations.DownloadEvent
+import com.itg.net.download.operations.DownloadListenerRegistry
 
 /**
  * 下载管理器（模块内部使用）
@@ -31,7 +31,11 @@ internal class Download {
     /**
      * 全局下载进度缓存，回调所有注册的全局下载监听器
      */
-    internal val globalDownloadProgressCache: GlobalDownloadProgressCache by lazy { GlobalDownloadProgressCache() }
+    internal val listenerRegistry: DownloadListenerRegistry by lazy { DownloadListenerRegistry() }
+
+    internal fun publishDownloadEvent(event: DownloadEvent) {
+        listenerRegistry.dispatch(event)
+    }
 
     /**
      * 创建下载任务构建器
@@ -48,7 +52,7 @@ internal class Download {
      * @param progressBack 下载进度回调
      */
     fun setGlobalProgressListener(progressBack: IProgressCallback) {
-        globalDownloadProgressCache.addItem(progressBack)
+        listenerRegistry.addGlobal(progressBack)
     }
 
     /**
@@ -57,7 +61,7 @@ internal class Download {
      * @param progressBack 要移除的下载进度回调
      */
     fun removeGlobalProgressListener(progressBack: IProgressCallback) {
-        globalDownloadProgressCache.removeItem(progressBack)
+        listenerRegistry.removeGlobal(progressBack)
     }
 
     /**
@@ -70,7 +74,7 @@ internal class Download {
      * @param task 下载任务
      */
     fun removeAllProgressListener(task: Task) {
-        HoldActivityCallbackMap.removeProgressCallback(task)
+        listenerRegistry.removeTaskListeners(task)
     }
 
     /**
@@ -80,7 +84,7 @@ internal class Download {
      * @param progressCallback 要移除的监听器
      */
     fun removeProgressListener(task: Task, progressCallback: IProgressCallback) {
-        HoldActivityCallbackMap.removeProgressCallback(task, progressCallback)
+        listenerRegistry.removeTaskListener(task, progressCallback)
     }
 
     /**

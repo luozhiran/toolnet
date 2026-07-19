@@ -3,6 +3,7 @@ package com.itg.net.download.operations
 import com.itg.net.download.data.Task
 import com.itg.net.Net
 import com.itg.net.download.callback.AbstractProgressCallback
+import com.itg.net.download.Download
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -80,12 +81,12 @@ class TaskStateTest {
         }
         val listener = object : AbstractProgressCallback() {}
 
-        HoldActivityCallbackMap.setProgressCallback(firstTask, listener)
-        assertEquals(1, HoldActivityCallbackMap.getUrlProgressCallbackNum(firstTask))
+        Download.instance.listenerRegistry.addTaskListener(firstTask, listener)
+        assertEquals(1, Download.instance.listenerRegistry.listenerCount(firstTask))
 
         assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(firstTask))
         assertEquals(TaskState.ScheduleResult.REJECTED, taskState.scheduleTask(duplicateTask))
-        assertEquals(1, HoldActivityCallbackMap.getUrlProgressCallbackNum(firstTask))
+        assertEquals(1, Download.instance.listenerRegistry.listenerCount(firstTask))
 
         taskState.deleteRunningTask(firstTask)
     }

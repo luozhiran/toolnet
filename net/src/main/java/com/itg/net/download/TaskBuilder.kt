@@ -8,8 +8,7 @@ import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
 import com.itg.net.download.callback.IProgressCallback
-import com.itg.net.download.operations.DownloadEndNotify
-import com.itg.net.download.operations.HoldActivityCallbackMap
+import com.itg.net.download.operations.DownloadEventPublisher
 import com.itg.net.monitor.MonitorMarker
 import com.itg.net.util.PrintLog
 import com.itg.net.util.ThreadTool
@@ -51,27 +50,23 @@ class TaskBuilder {
     private val task by lazy { Task() }
 
     /**
-     * 内部进度回调，负责将下载事件转发到 [DownloadEndNotify] 通知系统，
+     * 内部进度回调，负责将下载状态转换为统一的下载事件。
      * 并在下载完成或最终失败时自动移除 Activity 生命周期观察者
      */
     private val progressCallback by lazy {
         object : AbstractProgressCallback() {
             override fun onConnecting(task: Task) {
-                DownloadEndNotify.connectNotify(task)
-                externalProgressCallback?.onConnecting(task)
+                DownloadEventPublisher.connecting(task)
             }
 
             override fun onProgress(task: Task, complete: Boolean) {
                 if (complete) {
-                    DownloadEndNotify.completeNotify(task)
-                    externalProgressCallback?.onProgress(task, true)
-                    DownloadEndNotify.finishNotify(task)
-                    externalProgressCallback?.onFinish(task)
+                    DownloadEventPublisher.complete(task)
+                    DownloadEventPublisher.finished(task)
                     externalProgressCallback = null
                     removeActivityLifecycleObserver()
                 } else {
-                    DownloadEndNotify.progressNotify(task)
-                    externalProgressCallback?.onProgress(task, false)
+                    DownloadEventPublisher.progress(task)
                 }
             }
 
@@ -82,10 +77,8 @@ class TaskBuilder {
                 ) {
                     return
                 }
-                DownloadEndNotify.failNotify(task, error)
-                externalProgressCallback?.onFail(error, task)
-                DownloadEndNotify.finishNotify(task)
-                externalProgressCallback?.onFinish(task)
+                DownloadEventPublisher.failed(task, error)
+                DownloadEventPublisher.finished(task)
                 externalProgressCallback = null
                 removeActivityLifecycleObserver()
             }
@@ -194,13 +187,13 @@ class TaskBuilder {
                     lifecycleDestroyed = true
                     holdActivityRef?.let {
                         PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用)")
-                        HoldActivityCallbackMap.debugPrint()
-                        HoldActivityCallbackMap.removeProgressCallback(
+                        Download.instance.listenerRegistry.debugPrint()
+                        Download.instance.listenerRegistry.removeTaskListener(
                             task,
                             it
                         )
                         PrintLog.logSubd("释放下完成")
-                        HoldActivityCallbackMap.debugPrint()
+                        Download.instance.listenerRegistry.debugPrint()
                     }
                     holdActivityRef = null
                     PrintLog.logSubd("自动取消下载任务 ${task.url}")
@@ -246,7 +239,7 @@ class TaskBuilder {
     /**
      * 设置下载进度监听器
      *
-     * 监听器持有当前 Activity 的引用，会被 [HoldActivityCallbackMap] 管理；
+     * 监听器持有当前 Activity 的引用，会被下载监听注册表管理；
      * Activity 销毁或下载完成时会自动移除，防止内存泄露。
      *
      * @param progressBack 下载进度回调
@@ -268,7 +261,7 @@ class TaskBuilder {
      * @param callback 要设置的进度回调
      * @return 返回自身，支持链式调用
      */
-    fun setProgressCallback(callback: IProgressCallback): TaskBuilder {
+    fun addDownloadListener(callback: IProgressCallback): TaskBuilder {
         externalProgressCallback = callback
         return this
     }
@@ -367,7 +360,8 @@ class TaskBuilder {
 
         // 校验请求地址是否正在下载中
         // 校验请求地址是否已经在等待队列中
-        holdActivityRef?.apply { HoldActivityCallbackMap.setProgressCallback(task, this) }
+        holdActivityRef?.apply { Download.instance.listenerRegistry.addTaskListener(task, this) }
+        externalProgressCallback?.apply { Download.instance.listenerRegistry.addTaskListener(task, this) }
         task.progressCallback = progressCallback
         // 根据是否开启断点续传选择下载方式
         val accepted = if (taskState.isBreakpointContinuation(task)) {
@@ -376,7 +370,8 @@ class TaskBuilder {
             Download.instance.dispatchTool.download(task)
         }
         if (!accepted) {
-            holdActivityRef?.let { HoldActivityCallbackMap.removeProgressCallback(task, it) }
+            holdActivityRef?.let { Download.instance.listenerRegistry.removeTaskListener(task, it) }
+            externalProgressCallback?.let { Download.instance.listenerRegistry.removeTaskListener(task, it) }
             holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
             externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
             holdActivityRef?.onFinish(task)

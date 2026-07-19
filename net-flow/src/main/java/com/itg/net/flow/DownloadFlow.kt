@@ -91,7 +91,7 @@ fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
     }
 
     // 注入回调并启动下载
-    taskRef.setProgressCallback(flowCallback)
+    taskRef.addDownloadListener(flowCallback)
     val task = taskRef.start()
 
     awaitClose {
