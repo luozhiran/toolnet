@@ -85,7 +85,13 @@ internal class DownloadListenerRegistry {
                 }
             }
             is DownloadEvent.Failed -> dispatchFailed(listeners, task, event.error)
-            is DownloadEvent.Finished -> dispatchFinished(listeners, task)
+            is DownloadEvent.Finished -> {
+                try {
+                    dispatchFinished(listeners, task)
+                } finally {
+                    removeTaskListeners(task)
+                }
+            }
         }
     }
 

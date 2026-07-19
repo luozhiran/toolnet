@@ -52,6 +52,16 @@ sealed class BusinessResult {
             get() = error.body
     }
 
+    data class ResponseTooLarge(
+        val error: NetResult.ResponseTooLarge
+    ) : BusinessResult() {
+        override val httpCode: Int?
+            get() = error.code
+
+        override val rawBody: String?
+            get() = error.body
+    }
+
     data class InterceptorError(
         val error: Throwable,
         val index: Int,

@@ -18,6 +18,7 @@ fun NetResult.toBusinessResult(): BusinessResult {
             ).proceed()
         }
         is NetResult.HttpError -> BusinessResult.HttpError(this)
+        is NetResult.ResponseTooLarge -> BusinessResult.ResponseTooLarge(this)
         is NetResult.NetworkError -> BusinessResult.NetworkError(this)
     }
 }
@@ -29,6 +30,7 @@ fun ParamsBuilder.sendBusinessResult(callback: BusinessResultCallback?) {
                 is BusinessResult.Success -> callback?.onSuccess(businessResult)
                 is BusinessResult.BusinessError -> callback?.onBusinessError(businessResult)
                 is BusinessResult.HttpError -> callback?.onHttpError(businessResult)
+                is BusinessResult.ResponseTooLarge -> callback?.onResponseTooLarge(businessResult)
                 is BusinessResult.NetworkError -> callback?.onNetworkError(businessResult)
                 is BusinessResult.InterceptorError -> callback?.onInterceptorError(businessResult)
                 is BusinessResult.Consumed -> callback?.onConsumed(businessResult)
@@ -37,6 +39,10 @@ fun ParamsBuilder.sendBusinessResult(callback: BusinessResultCallback?) {
 
         override fun onHttpError(error: NetResult.HttpError) {
             callback?.onHttpError(BusinessResult.HttpError(error))
+        }
+
+        override fun onResponseTooLarge(error: NetResult.ResponseTooLarge) {
+            callback?.onResponseTooLarge(BusinessResult.ResponseTooLarge(error))
         }
 
         override fun onNetworkError(error: NetResult.NetworkError) {

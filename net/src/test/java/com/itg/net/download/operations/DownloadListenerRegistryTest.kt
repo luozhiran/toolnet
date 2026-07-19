@@ -79,6 +79,20 @@ class DownloadListenerRegistryTest {
         assertEquals(0, registry.listenerCount(task))
     }
 
+    @Test
+    fun finishedEventRemovesTaskListenersAfterDispatch() {
+        val registry = DownloadListenerRegistry()
+        val task = task("https://example.com/a.zip")
+        val events = mutableListOf<String>()
+        val listener = recordingListener(events)
+
+        registry.addTaskListener(task, listener)
+        registry.dispatch(DownloadEvent.Finished(task))
+
+        assertEquals(listOf("finish"), events)
+        assertEquals(0, registry.listenerCount(task))
+    }
+
     private fun task(url: String): Task {
         return Task().apply {
             this.url = url

@@ -5,6 +5,7 @@ import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.business.toBusinessResult
 import com.itg.net.request.business.toTypedBusinessResult
 import com.itg.net.request.result.NetResult
+import com.itg.net.request.result.toResponseTooLarge
 import com.itg.net.request.base.ParamsBuilder
 import com.google.gson.reflect.TypeToken
 import com.itg.net.Net
@@ -143,7 +144,7 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
                                 )
                             }
                         }
-                        is BodyReadResult.TooLarge -> NetResult.NetworkError(bodyResult.asIOException())
+                        is BodyReadResult.TooLarge -> bodyResult.toResponseTooLarge(response.code)
                     }
                     trySend(result)
                     close()

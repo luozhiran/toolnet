@@ -123,7 +123,7 @@ abstract class PostMulBuilderImpl : ParamsBuilder(), PostBuilder, GetBuilder {
         var hasValue = false
         val formParams = mutableMapOf<String, Any?>()
         if (!noGlobalParams) {
-            formParams.putAll(Net.instance.ddNetConfig.globalParams)
+            Net.instance.ddNetConfig.putGlobalParamsInto(formParams)
         }
         UrlTools.cutOffStrToMap(postForm.getParams().toString())?.let {
             formParams.putAll(it)

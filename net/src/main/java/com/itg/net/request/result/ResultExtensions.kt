@@ -65,9 +65,7 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
                             }
                         }
                         is BodyReadResult.TooLarge -> {
-                            callback?.onNetworkError(
-                                NetResult.NetworkError(bodyResult.asIOException())
-                            )
+                            callback?.onResponseTooLarge(bodyResult.toResponseTooLarge(response.code))
                         }
                     }
                 }
@@ -78,4 +76,13 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
             }
         }
     })
+}
+
+fun BodyReadResult.TooLarge.toResponseTooLarge(code: Int?): NetResult.ResponseTooLarge {
+    return NetResult.ResponseTooLarge(
+        contentLength = contentLength,
+        maxBytes = maxBytes,
+        message = message,
+        code = code
+    )
 }

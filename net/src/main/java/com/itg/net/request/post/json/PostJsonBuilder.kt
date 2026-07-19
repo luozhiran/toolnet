@@ -30,7 +30,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     protected fun getRequestBody(): RequestBody {
         val requestJson = JSONObject(jsonObject.toString())
         if (!this.noGlobalParams) {
-            Net.instance.ddNetConfig.globalParams.forEach {
+            Net.instance.ddNetConfig.forEachGlobalParam {
                 if (it.key.isNotBlank() && !requestJson.has(it.key)) {
                     requestJson.put(it.key, it.value)
                 }

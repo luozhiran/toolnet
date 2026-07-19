@@ -84,7 +84,7 @@ abstract class PostFileBuilder : ParamsBuilder() {
         val urlParamsMap = UrlTools.cutOffStrToMap(urlParams.toString())
         val totalParamsMap = mutableMapOf<String, Any?>()
         if (!noGlobalParams) {
-            totalParamsMap.putAll(Net.instance.ddNetConfig.globalParams)
+            Net.instance.ddNetConfig.putGlobalParamsInto(totalParamsMap)
         }
         urlParamsMap?.let { totalParamsMap.putAll(it) }
         return UrlTools.getSpliceUrl(totalParamsMap, url ?: "")

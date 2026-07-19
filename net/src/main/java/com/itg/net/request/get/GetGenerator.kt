@@ -59,7 +59,7 @@ abstract class GetGenerator: ParamsBuilder(), SentBuilder, GetBuilder {
         val urlParamsMap = UrlTools.cutOffStrToMap(params.toString())
         val totalParamsMap = mutableMapOf<String,Any?>()
         if (!this.noGlobalParams) {
-            totalParamsMap.putAll(Net.instance.ddNetConfig.globalParams)
+            Net.instance.ddNetConfig.putGlobalParamsInto(totalParamsMap)
         }
         urlParamsMap?.let {
             totalParamsMap.putAll(it)

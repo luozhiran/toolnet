@@ -16,7 +16,7 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
     fun getRequestBody(): FormBody? {
         val totalParamsMap = mutableMapOf<String, Any?>()
         if (!this.noGlobalParams) {
-            totalParamsMap.putAll(Net.instance.ddNetConfig.globalParams)
+            Net.instance.ddNetConfig.putGlobalParamsInto(totalParamsMap)
         }
         UrlTools.cutOffStrToMap(params.toString())?.let {
             totalParamsMap.putAll(it)

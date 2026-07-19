@@ -5,6 +5,7 @@ interface TypedBusinessResultCallback<T> {
     fun onDataConvertError(error: TypedBusinessResult.DataConvertError)
     fun onBusinessError(error: TypedBusinessResult.BusinessError)
     fun onHttpError(error: TypedBusinessResult.HttpError)
+    fun onResponseTooLarge(error: TypedBusinessResult.ResponseTooLarge) = Unit
     fun onNetworkError(error: TypedBusinessResult.NetworkError)
     fun onInterceptorError(error: TypedBusinessResult.InterceptorError) = Unit
     fun onConsumed(result: TypedBusinessResult.Consumed) = Unit

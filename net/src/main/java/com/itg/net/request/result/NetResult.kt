@@ -19,6 +19,14 @@ sealed class NetResult {
         val headers: Map<String, String> = emptyMap()
     ) : NetResult()
 
+    data class ResponseTooLarge(
+        val contentLength: Long,
+        val maxBytes: Long,
+        val message: String,
+        override val code: Int?,
+        override val body: String? = null
+    ) : NetResult()
+
     data class NetworkError(
         val error: IOException,
         override val body: String? = null

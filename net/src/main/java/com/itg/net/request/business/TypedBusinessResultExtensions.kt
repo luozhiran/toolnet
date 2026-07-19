@@ -36,6 +36,7 @@ fun <T> BusinessResult.toTypedBusinessResult(type: Type): TypedBusinessResult<T>
             headers = headers
         )
         is BusinessResult.HttpError -> TypedBusinessResult.HttpError(this)
+        is BusinessResult.ResponseTooLarge -> TypedBusinessResult.ResponseTooLarge(this)
         is BusinessResult.NetworkError -> TypedBusinessResult.NetworkError(this)
         is BusinessResult.InterceptorError -> TypedBusinessResult.InterceptorError(this)
         is BusinessResult.Consumed -> TypedBusinessResult.Consumed(this)
@@ -56,6 +57,10 @@ fun <T> ParamsBuilder.sendTypedBusinessResult(
         }
 
         override fun onHttpError(error: BusinessResult.HttpError) {
+            dispatchTypedResult(error.toTypedBusinessResult(type), callback)
+        }
+
+        override fun onResponseTooLarge(error: BusinessResult.ResponseTooLarge) {
             dispatchTypedResult(error.toTypedBusinessResult(type), callback)
         }
 
@@ -94,6 +99,7 @@ private fun <T> dispatchTypedResult(
         is TypedBusinessResult.DataConvertError -> callback?.onDataConvertError(result)
         is TypedBusinessResult.BusinessError -> callback?.onBusinessError(result)
         is TypedBusinessResult.HttpError -> callback?.onHttpError(result)
+        is TypedBusinessResult.ResponseTooLarge -> callback?.onResponseTooLarge(result)
         is TypedBusinessResult.NetworkError -> callback?.onNetworkError(result)
         is TypedBusinessResult.InterceptorError -> callback?.onInterceptorError(result)
         is TypedBusinessResult.Consumed -> callback?.onConsumed(result)

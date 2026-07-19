@@ -59,7 +59,7 @@ abstract class PostContentBuilder : ParamsBuilder() {
     internal fun getUrl(): String {
         val totalParamsMap = mutableMapOf<String, Any?>()
         if (!this.noGlobalParams) {
-            totalParamsMap.putAll(Net.instance.ddNetConfig.globalParams)
+            Net.instance.ddNetConfig.putGlobalParamsInto(totalParamsMap)
         }
         UrlTools.cutOffStrToMap(urlParams.toString())?.let {
             totalParamsMap.putAll(it)

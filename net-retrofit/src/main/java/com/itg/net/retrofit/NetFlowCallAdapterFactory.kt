@@ -10,6 +10,7 @@ import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.business.toBusinessResult
 import com.itg.net.request.business.toTypedBusinessResult
 import com.itg.net.request.result.NetResult
+import com.itg.net.request.result.toResponseTooLarge
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -262,7 +263,7 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             }
             if (rawBodyResult is BodyReadResult.TooLarge) {
                 return if (isSuccessful) {
-                    NetResult.NetworkError(rawBodyResult.asIOException())
+                    rawBodyResult.toResponseTooLarge(code())
                 } else {
                     NetResult.HttpError(
                         body = null,

@@ -71,6 +71,19 @@ class NetFlowCallAdapterFactoryTest {
     }
 
     @Test
+    fun flowNetResultEmitsResponseTooLargeForSuccessfulLargeBody() = runBlocking {
+        Net.configure {
+            maxResponseBodyBytes(4)
+        }
+        server.enqueue(MockResponse().setResponseCode(200).setBody("too-large-success-body"))
+
+        val result = api.netResult().first()
+
+        assertTrue("actual=$result", result is NetResult.ResponseTooLarge)
+        assertEquals(200, (result as NetResult.ResponseTooLarge).code)
+    }
+
+    @Test
     fun flowBusinessResultUsesConfiguredInterceptorChain() = runBlocking {
         Net.configure {
             clearBusinessInterceptors()

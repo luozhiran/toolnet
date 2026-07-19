@@ -146,6 +146,14 @@ class NetConfig {
     val globalParams: Map<String, Any?>
         get() = globalParameterMap.toMap()
 
+    internal fun putGlobalParamsInto(target: MutableMap<String, Any?>) {
+        target.putAll(globalParameterMap)
+    }
+
+    internal fun forEachGlobalParam(action: (Map.Entry<String, Any?>) -> Unit) {
+        globalParameterMap.forEach(action)
+    }
+
     /**
      * 配置 Application。网络库会从中读取包名、主线程 Looper 和默认日志目录。
      */
