@@ -1,234 +1,161 @@
 # 4. 文件下载
 
-如何使用 Net 库进行文件下载，包括基础下载、断点续传、进度监听、生命周期绑定、全局监听和重试配置。
+本文说明如何使用 `net` 核心库下载文件、监听进度、绑定生命周期，并解释本次调整后的下载事件分发模型。
 
-## 适用条件
+## 场景选择
 
-- 已完成初始化配置（见 [01-快速开始](./01-quick-start.md)）
-- 文件可通过 HTTP/HTTPS URL 访问
-- 断点续传需要服务器支持 Range 请求
+| 使用场景 | 推荐 API | 适用条件 | 选择理由 |
+| --- | --- | --- | --- |
+| 普通文件下载 | `Net.instance.newDownload().savePath(...).url(...).listener(...).start()` | 需要回调式下载进度 | API 简单，适合 Activity/Fragment 中直接更新业务状态 |
+| 断点续传 | `supportCheckpoint()` | 服务端支持 `Range` 请求，目标文件允许追加写入 | 失败或暂停后可以从已有字节继续下载 |
+| 页面销毁自动取消 | `bindActivity(activity)` | 下载只服务于当前页面 | 页面销毁时自动取消任务并释放监听器，降低内存泄露风险 |
+| 全局监听下载 | `Net.instance.addGlobalDownloadListener(listener)` | 需要统一展示通知栏、悬浮窗或调试日志 | 所有下载任务复用同一个全局监听入口 |
+| 协程 Flow 下载 | [`TaskBuilder.flow()`](../../net-flow/doc/02-flow-download.md) | 项目使用 Kotlin 协程 | 将下载事件转换成 `Flow<DownloadProgress>`，取消协程即可取消下载 |
+| 下载监控上报 | `monitor()` / `skipMonitor()` / `monitorExtra(...)` | 项目开启网络质量监控 | 单个下载任务可以覆盖全局监控策略 |
 
-## 推荐做法
-
-### 基础下载
+## 最小示例
 
 ```kotlin
+import com.itg.net.Net
+import com.itg.net.download.callback.AbstractProgressCallback
+import com.itg.net.download.data.Task
+import com.itg.net.util.TaskTools
+
 val task = Net.instance.newDownload()
-    .savePath("${filesDir}/video.mp4")    // 文件保存路径
-    .url("https://example.com/video.mp4") // 下载地址
-    .listener(object : IProgressCallback {
+    .savePath("${filesDir}/demo.zip")
+    .url("https://example.com/demo.zip")
+    .overwrite(true)
+    .listener(object : AbstractProgressCallback() {
         override fun onConnecting(task: Task) {
-            // 正在与服务器建立连接
+            showStatus("正在连接")
         }
 
         override fun onProgress(task: Task, complete: Boolean) {
-            val percent = task.downloadSize * 100 / maxOf(task.contentLength, 1L)
-            Log.d("TAG", "进度: $percent%")
             if (complete) {
-                Log.d("TAG", "下载完成！路径: ${task.path}")
+                showStatus("下载完成")
+            } else {
+                val percent = TaskTools.getDownloadProgress(task)
+                showProgress(percent)
             }
         }
 
         override fun onFail(error: String?, task: Task) {
-            Log.e("TAG", "下载失败: $error")
+            showStatus("下载失败: $error")
         }
 
         override fun onFinish(task: Task) {
-            // 无论成功失败都会触发（重试中的 onFail 不会触发）
-            Log.d("TAG", "下载任务结束: ${task.url}")
+            hideLoading()
         }
     })
     .start()
 ```
 
-### 断点续传下载
+## 断点续传
 
 ```kotlin
 Net.instance.newDownload()
-    .savePath("${filesDir}/large_file.zip")
-    .url("https://example.com/large_file.zip")
-    .supportCheckpoint()  // 开启断点续传
+    .savePath("${filesDir}/large.apk")
+    .url("https://example.com/large.apk")
+    .supportCheckpoint()
+    .retryCount(3)
+    .overwrite(false)
     .listener(callback)
     .start()
 ```
 
-> 依赖服务器支持 Range 请求。如果下载中断后重新发起相同请求（相同 URL 和保存路径），会从断点位置继续下载。
+`supportCheckpoint()` 会让任务按断点续传流程执行。目标文件已经存在且没有开启 `overwrite(true)` 时，任务会通过 `onFail(ERROR_TARGET_FILE_EXISTS, task)` 返回失败。
 
-### 覆盖已存在文件
+## 生命周期绑定
 
 ```kotlin
 Net.instance.newDownload()
-    .savePath(path)
-    .url(url)
-    .overwrite(true)  // 目标文件存在时覆盖
+    .savePath("${filesDir}/page-resource.zip")
+    .url("https://example.com/page-resource.zip")
+    .bindActivity(this)
     .listener(callback)
     .start()
 ```
 
-> `overwrite(false)`（默认）时，目标文件已存在会通过 `onFail` 回调 `"目标文件已存在，未开启覆盖"`。
+`bindActivity(activity)` 适合“页面离开后下载也没有意义”的场景。Activity 销毁时库会取消下载任务，并移除与该任务绑定的监听器。
 
-### 重试次数
-
-```kotlin
-Net.instance.newDownload()
-    .savePath(path)
-    .url(url)
-    .retryCount(3)  // 失败后最多重试 3 次，默认 1
-    .listener(callback)
-    .start()
-```
-
-### 绑定 Activity 生命周期
+如果下载不绑定 Activity，并且任务会在后台继续执行，业务侧应在不再需要监听时调用：
 
 ```kotlin
-Net.instance.newDownload()
-    .savePath(path)
-    .url(url)
-    .bindActivity(this)  // Activity 销毁时自动取消+释放监听器
-    .listener(callback)
-    .start()
-```
-
-> **重要**：未调用 `bindActivity()` 且未取消的下载任务，后台会继续执行。此时必须手动调用 `removeDownloadListeners(task)` 释放监听器，否则回调中持有的 Activity 引用会导致内存泄露。
-
-### 全局下载进度监听
-
-```kotlin
-val globalListener = object : IProgressCallback {
-    override fun onConnecting(task: Task) { /* ... */ }
-    override fun onProgress(task: Task, complete: Boolean) { /* ... */ }
-    override fun onFail(error: String?, task: Task) { /* ... */ }
-    override fun onFinish(task: Task) { /* ... */ }
-}
-
-// 注册
-Net.instance.addGlobalDownloadListener(globalListener)
-// 移除
-Net.instance.removeGlobalDownloadListener(globalListener)
-```
-
-### 手动释放监听器
-
-```kotlin
-// 移除某个任务的所有监听器
 Net.instance.removeDownloadListeners(task)
-
-// 移除某个任务的特定监听器
-Net.instance.removeDownloadListener(task, specificCallback)
 ```
 
-### 查询下载状态
+或只移除某一个监听器：
 
 ```kotlin
-if (Net.instance.isDownloadQueued("https://example.com/file.zip")) {
-    // 该 URL 正在下载或排队中
-}
+Net.instance.removeDownloadListener(task, callback)
 ```
 
-## Task 属性
+## 下载事件模型
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `url` | `String?` | 下载地址 |
-| `path` | `String?` | 保存路径 |
-| `downloadSize` | `Long` | 已下载字节数 |
-| `contentLength` | `Long` | 文件总字节数 |
-| `append` | `Boolean` | 是否断点续传 |
-| `overwrite` | `Boolean` | 是否覆盖已存在文件 |
-| `tryAgainCount` | `Int` | 最大重试次数 |
-| `cancelUrl` | `String?` | 被取消时的 URL |
-| `uniqueId` | `String` | 任务唯一标识 |
+本次调整后，下载回调统一通过事件分发链路处理：
 
-## TaskBuilder 完整方法
-
-| 方法 | 说明 |
-|---|---|
-| `savePath(path)` | 文件保存路径 |
-| `url(url)` | 下载地址 |
-| `retryCount(count)` | 最大重试次数（≥1） |
-| `overwrite(bool)` | 目标文件存在时是否覆盖 |
-| `supportCheckpoint()` | 开启断点续传 |
-| `bindActivity(activity)` | 绑定 FragmentActivity 生命周期 |
-| `listener(callback)` | 下载进度监听器 |
-| `noUseGlobalParams()` | 跳过全局参数 |
-| `monitor()` | 强制对本下载任务开启监控上报 |
-| `skipMonitor()` | 强制跳过本下载任务的监控上报 |
-| `monitorExtra(extra)` | 设置下载监控业务附加字段，透传到 MonitorEvent.extra |
-| `setProgressCallback(callback)` | 设置内部进度回调（供 net-flow 等扩展模块使用） |
-| `start(): Task` | 启动下载，返回 Task 实例 |
-
-## 辅助工具
-
-### AbstractProgressCallback
-
-Java 友好适配器，只需覆写关心的回调：
-
-```kotlin
-builder.listener(object : AbstractProgressCallback() {
-    override fun onProgress(task: Task, complete: Boolean) {
-        // 只处理进度
-    }
-})
+```text
+Task.progressCallback
+  -> DownloadEventPublisher
+  -> Download.publishDownloadEvent()
+  -> DownloadListenerRegistry
+  -> 全局监听器 / 任务监听器 / Flow 监听器
 ```
 
-### TaskTools 进度计算
+这套模型替代了旧的 `DownloadEndNotify`、`GlobalDownloadProgressCache`、`HoldActivityCallbackMap` 和 `setProgressCallback`。使用者不需要直接接触这些内部类，只需要使用公开 API。
+
+## 公开监听 API
+
+| API | 作用 | 何时清理 |
+| --- | --- | --- |
+| `listener(callback)` | 给当前下载任务注册进度监听 | 任务结束、绑定 Activity 销毁、取消任务或手动移除 |
+| `Net.instance.addGlobalDownloadListener(callback)` | 监听所有下载任务 | 不再需要全局监听时手动移除 |
+| `Net.instance.removeGlobalDownloadListener(callback)` | 移除指定全局监听器 | 全局监听组件销毁时 |
+| `Net.instance.removeDownloadListeners(task)` | 移除某个任务的全部监听器 | 后台下载不再需要 UI 监听时 |
+| `Net.instance.removeDownloadListener(task, callback)` | 移除某个任务的指定监听器 | 单个监听器失效时 |
+
+`TaskBuilder.addDownloadListener(callback)` 是扩展模块使用的内部桥接 API，目前用于 `net-flow` 将下载进度转换为 Flow。普通业务代码推荐使用 `listener(callback)`。
+
+## 回调语义
+
+| 回调 | 含义 | 说明 |
+| --- | --- | --- |
+| `onConnecting(task)` | 开始连接服务器 | 每次实际下载尝试前触发 |
+| `onProgress(task, false)` | 正在下载 | `task.downloadSize` 和 `task.contentLength` 会持续更新 |
+| `onProgress(task, true)` | 下载完成 | 完成后会继续触发 `onFinish(task)` |
+| `onFail(error, task)` | 最终失败、取消或任务无效 | 重试过程中的中间失败不会作为最终失败分发 |
+| `onFinish(task)` | 任务终结 | 成功或最终失败后都会触发，用于收尾 |
+
+无效任务会返回 `ERROR_INVALID_DOWNLOAD_TASK`。当前任务要求 `url` 和 `savePath` 都有效，否则不会发起真实下载。
+
+## 监控字段
 
 ```kotlin
-val percent = TaskTools.getDownloadProgress(task)  // 返回 0..100
-```
-
-## 关键说明
-
-- 下载默认最大并行数为 3，可在 `configure {}` 中通过 `maxConcurrentDownloads()` 调整
-- 断点续传依赖服务器支持 HTTP Range 请求（返回 206 Partial Content）
-- `IProgressCallback` 回调在后台线程执行，更新 UI 需切换到主线程
-- 使用 Flow 方式获取下载进度可自动在主线程接收，详见 [08-下载进度 Flow](../../net-flow/doc/02-flow-download.md)
-- `onFinish` 在无论成功失败都会触发（但重试中的临时 `onFail` 不会触发），适合做清理工作
-
-## 下载监控
-
-当全局监控开启（`monitor { enabled(true) }`）时，下载任务会自动上报**下载阶段**的监控事件，与 HTTP 层的 `MonitorInterceptor` 事件互补：
-
-- **HTTP 层事件**（MonitorInterceptor）：上报 DNS/连接/HTTP 状态码等网络层信息
-- **下载阶段事件**（BaseRequest.reportDownloadEvent）：上报流读取、磁盘写入、MD5 校验等下载层信息
-
-下载事件的核心字段：
-
-| 监控字段 | 说明 |
-|---|---|
-| `eventStage = "DOWNLOAD"` | 区分 HTTP 层和下载层事件 |
-| `downloadSize` | 已下载字节数 |
-| `contentLength` | 文件总大小 |
-| `isAppend` | 是否断点续传 |
-| `retryCount` | 当前重试次数 |
-| `downloadSpeed` | 平均下载速度（bytes/s） |
-| `downloadError` | 下载阶段独立错误类型（NONE / DOWNLOAD_STREAM_ERROR / DISK_WRITE_ERROR / MD5_MISMATCH / CANCELLED） |
-
-下载监控单任务控制：
-
-```kotlin
-// 强制监控关键下载
 Net.instance.newDownload()
-    .savePath(path).url(url)
-    .monitor()                            // 无视全局 enabled=false
-    .monitorExtra("scene=ota;version=2.3") // 附加业务数据
+    .savePath("${filesDir}/report.zip")
+    .url("https://example.com/report.zip")
+    .monitor()
+    .monitorExtra("scene=preload;module=home")
     .listener(callback)
     .start()
-
-// 跳过心跳/轮询下载的监控
-Net.instance.newDownload()
-    .savePath(cachePath).url(heartbeatUrl)
-    .skipMonitor()  // 无视全局 enabled=true，不产生监控事件
-    .start()
 ```
 
-> 下载监控事件仅在下载失败时上报（与 `MonitorConfig.reportMode` 一致），成功时不产生下载事件。
+- `monitor()`：强制对当前下载任务开启监控上报。
+- `skipMonitor()`：强制跳过当前下载任务的监控上报。
+- `monitorExtra(extra)`：给监控事件附加业务字段，便于服务端排查具体场景。
+
+## 常见问题
+
+- 不要在普通业务代码里使用 `addDownloadListener()`，它是为扩展模块保留的桥接能力。
+- 不要只依赖 Activity 销毁释放监听器。后台下载场景应主动取消任务或移除监听器。
+- 不要把 `onProgress(task, true)` 和 `onFinish(task)` 当成同一个事件。前者表示下载完成，后者表示任务收尾。
+- 下载大文件时不要在每次 `onProgress` 中做复杂 JSON、数据库或文件扫描操作，避免拖慢下载线程。
 
 ## 验证方式
 
-- 下载完成后检查文件是否存在且大小正确
-- 通过 MD5 校验确认文件完整性
-- 断点续传：下载到一半杀掉进程，重新启动后确认从断点继续
-- 使用 `isDownloadQueued(url)` 确认下载状态
+- 下载一个小文件，应按 `onConnecting -> onProgress(false) -> onProgress(true) -> onFinish` 顺序触发。
+- 下载一个不存在的地址，应最终触发 `onFail -> onFinish`。
+- 绑定 Activity 后关闭页面，应取消下载并释放任务监听器。
+- 开启 `supportCheckpoint()` 后中断再恢复，应从已有字节继续下载。
 
-[返回 README](../../README.md)
+[返回模块 README](../README.md)

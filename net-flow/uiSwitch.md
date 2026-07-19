@@ -236,7 +236,7 @@ fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
             trySend(DownloadProgress(task, DownloadPhase.Downloading))
         }
     }
-    taskRef.setProgressCallback(flowCallback)
+    taskRef.addDownloadListener(flowCallback)
     taskRef.start()
     awaitClose { Net.instance.cancelDownload(task) }
 }
