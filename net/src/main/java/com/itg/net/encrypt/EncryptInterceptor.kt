@@ -427,7 +427,7 @@ class EncryptInterceptor(
         } catch (_: Exception) {
             -1L
         }
-        return length > limit
+        return length < 0L || length > limit
     }
 
     private fun exceedsBodyLimit(body: ResponseBody): Boolean {

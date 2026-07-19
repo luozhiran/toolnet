@@ -8,6 +8,7 @@ import com.itg.net.download.data.Task
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 下载进度阶段
@@ -64,6 +65,7 @@ data class DownloadProgress(
  */
 fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
     val taskRef = this@flow
+    val terminalReached = AtomicBoolean(false)
 
     // 注入自定义进度回调，将下载事件桥接到 Flow
     val flowCallback = object : IProgressCallback {
@@ -73,6 +75,7 @@ fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
 
         override fun onProgress(task: Task, complete: Boolean) {
             if (complete) {
+                terminalReached.set(true)
                 trySend(DownloadProgress(task, DownloadPhase.Complete))
                 close()
             } else {
@@ -81,6 +84,7 @@ fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
         }
 
         override fun onFail(error: String?, task: Task) {
+            terminalReached.set(true)
             trySend(DownloadProgress(task, DownloadPhase.Failed))
             close(NetFlowException(null, error))
         }
@@ -95,11 +99,14 @@ fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
     taskRef.addDownloadListener(flowCallback)
     val task = taskRef.start()
     if (task.cancelUrl == task.url && task.url != null) {
+        terminalReached.set(true)
         trySend(DownloadProgress(task, DownloadPhase.Failed))
         close(NetFlowException(null, ERROR_DOWNLOAD_CANCELED))
     }
 
     awaitClose {
-        Net.instance.cancelDownload(task)
+        if (!terminalReached.get()) {
+            Net.instance.cancelDownload(task)
+        }
     }
 }

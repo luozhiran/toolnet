@@ -1,6 +1,7 @@
 package com.itg.net.request.business
 
 import com.itg.net.request.result.NetResult
+import java.io.IOException
 
 internal class BusinessResultChain(
     private val interceptors: List<BusinessResultInterceptor>,
@@ -26,13 +27,22 @@ internal class BusinessResultChain(
             }
         }
 
-        return interceptors[index].intercept(
-            BusinessResultChain(
-                interceptors = interceptors,
-                response = response,
-                envelope = envelope,
-                index = index + 1
+        return try {
+            interceptors[index].intercept(
+                BusinessResultChain(
+                    interceptors = interceptors,
+                    response = response,
+                    envelope = envelope,
+                    index = index + 1
+                )
             )
-        )
+        } catch (error: Exception) {
+            BusinessResult.NetworkError(
+                NetResult.NetworkError(
+                    error = IOException("Business result interceptor failed at index $index", error),
+                    body = response.body
+                )
+            )
+        }
     }
 }

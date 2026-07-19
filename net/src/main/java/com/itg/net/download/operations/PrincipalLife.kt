@@ -56,7 +56,7 @@ object PrincipalLife {
                 if (event != Lifecycle.Event.ON_DESTROY) return
 
                 val ownerActivity = source as? Activity ?: return
-                ThreadTool.runOnExecutor {
+                ThreadTool.executeOnBackground {
                     val calls = synchronized(lockCall) {
                         observerWeakHash.remove(ownerActivity)
                         callWeakHash.remove(ownerActivity)?.toList().orEmpty()

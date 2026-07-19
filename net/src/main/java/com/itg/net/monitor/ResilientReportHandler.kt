@@ -23,6 +23,7 @@ class ResilientReportHandler(
     }
 
     private val safeMaxLocalEvents: Int = maxLocalEvents.coerceAtLeast(1)
+    private val trimThreshold: Int = (safeMaxLocalEvents * 2).coerceAtLeast(safeMaxLocalEvents + 1)
 
     private var localEventCount = 0
 
@@ -38,7 +39,11 @@ class ResilientReportHandler(
         try {
             localFile.parentFile?.mkdirs()
             if (localFile.exists()) {
-                localEventCount = countLines(localFile).coerceAtMost(safeMaxLocalEvents)
+                localEventCount = countLines(localFile, trimThreshold)
+                if (localEventCount > trimThreshold) {
+                    truncateHead()
+                    localEventCount = safeMaxLocalEvents
+                }
             }
             writer = RandomAccessFile(localFile, "rw")
             writer?.seek(localFile.length())
@@ -74,15 +79,14 @@ class ResilientReportHandler(
         try {
             val w = writer ?: return
             synchronized(w) {
-                if (localEventCount >= safeMaxLocalEvents) {
-                    truncateHead()
-                    localEventCount--
-                }
-
                 w.seek(localFile.length())
-                w.writeBytes(event.toJson().toString())
-                w.writeBytes("\n")
+                w.write((event.toJson().toString() + "\n").toByteArray(Charsets.UTF_8))
                 localEventCount++
+                if (localEventCount > trimThreshold) {
+                    truncateHead()
+                    localEventCount = safeMaxLocalEvents
+                    w.seek(localFile.length())
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to write local backup", e)
@@ -93,23 +97,23 @@ class ResilientReportHandler(
         try {
             val keep = readLastLines(localFile, safeMaxLocalEvents - 1)
             if (keep.isEmpty()) {
-                localFile.writeText("")
+                localFile.writeText("", Charsets.UTF_8)
                 return
             }
-            localFile.writeText(keep.joinToString("\n") + "\n")
+            localFile.writeText(keep.joinToString("\n") + "\n", Charsets.UTF_8)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to truncate local backup head", e)
         }
     }
 
-    private fun countLines(file: File): Int {
+    private fun countLines(file: File, maxLines: Int): Int {
         var count = 0
-        file.bufferedReader().useLines { lines ->
+        file.bufferedReader(Charsets.UTF_8).useLines { lines ->
             for (line in lines) {
                 if (line.isNotEmpty()) {
                     count++
                 }
-                if (count >= safeMaxLocalEvents) return safeMaxLocalEvents
+                if (count > maxLines) return count
             }
         }
         return count
@@ -118,7 +122,7 @@ class ResilientReportHandler(
     private fun readLastLines(file: File, maxLines: Int): List<String> {
         if (maxLines <= 0) return emptyList()
         val buffer = ArrayDeque<String>(maxLines)
-        file.bufferedReader().use { reader: BufferedReader ->
+        file.bufferedReader(Charsets.UTF_8).use { reader: BufferedReader ->
             while (true) {
                 val line = reader.readLine() ?: break
                 if (buffer.size == maxLines) {

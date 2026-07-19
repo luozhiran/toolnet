@@ -42,9 +42,12 @@ class EncryptConfig {
      * 单次字段加解密允许处理的最大 body 字节数。
      *
      * 字段级加解密需要把 JSON/Form body 读入内存后解析，超过该阈值会跳过处理，避免大包请求或响应造成
-     * 内存峰值和 GC 抖动。设置为 0 或负数表示不限制。
+     * 内存峰值和 GC 抖动。设置为 0 或负数会回退到默认安全上限。
      */
     var maxBodyBytes: Long = DEFAULT_MAX_BODY_BYTES
+        set(value) {
+            field = if (value > 0L) value else DEFAULT_MAX_BODY_BYTES
+        }
 
     // ==================== 加密规则 ====================
 
@@ -145,7 +148,7 @@ class EncryptConfig {
     }
 
     /**
-     * 设置字段加解密最大 body 字节数。默认 64KB，传入 0 或负数表示不限制。
+     * 设置字段加解密最大 body 字节数。默认 64KB，传入 0 或负数会回退到默认安全上限。
      */
     fun maxBodyBytes(maxBytes: Long): EncryptConfig {
         this.maxBodyBytes = maxBytes

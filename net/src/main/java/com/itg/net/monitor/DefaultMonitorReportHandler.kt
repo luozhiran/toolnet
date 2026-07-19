@@ -9,7 +9,10 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -65,7 +68,13 @@ class DefaultMonitorReportHandler(
 
     /** 是否正在运行 */
     private val running = AtomicBoolean(true)
+    private val flushLock = Any()
     private val reportInFlight = AtomicBoolean(false)
+    private val flushExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "monitor-flush").apply {
+            isDaemon = true
+        }
+    }
 
     /** 强制刷新标志：flush() 时设为 true，消费者线程检测后立即 flush 当前 batch */
     @Volatile
@@ -244,11 +253,13 @@ class DefaultMonitorReportHandler(
      * - 已 shutdown：静默丢弃
      */
     override fun onEvent(event: MonitorEvent) {
-        if (!running.get()) return
-        if (!queue.offer(event)) {
-            // 队列满，静默丢弃（可在后续版本增加丢弃计数用于监控自监控）
-            if (Log.isLoggable(TAG, Log.DEBUG)) {
-                Log.d(TAG, "Queue full, event dropped")
+        synchronized(flushLock) {
+            if (!running.get()) return
+            if (!queue.offer(event)) {
+                // 队列满，静默丢弃（可在后续版本增加丢弃计数用于监控自监控）
+                if (Log.isLoggable(TAG, Log.DEBUG)) {
+                    Log.d(TAG, "Queue full, event dropped")
+                }
             }
         }
     }
@@ -257,15 +268,18 @@ class DefaultMonitorReportHandler(
      * 立即刷新队列中所有未上报的事件
      */
     override fun flush() {
-        // 排空队列中的事件（事件还在 queue 中，消费者尚未 take）
-        val pending = mutableListOf<MonitorEvent>()
-        queue.drainTo(pending)
-        if (pending.isNotEmpty()) {
-            runFlushWorker(pending)
+        synchronized(flushLock) {
+            if (!running.get()) return
+            // 排空队列中的事件（事件还在 queue 中，消费者尚未 take）
+            val pending = mutableListOf<MonitorEvent>()
+            queue.drainTo(pending)
+            if (pending.isNotEmpty()) {
+                runFlushWorker(pending)
+            }
+            // 通知消费者线程立即 flush 当前 batch（事件已被 take 但尚未到 flush 窗口）
+            // forceFlush 是 volatile，interrupt 只用于唤醒阻塞中的 take/poll。
+            forceFlush = true
         }
-        // 通知消费者线程立即 flush 当前 batch（事件已被 take 但尚未到 flush 窗口）
-        // forceFlush 是 volatile，interrupt 只用于唤醒阻塞中的 take/poll。
-        forceFlush = true
         consumerThread.interrupt()
     }
 
@@ -273,7 +287,9 @@ class DefaultMonitorReportHandler(
      * 关闭上报器，等待剩余事件上报完成后释放资源
      */
     override fun shutdown() {
-        running.set(false)
+        synchronized(flushLock) {
+            running.set(false)
+        }
         consumerThread.interrupt()
         try {
             consumerThread.join(5000)
@@ -281,6 +297,7 @@ class DefaultMonitorReportHandler(
             Thread.currentThread().interrupt()
         }
         // 排空队列 + 二次排空（捕获 drainTo 之后竞态到达的事件）
+        shutdownFlushExecutor()
         val remaining = mutableListOf<MonitorEvent>()
         queue.drainTo(remaining)
         val lateArrivals = mutableListOf<MonitorEvent>()
@@ -412,11 +429,22 @@ class DefaultMonitorReportHandler(
     }
 
     private fun runFlushWorker(events: List<MonitorEvent>) {
-        Thread({
-            doFlushAsync(events, awaitCompletion = true)
-        }, "monitor-flush").apply {
-            isDaemon = true
-            start()
+        if (!running.get()) return
+        try {
+            flushExecutor.execute {
+                doFlushAsync(events, awaitCompletion = true)
+            }
+        } catch (_: RejectedExecutionException) {
+            Log.w(TAG, "Flush executor is shut down, dropping ${events.size} events")
+        }
+    }
+
+    private fun shutdownFlushExecutor() {
+        flushExecutor.shutdown()
+        try {
+            flushExecutor.awaitTermination(5000, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 }

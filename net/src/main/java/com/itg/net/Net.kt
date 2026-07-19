@@ -494,7 +494,16 @@ class Net {
      * - 手动释放监控资源时
      */
     fun shutdownMonitor() {
+        // 默认非阻塞，适合主线程；需要等待关闭完成时调用 shutdownMonitorBlocking()。
         shutdownMonitorAsync()
+    }
+
+    /**
+     * [shutdownMonitor] 的语义化别名：阻塞等待监控资源关闭完成。
+     */
+    fun shutdownMonitorBlocking() {
+        val manager = okhttpManagerRef ?: return
+        manager.shutdownMonitor()
     }
 
     /**

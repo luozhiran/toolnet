@@ -2,22 +2,24 @@ package com.itg.net.util
 
 import android.os.Handler
 import android.os.Looper
-import java.util.concurrent.Executors
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 object ThreadTool {
-    private val executor by lazy { Executors.newFixedThreadPool(2) }
+    private val executor by lazy {
+        Executors.newFixedThreadPool(2, NamedDaemonThreadFactory("itg-net-bg"))
+    }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
-    fun runOnExecutor(runnable: Runnable) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            runnable.run()
-        } else {
-            executor.execute(runnable)
-        }
+    fun executeOnBackground(runnable: Runnable) {
+        executor.execute(runnable)
     }
+
+    fun runOnExecutor(runnable: Runnable) = executeOnBackground(runnable)
 
     fun runOnUIThread(runnable: Runnable) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -77,4 +79,17 @@ object ThreadTool {
     }
 
     private const val DEFAULT_UI_WAIT_TIMEOUT_MS = 3000L
+
+    private class NamedDaemonThreadFactory(
+        private val prefix: String
+    ) : ThreadFactory {
+        private val counter = AtomicInteger(0)
+
+        override fun newThread(runnable: Runnable): Thread {
+            return Thread(runnable, "$prefix-${counter.incrementAndGet()}").apply {
+                isDaemon = true
+                priority = Thread.NORM_PRIORITY - 1
+            }
+        }
+    }
 }
