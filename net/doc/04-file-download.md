@@ -179,4 +179,4 @@ Net.instance.newDownload()
 - 绑定 Activity 后关闭页面，应取消下载并释放任务监听器。
 - 开启 `supportCheckpoint()` 后中断再恢复，应从已有字节继续下载。
 
-[返回模块 README](../README.md)
+[返回 README](../../README.md)

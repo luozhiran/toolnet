@@ -296,8 +296,8 @@ class MyApp : Application() {
 // 主动刷新缓冲区（App 进后台时调用）
 Net.instance.flushMonitor()
 
-// 异步关闭监控，优雅释放资源（OkHttpClient 重建前）
-Net.instance.shutdownMonitorAsync()
+// 关闭监控，释放所有资源（默认异步，OkHttpClient 重建前）
+Net.instance.shutdownMonitor()
 
 // 同步阻塞关闭监控，确保数据不丢失（进程终止前）
 Net.instance.shutdownMonitorBlocking()
@@ -306,7 +306,7 @@ Net.instance.shutdownMonitorBlocking()
 | 方法 | 行为 | 调用时机 |
 |------|------|---------|
 | `flushMonitor()` | 立即排空内存队列并 POST | App 进后台、即将终止 |
-| `shutdownMonitorAsync()` | 异步关闭：等待队列排空 → 释放线程池 → 释放网络连接 | 切换环境 / 重建 OkHttpClient |
+| `shutdownMonitor()` | 异步关闭：等待队列排空 → 释放线程池 → 释放网络连接 | 切换环境 / 重建 OkHttpClient |
 | `shutdownMonitorBlocking()` | 同步阻塞关闭，等待全部完成后返回 | 进程 `onTerminate()` |
 
 ## 架构概览

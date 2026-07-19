@@ -365,6 +365,7 @@ Net.instance.get()
 | `postMultipart()` | `PostMul` | `multipart/form-data` | 混合内容 |
 | `postContent()` | `PostContent` | 自定义 | 自定义 Content-Type |
 | `builder(ModeType.PostResume)` | `PostResumeFile` | 自动推断 | 断点续传上传 |
+| `postResumeFile()` | `PostResumeFile` | 自动推断 | `builder(ModeType.PostResume)` 的便捷方法 |
 | `request(ModeType)` | 对应类型 | — | `builder()` 的别名 |
 | `uploadFile()` | `PostFile` | 自动推断 | `postFile()` 的别名 |
 | `uploadMultipart()` | `PostMul` | `multipart/form-data` | `postMultipart()` 的别名 |

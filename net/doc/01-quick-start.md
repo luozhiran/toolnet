@@ -149,6 +149,28 @@ val api = Net.instance.retrofit
 | `Net.instance.config` | `NetConfig` | 获取当前全局配置的只读快照 |
 | `Net.instance.retrofit` | `NetRetrofit.Builder` | Retrofit 声明式 API 构建器入口（依赖 `net-retrofit` 模块） |
 
+## 静态便捷方法
+
+除了 `Net.instance.get()` 等形式，`Net` 也提供了静态便捷方法，效果完全相同：
+
+```kotlin
+// 以下两行等价
+Net.get().url("...").send(callback)
+Net.instance.get().url("...").send(callback)
+```
+
+| 静态方法 | 等价于 | 说明 |
+|------|------|------|
+| `Net.get()` | `Net.instance.get()` | GET 请求 |
+| `Net.postJson()` | `Net.instance.postJson()` | POST JSON 请求 |
+| `Net.postForm()` | `Net.instance.postForm()` | POST Form 请求 |
+| `Net.postFile()` | `Net.instance.postFile()` | 文件上传 |
+| `Net.postMultipart()` | `Net.instance.postMultipart()` | Multipart 上传 |
+| `Net.postContent()` | `Net.instance.postContent()` | 自定义 Content-Type |
+| `Net.download()` | `Net.instance.newDownload()` | 创建下载任务 |
+| `Net.cancelAllRequests()` | `Net.instance.cancelAll()` | 取消所有请求 |
+| `Net.cancelRequest(tag)` | `Net.instance.cancel(tag)` | 按 tag 取消请求 |
+
 ## 模块关系
 
 ```

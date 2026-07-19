@@ -164,8 +164,8 @@ val builder2 = Net.instance.retrofit        // Net 扩展属性（推荐）
 | `client(client: OkHttpClient)` | 自定义 OkHttpClient（默认使用 Net 库全局 client） |
 | `addConverterFactory(factory)` | 添加 Converter.Factory（默认 `GsonConverterFactory`） |
 | `addCallAdapterFactory(factory)` | 添加 CallAdapter.Factory（默认 `NetFlowCallAdapterFactory`） |
-| `build(): NetRetrofit` | 构建实例 |
-| `create<T>(): T` | 创建 Service 接口的动态代理实现 |
+| `build(): NetRetrofit` | 构建 `NetRetrofit` 实例 |
+| `NetRetrofit.create<T>(): T` | 创建 Service 接口的动态代理实现（在 `NetRetrofit` 上，不在 `Builder` 上） |
 
 ## ProGuard / R8 规则
 

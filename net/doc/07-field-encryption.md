@@ -123,7 +123,6 @@ encrypt {
 | `AES_GCM_NO_PADDING` | ✅ 12 字节推荐 | ⭐⭐⭐⭐⭐ 加密+认证 | ⭐⭐⭐⭐⭐ 硬件加速 | **首选** |
 | `AES_CBC_PKCS7` | ✅ 16 字节 | ⭐⭐⭐ 仅加密 | ⭐⭐⭐ | 兼容性好 |
 | `AES_ECB_PKCS7` | ❌ 不需要 | ⭐ 固定密文 | ⭐⭐⭐⭐ | 仅简单混淆 |
-| `RSA_ECB_PKCS1` | ❌ 不需要 | ⭐⭐⭐⭐ 非对称 | ⭐ 很慢 | 仅密钥传输 |
 
 ### AES/GCM/NoPadding（推荐，带认证）
 
@@ -167,23 +166,6 @@ encrypt {
 ```
 
 > **不推荐用于生产环境**。ECB 模式相同明文始终产生相同密文，安全性较低。
-
-### RSA/ECB/PKCS1（非对称加密）
-
-RSA 适合加密小数据（如 AES 密钥传输），不适合加密大段文本。推荐做法是混合加密：用 RSA 加密 AES 密钥，再用 AES 加密业务数据。
-
-```kotlin
-// 推荐：混合加密模式
-encrypt {
-    // 1. 登录时用 RSA 公钥加密 AES 密钥传给服务端
-    // 2. 服务端用 RSA 私钥解密，返回 AES SessionKey
-    // 3. 后续通信使用协商的 AES SessionKey
-    algorithm(Algorithm.AES_GCM_NO_PADDING)
-    secretKey(sessionAesKey)  // 服务端返回的 SessionKey
-    iv(sessionIv)
-    encryptField("phone")
-}
-```
 
 ## EncryptUtil 独立使用
 
@@ -230,6 +212,7 @@ val phone = EncryptUtil.decrypt(
 | `requestEncrypt(bool)` | 启用/禁用请求加密（默认 true） |
 | `responseDecrypt(bool)` | 启用/禁用响应解密（默认 true） |
 | `skipGetRequest(bool)` | 是否跳过 GET 请求（默认 true） |
+| `maxBodyBytes(bytes)` | Body 大小上限（超过跳过加解密，默认 64KB） |
 
 ## 密钥管理建议
 
@@ -238,14 +221,13 @@ val phone = EncryptUtil.decrypt(
 | 本地固定密钥 | ⭐ | 开发/测试 |
 | 本地固定密钥 + 代码混淆 | ⭐⭐ | 非敏感数据 |
 | 服务端下发 SessionKey（登录后返回） | ⭐⭐⭐ | **生产环境推荐** |
-| RSA 加密 AES 密钥（混合加密） | ⭐⭐⭐⭐ | 高安全需求 |
 | Android Keystore 硬件保护 | ⭐⭐⭐⭐⭐ | 金融/支付 |
 
 ### 推荐生产方案
 
 ```
-1. App 启动 → 生成 RSA 密钥对（或预置公钥）
-2. 登录请求 → 服务端用 RSA 公钥加密 AES SessionKey 返回
+1. App 启动 → 与服务端建立安全通道（如证书固定）
+2. 登录请求 → 服务端返回 AES SessionKey（通过 HTTPS 传输）
 3. 后续请求 → 使用 AES SessionKey + GCM 模式进行字段加解密
 4. SessionKey 定期轮换（如每 30 分钟）
 ```
@@ -257,7 +239,7 @@ val phone = EncryptUtil.decrypt(
 - GET 请求默认跳过加密（可通过 `skipGetRequest(false)` 修改）
 - 单请求的 `.encrypt()` / `.skipEncrypt()` 优先级高于全局配置
 - GCM 模式每次加密必须使用不同的 IV/Nonce，重复使用会严重破坏安全性
-- RSA 最多加密 245 字节（RSA-2048），不适合加密大段文本
+- GCM 模式每次加密必须使用不同的 IV/Nonce，重复使用会严重破坏安全性
 
 ## 验证方式
 
