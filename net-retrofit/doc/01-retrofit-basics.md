@@ -1,76 +1,35 @@
-# 9. Retrofit 声明式 API（net-retrofit 模块）
+# 01. Retrofit 基础
 
-如何使用 Net 库的 Retrofit 集成，通过 Kotlin 接口 + 注解定义网络 API，并利用 `suspend` 函数和 `Flow` 返回类型。
+这个文档说明如何用 `net-retrofit` 定义声明式网络接口。
 
-## 适用条件
-
-- 项目已引入 `net-retrofit` 模块
-- 熟悉 Retrofit 注解（`@GET`、`@POST`、`@Path`、`@Query`、`@Body` 等）
-- 希望用声明式方式管理 API 接口
-
-## 推荐做法
-
-### 定义 Service 接口
+## 初始化 Net
 
 ```kotlin
-import retrofit2.http.*
-import com.itg.net.flow.NetResponse
-import com.itg.net.request.business.BusinessResult
-import com.itg.net.request.business.TypedBusinessResult
-import com.itg.net.request.result.NetResult
-
-interface UserService {
-
-    @GET("user/{id}")
-    suspend fun getUser(@Path("id") id: String): User
-
-    @POST("user/login")
-    suspend fun login(@Body request: LoginRequest): LoginResponse
-
-    @GET("user/list")
-    suspend fun listUsers(
-        @Query("page") page: Int,
-        @Query("size") size: Int
-    ): List<User>
-
-    @FormUrlEncoded
-    @POST("user/update")
-    suspend fun updateProfile(
-        @Field("name") name: String,
-        @Field("email") email: String
-    ): User
-
-    @Multipart
-    @POST("upload/avatar")
-    suspend fun uploadAvatar(
-        @Part file: MultipartBody.Part
-    ): UploadResult
-
-    // NetResponse 包装，不抛 HttpException
-    @POST("user/login")
-    suspend fun loginSafe(@Body request: LoginRequest): NetResponse<LoginResponse>
-
-    // Flow 流式返回
-    @GET("events")
-    fun eventStream(): Flow<Event>
-
-    // Flow + HTTP 结果分流
-    @GET("user/info")
-    fun userInfoResult(): Flow<NetResult>
-
-    // Flow + 业务码责任链
-    @GET("user/info")
-    fun userInfoBusiness(): Flow<BusinessResult>
-
-    // Flow + 业务码责任链 + data 自动转类型
-    @GET("user/info")
-    fun userInfoTypedBusiness(): Flow<TypedBusinessResult<UserInfo>>
+Net.configure {
+    application(app)
+    baseUrl("https://api.example.com/")
+    enableHttpLog(BuildConfig.DEBUG)
 }
 ```
 
-### 构建 NetRetrofit 实例
+`NetRetrofit` 默认复用 `Net.instance` 中的 OkHttpClient，所以拦截器、超时、缓存、加密、监控等底层能力都来自 `net` 的配置。
 
-#### 便捷入口（推荐）
+## 定义 Service
+
+```kotlin
+interface UserService {
+    @GET("user/profile")
+    suspend fun profile(): UserInfo
+
+    @POST("user/login")
+    suspend fun login(@Body body: LoginRequest): LoginResponse
+
+    @GET("user/profile")
+    fun profileResult(): Flow<NetResult>
+}
+```
+
+## 创建实例
 
 ```kotlin
 val userService = Net.instance.retrofit
@@ -79,226 +38,45 @@ val userService = Net.instance.retrofit
     .create<UserService>()
 ```
 
-#### 多 Service 共享实例
+`baseUrl` 必须以 `/` 结尾，这是 Retrofit 的要求。
 
-```kotlin
-val retrofit = Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .build()
-
-val userService = retrofit.create<UserService>()
-val orderService = retrofit.create<OrderService>()
-```
-
-#### 单例管理（推荐）
-
-```kotlin
-object ApiServices {
-    val retrofit = Net.instance.retrofit
-        .baseUrl("https://api.example.com/")
-        .build()
-
-    val user: UserService by lazy { retrofit.create() }
-    val order: OrderService by lazy { retrofit.create() }
-}
-```
-
-### 默认行为
-
-| 配置项 | 默认值 |
-|---|---|
-| OkHttpClient | `Net.instance.okhttpManager.okHttpClient`（继承全部拦截器/超时/缓存） |
-| Converter.Factory | `GsonConverterFactory.create()` |
-| CallAdapter.Factory | `NetFlowCallAdapterFactory()`（支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>` / `Flow<TypedBusinessResult<T>>`） |
-
-### suspend 函数请求
-
-#### 直接返回反序列化对象
+## suspend 接口
 
 ```kotlin
 lifecycleScope.launch {
     try {
-        val user = userService.getUser("123")  // 返回 User 对象
-        updateUI(user)                          // 主线程，安全
+        val user = userService.profile()
+        render(user)
     } catch (e: HttpException) {
-        showError("HTTP ${e.code()}: ${e.message()}")  // 非 2xx 抛此异常
+        showError("HTTP ${e.code()}")
     } catch (e: IOException) {
-        showError("网络连接异常: ${e.message}")
+        showError(e.message)
     }
 }
 ```
 
-#### 返回 NetResponse（不抛 HttpException）
+普通 `suspend fun` 使用 Retrofit 原生行为：
+
+- HTTP 2xx：返回反序列化后的对象。
+- HTTP 4xx/5xx：抛 `HttpException`。
+- 网络错误：抛 `IOException`。
+
+如果你想使用 `NetResult`、`BusinessResult` 或 `ResponseTooLarge` 这类统一结果模型，请声明为 Flow 返回类型，见 [Retrofit 进阶](./02-retrofit-advanced.md)。
+
+## 自定义 OkHttpClient
 
 ```kotlin
-@POST("user/login")
-suspend fun login(@Body request: LoginRequest): NetResponse<LoginResponse>
+val client = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .build()
 
-// 使用
-val response = userService.login(LoginRequest("admin", "123456"))
-if (response.isSuccessful) {
-    navigateToHome(response.body)
-} else {
-    showError("登录失败: ${response.rawBody}")
-}
+val service = Net.instance.retrofit
+    .baseUrl("https://api.example.com/")
+    .client(client)
+    .build()
+    .create<UserService>()
 ```
 
-#### 返回 Retrofit Response
+传入 `client(...)` 后，这个 Retrofit 实例会使用该 client。是否包含日志、加密、监控、业务自己的拦截器，取决于你传入的 client。
 
-```kotlin
-@GET("user/{id}")
-suspend fun getUser(@Path("id") id: String): Response<User>
-
-// 使用
-val response = userService.getUser("123")
-when {
-    response.isSuccessful -> updateUI(response.body())
-    response.code() == 404 -> showNotFound()
-}
-```
-
-### Flow 流式返回
-
-```kotlin
-// Flow<T>
-@GET("events")
-fun eventStream(): Flow<Event>
-
-lifecycleScope.launch {
-    eventService.eventStream()
-        .catch { e -> Log.e("TAG", "事件流中断", e) }
-        .collect { event -> processEvent(event) }
-}
-
-// Flow<NetResponse<T>>
-@GET("data/stream")
-fun dataStream(): Flow<NetResponse<DataChunk>>
-
-lifecycleScope.launch {
-    dataService.dataStream()
-        .collect { response ->
-            if (response.isSuccessful) processData(response.body)
-        }
-}
-```
-
-#### Flow<NetResult>
-
-`Flow<NetResult>` 和 `net-flow` 的 `flowResult()` 行为一致：2xx 进入 `Success`，4xx/5xx 进入 `HttpError`，断网/超时进入 `NetworkError`。
-
-```kotlin
-import com.itg.net.request.result.NetResult
-
-interface UserService {
-    @GET("user/info")
-    fun userInfoResult(): Flow<NetResult>
-}
-
-lifecycleScope.launch {
-    userService.userInfoResult()
-        .collect { result ->
-            when (result) {
-                is NetResult.Success -> render(result.body)
-                is NetResult.HttpError -> showError("HTTP ${result.code}: ${result.body}")
-                is NetResult.NetworkError -> showError("网络不可用: ${result.message}")
-            }
-        }
-}
-```
-
-#### Flow<BusinessResult>
-
-`Flow<BusinessResult>` 和 `net-flow` 的 `flowBusinessResult()` 行为一致：HTTP 2xx 会先进入 `ApiEnvelopeParser`，再走 `BusinessResultInterceptor` 责任链，适合统一处理登录失效、权限不足、维护模式等业务码。
-
-```kotlin
-import com.itg.net.request.business.BusinessResult
-
-interface UserService {
-    @GET("user/info")
-    fun userInfoBusiness(): Flow<BusinessResult>
-}
-
-lifecycleScope.launch {
-    userService.userInfoBusiness()
-        .collect { result ->
-            when (result) {
-                is BusinessResult.Success -> render(result.dataRaw)
-                is BusinessResult.BusinessError -> showError(result.message)
-                is BusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
-                is BusinessResult.NetworkError -> showError("网络不可用")
-                is BusinessResult.Consumed -> Unit
-            }
-        }
-}
-```
-
-`BusinessResult` 使用 `Net.configure { businessEnvelopeParser(...) }` 和 `businessInterceptor(...)` 中的全局配置，详见 [net 09. HTTP 错误、网络异常与业务码处理](../../net/doc/09-error-handling.md)。
-
-#### Flow<TypedBusinessResult<T>>
-
-如果希望 Retrofit Service 直接返回已转换好的业务模型，声明 `Flow<TypedBusinessResult<T>>`：
-
-```kotlin
-import com.itg.net.request.business.TypedBusinessResult
-
-data class UserInfo(
-    val id: Int,
-    val name: String
-)
-
-interface UserService {
-    @GET("user/info")
-    fun userInfoTypedBusiness(): Flow<TypedBusinessResult<UserInfo>>
-}
-
-lifecycleScope.launch {
-    userService.userInfoTypedBusiness()
-        .collect { result ->
-            when (result) {
-                is TypedBusinessResult.Success -> render(result.data)
-                is TypedBusinessResult.DataConvertError -> showError("数据解析失败")
-                is TypedBusinessResult.BusinessError -> showError(result.message)
-                is TypedBusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
-                is TypedBusinessResult.NetworkError -> showError("网络不可用")
-                is TypedBusinessResult.Consumed -> Unit
-            }
-        }
-}
-```
-
-`TypedBusinessResult<T>` 会复用 `NetConfig` 里的 `ApiEnvelopeParser`、`BusinessResultInterceptor` 和 `BusinessDataConverter`。默认转换器是 Gson，只转换业务数据字段 `dataRaw`。
-
-## 返回类型对比
-
-| Service 返回类型 | 非 2xx 行为 | 需要 CallAdapter |
-|---|---|---|
-| `T` (suspend) | 抛 `HttpException` | Retrofit 内置 |
-| `Response<T>` (suspend) | 正常返回，body() 为 null | Retrofit 内置 |
-| `NetResponse<T>` (suspend) | 正常返回，rawBody 含错误信息 | Retrofit 内置 |
-| `Flow<T>` | 以 `NetFlowException` 关闭 | `NetFlowCallAdapterFactory` |
-| `Flow<NetResponse<T>>` | 正常发送，.code 体现错误 | `NetFlowCallAdapterFactory` |
-| `Flow<NetResult>` | 发射 `Success` / `HttpError` / `NetworkError` | `NetFlowCallAdapterFactory` |
-| `Flow<BusinessResult>` | 发射业务责任链处理后的结果 | `NetFlowCallAdapterFactory` |
-| `Flow<TypedBusinessResult<T>>` | 业务成功时把 `data` 转成 `T`，转换失败发射 `DataConvertError` | `NetFlowCallAdapterFactory` |
-| `Call<T>` | Retrofit 原生 | 否 |
-
-## 关键说明
-
-- `baseUrl` 必须以 `/` 结尾，与 Retrofit 原生要求一致
-- Retrofit Service 自动使用 Net 库中配置的 OkHttpClient（包含所有拦截器、超时、缓存等）
-- `globalParams` 不会自动附加到 Retrofit 请求（需在接口中自行添加 `@Query` 参数）
-- `NetResponse<T>` 作为返回类型时，非 2xx 不会抛异常，可通过 `response.code` 自行判断
-- `Flow<T>`、`Flow<NetResponse<T>>`、`Flow<NetResult>`、`Flow<BusinessResult>` 和 `Flow<TypedBusinessResult<T>>` 依赖 `NetFlowCallAdapterFactory`（默认已注册）
-- `Flow<BusinessResult>` 会复用 `NetConfig` 中配置的 `ApiEnvelopeParser` 和 `BusinessResultInterceptor`
-- `Flow<TypedBusinessResult<T>>` 会继续使用 `BusinessDataConverter` 将 `dataRaw` 转成 `T`
-
-## 验证方式
-
-- 编译通过并确认 Service 接口方法可正常调用
-- 在 Retrofit Service 中设置断点确认 OkHttpClient 与全局配置一致
-- 测试 `NetResponse<T>` 在非 2xx 时不抛异常
-- 测试 `Flow<NetResult>` 在 4xx/5xx 时发射 `NetResult.HttpError`
-- 测试 `Flow<BusinessResult>` 在 HTTP 200 + 业务失败码时发射 `BusinessResult.BusinessError` 或被责任链消费
-- 测试 `Flow<TypedBusinessResult<UserInfo>>` 在 HTTP 200 + 业务成功码时发射 `Success<UserInfo>`，模型不匹配时发射 `DataConvertError`
-
-[返回 README](../../README.md)
+[返回模块 README](../README.md)

@@ -1,206 +1,163 @@
-# 10. Retrofit 高级配置
+# 02. Retrofit 进阶
 
-如何自定义 Retrofit 的 Converter、CallAdapter，使用多个 Base URL，以及管理多个 Service 实例。
+这个文档说明 Retrofit Flow 返回类型、自定义 Converter、CallAdapter 和容易误解的行为。
 
-## 适用条件
-
-- 已完成 Retrofit 基础配置（见 [01-Retrofit 基础](./01-retrofit-basics.md)）
-- 需要使用 Gson 以外的序列化库（Moshi、Jackson、kotlinx.serialization）
-- 需要同时对接多个不同 Base URL 的后端服务
-- 需要使用 RxJava 等自定义 CallAdapter
-
-## 推荐做法
-
-### 自定义 Converter
-
-#### 使用 Moshi 代替 Gson
+## 支持的 Flow 返回类型
 
 ```kotlin
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import retrofit2.converter.moshi.MoshiConverterFactory
+interface ApiService {
+    @GET("text")
+    fun text(): Flow<String>
 
-val moshi = Moshi.Builder()
-    .addLast(KotlinJsonAdapterFactory())
-    .build()
+    @GET("user/profile")
+    fun profileResponse(): Flow<NetResponse<UserInfo>>
 
+    @GET("user/profile")
+    fun profileNetResult(): Flow<NetResult>
+
+    @GET("user/profile")
+    fun profileBusiness(): Flow<BusinessResult>
+
+    @GET("user/profile")
+    fun profileTypedBusiness(): Flow<TypedBusinessResult<UserInfo>>
+}
+```
+
+## Flow<T>
+
+`Flow<T>` 适合只关心 HTTP 2xx 成功体的接口。
+
+- HTTP 2xx 且 body 不为空：发射 `T`。
+- HTTP 4xx/5xx：关闭 Flow，并抛出 `NetFlowException(code, message)`。
+- 网络错误：关闭 Flow，并抛出 `NetFlowException(null, message)`。
+
+```kotlin
+lifecycleScope.launch {
+    apiService.text()
+        .catch { e -> showError(e.message) }
+        .collect { text -> render(text) }
+}
+```
+
+## Flow<NetResponse<T>>
+
+`Flow<NetResponse<T>>` 会保留 HTTP 状态码、响应头和原始 body。
+
+```kotlin
+lifecycleScope.launch {
+    apiService.profileResponse()
+        .collect { response ->
+            if (response.isSuccessful) {
+                render(response.body)
+            } else {
+                showError("HTTP ${response.code}: ${response.rawBody}")
+            }
+        }
+}
+```
+
+注意：
+
+- HTTP 4xx/5xx 不会抛异常，会发射 `NetResponse(body = null, code = ...)`。
+- 响应体超过 `maxResponseBodyBytes` 时，`rawBody` 为 null。调用方应把它当作“大响应被保护性截断”处理。
+
+## Flow<NetResult>
+
+```kotlin
+lifecycleScope.launch {
+    apiService.profileNetResult()
+        .collect { result ->
+            when (result) {
+                is NetResult.Success -> render(result.body)
+                is NetResult.HttpError -> showError("HTTP ${result.code}")
+                is NetResult.ResponseTooLarge -> showError(result.message)
+                is NetResult.NetworkError -> showError(result.message)
+            }
+        }
+}
+```
+
+这是最适合统一处理 HTTP、网络错误和响应体上限的 Retrofit 返回类型。
+
+## Flow<BusinessResult>
+
+```kotlin
+lifecycleScope.launch {
+    apiService.profileBusiness()
+        .collect { result ->
+            when (result) {
+                is BusinessResult.Success -> render(result.dataRaw)
+                is BusinessResult.BusinessError -> showError(result.message)
+                is BusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
+                is BusinessResult.ResponseTooLarge -> showError("响应过大")
+                is BusinessResult.NetworkError -> showError(result.rawBody)
+                is BusinessResult.InterceptorError -> showError(result.error.message)
+                is BusinessResult.Consumed -> Unit
+            }
+        }
+}
+```
+
+这个类型会复用 `NetConfig.businessEnvelopeParser` 和业务责任链。登录失效、权限不足等业务码建议在责任链统一处理。
+
+## Flow<TypedBusinessResult<T>>
+
+```kotlin
+lifecycleScope.launch {
+    apiService.profileTypedBusiness()
+        .collect { result ->
+            when (result) {
+                is TypedBusinessResult.Success -> render(result.data)
+                is TypedBusinessResult.DataConvertError -> showError("data 解析失败")
+                is TypedBusinessResult.BusinessError -> showError(result.message)
+                is TypedBusinessResult.HttpError -> showError("HTTP ${result.httpCode}")
+                is TypedBusinessResult.ResponseTooLarge -> showError("响应过大")
+                is TypedBusinessResult.NetworkError -> showError(result.rawBody)
+                is TypedBusinessResult.InterceptorError -> showError(result.error.error.message)
+                is TypedBusinessResult.Consumed -> Unit
+            }
+        }
+}
+```
+
+成功时会把业务信封里的 `dataRaw` 转成 `T`。转换失败会发射 `DataConvertError`，不会抛出异常。
+
+## 自定义 Converter
+
+```kotlin
 val service = Net.instance.retrofit
     .baseUrl("https://api.example.com/")
-    .addConverterFactory(MoshiConverterFactory.create(moshi))
+    .addConverterFactory(MoshiConverterFactory.create())
     .build()
-    .create<UserService>()
+    .create<ApiService>()
 ```
 
-> 需要添加依赖：`com.squareup.retrofit2:converter-moshi:2.9.0`
+当前行为：
 
-#### 自定义 Gson 实例
+- 自定义 Converter 会先注册，优先处理响应。
+- 如果你没有添加 `GsonConverterFactory`，库会追加默认 Gson 兜底。
+- 因此添加 Moshi 不会导致默认 Gson 静默消失。
 
-```kotlin
-val gson = GsonBuilder()
-    .setDateFormat("yyyy-MM-dd HH:mm:ss")
-    .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
-    .serializeNulls()
-    .create()
-
-// 注意：调用了 addConverterFactory 后，默认的 GsonConverterFactory 不会自动注册
-val retrofit = Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .addConverterFactory(GsonConverterFactory.create(gson))
-    .build()
-```
-
-#### 添加 Scalars Converter（支持纯文本/String 返回值）
-
-当接口返回纯文本而非 JSON 时需要：
+## 自定义 CallAdapter
 
 ```kotlin
-Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .addConverterFactory(ScalarsConverterFactory.create())   // 先匹配 String/Int 等基本类型
-    .addConverterFactory(GsonConverterFactory.create())      // 再匹配 JSON→对象
-    .build()
-```
-
-> `converter-scalars:2.9.0` 已内置在 `net-retrofit` 模块依赖中。
-
-> Retrofit 会按添加顺序依次尝试 Converter，找到第一个能处理的为止。
-
-### 自定义 CallAdapter
-
-#### 添加 RxJava 适配器
-
-```kotlin
-val retrofit = Net.instance.retrofit
+val service = Net.instance.retrofit
     .baseUrl("https://api.example.com/")
     .addCallAdapterFactory(RxJava3CallAdapterFactory.create())
     .build()
+    .create<ApiService>()
 ```
 
-#### 保持 NetFlowCallAdapterFactory
+当前行为：
 
-如果添加自定义 CallAdapter 后仍想使用 Flow 返回类型，需要**同时添加**：
+- 自定义 CallAdapter 会先注册。
+- 如果你没有添加 `NetFlowCallAdapterFactory`，库会追加默认 Flow 适配器。
+- 因此添加 RxJava 适配器不会导致 `Flow<NetResult>` 等能力失效。
 
-```kotlin
-val retrofit = Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .addCallAdapterFactory(NetFlowCallAdapterFactory())       // 支持 Flow<T>/NetResponse/NetResult/BusinessResult/TypedBusinessResult
-    .addCallAdapterFactory(RxJava3CallAdapterFactory.create()) // 支持 RxJava
-    .build()
-```
+## 容易误解的点
 
-> **注意**：一旦调用了 `addCallAdapterFactory()`，默认的 `NetFlowCallAdapterFactory` 不会被自动注册，需要手动添加，否则 `Flow<T>`、`Flow<NetResult>`、`Flow<BusinessResult>`、`Flow<TypedBusinessResult<T>>` 等返回类型都不可用。
+- `NetConfig.globalParam(...)` 不会自动变成 Retrofit 注解参数。Retrofit 接口里仍需要按 Retrofit 规则声明 `@Query`、`@Header`、`@Body`。
+- 普通 `suspend fun` 不会自动返回 `NetResult` 或 `BusinessResult`。要使用统一结果模型，请声明 Flow 返回类型。
+- `Flow<NetResponse<T>>` 不等于业务成功模型，它只表达 HTTP 响应。业务码请用 `Flow<BusinessResult>` 或 `Flow<TypedBusinessResult<T>>`。
 
-### 多个 Service 实例管理
-
-#### 同一 Base URL 共享实例（推荐）
-
-```kotlin
-val retrofit = Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .build()
-
-val userService = retrofit.create<UserService>()
-val orderService = retrofit.create<OrderService>()
-val productService = retrofit.create<ProductService>()
-```
-
-#### 不同 Base URL 的多个实例
-
-```kotlin
-val apiRetrofit = Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .build()
-
-val cdnRetrofit = Net.instance.retrofit
-    .baseUrl("https://cdn.example.com/")
-    .build()
-
-val userService = apiRetrofit.create<UserService>()
-val fileService = cdnRetrofit.create<FileService>()
-```
-
-#### 独立 OkHttpClient
-
-某些 Service 需要独立的超时或拦截器配置：
-
-```kotlin
-val customClient = OkHttpClient.Builder()
-    .connectTimeout(30, TimeUnit.SECONDS)
-    .readTimeout(60, TimeUnit.SECONDS)
-    .addInterceptor(specialInterceptor)
-    .build()
-
-val service = Net.instance.retrofit
-    .baseUrl("https://api.example.com/")
-    .client(customClient)  // 使用独立 OkHttpClient，覆盖全局配置
-    .build()
-    .create<UserService>()
-```
-
-## 与 Net 全局配置的继承关系
-
-| 配置项 | 自动继承 | 说明 |
-|---|---|---|
-| OkHttpClient（拦截器、超时、缓存） | ✅ | 通过 `Net.instance.okhttpManager.okHttpClient` |
-| globalParams | ❌ | 全局参数只影响 Builder 模式请求，Retrofit 接口需自行传参 |
-| Base URL（NetConfig.url） | ❌ | Retrofit 需要独立的 `baseUrl()` 设置 |
-| HTTP 日志 | ✅ | 通过共享 OkHttpClient 的拦截器生效 |
-| 加密拦截器 | ✅ | EncryptInterceptor 在 OkHttpClient 中生效 |
-| 监控拦截器 | ✅ | MonitorInterceptor 在 OkHttpClient 中生效 |
-
-## NetRetrofit.Builder 完整 API
-
-```kotlin
-// 两种入口等价
-val builder1 = NetRetrofit.builder()        // 静态工厂方法
-val builder2 = Net.instance.retrofit        // Net 扩展属性（推荐）
-```
-
-| 方法 | 说明 |
-|---|---|
-| `NetRetrofit.builder()` | 静态工厂，创建 Builder 实例 |
-| `Net.instance.retrofit` | 扩展属性，等价于 `NetRetrofit.builder()`（推荐日常使用） |
-| `baseUrl(url: String)` | 设置 Base URL（**必选**，须以 `/` 结尾） |
-| `client(client: OkHttpClient)` | 自定义 OkHttpClient（默认使用 Net 库全局 client） |
-| `addConverterFactory(factory)` | 添加 Converter.Factory（默认 `GsonConverterFactory`） |
-| `addCallAdapterFactory(factory)` | 添加 CallAdapter.Factory（默认 `NetFlowCallAdapterFactory`） |
-| `build(): NetRetrofit` | 构建 `NetRetrofit` 实例 |
-| `NetRetrofit.create<T>(): T` | 创建 Service 接口的动态代理实现（在 `NetRetrofit` 上，不在 `Builder` 上） |
-
-## ProGuard / R8 规则
-
-如果启用了代码混淆，`net-retrofit` 模块的 `consumer-rules.pro` 已默认包含必要规则：
-
-```proguard
-# Retrofit
--keepattributes Signature
--keepattributes *Annotation*
--keep,allowobfuscation interface * {
-    @retrofit2.http.* <methods>;
-}
-
-# Gson
--keepattributes Signature
--keepattributes *Annotation*
--dontwarn sun.misc.**
--keep class com.google.gson.** { *; }
-
-# 保持你的数据类不被混淆
--keep class com.yourpackage.model.** { *; }
-```
-
-## 关键说明
-
-- `addConverterFactory` 和 `addCallAdapterFactory` 会追加到列表末尾（不是替换），Retrofit 按顺序匹配
-- 调用了 `addConverterFactory` 或 `addCallAdapterFactory` 后，对应的默认工厂不会自动注册
-- 自定义 `OkHttpClient` 完全覆盖全局配置，不会合并
-- `baseUrl` 必须以 `/` 结尾，否则 Retrofit 会抛异常
-- 多个 Retrofit 实例共享连接池不会造成资源浪费
-
-## 验证方式
-
-- 使用自定义 Gson 配置（如日期格式）发请求，检查反序列化结果
-- 使用 Moshi Converter 确认可正常工作
-- 创建多个 Base URL 的 Service，确认各自独立工作
-
-[返回 README](../../README.md)
+[返回模块 README](../README.md)

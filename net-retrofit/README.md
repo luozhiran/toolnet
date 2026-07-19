@@ -1,61 +1,37 @@
-# net-retrofit — Retrofit 声明式 API 集成
+# net-retrofit
 
-将 Retrofit 2.9.0 的声明式 API 能力集成到 Net 网络库中，自动继承 Net 的全局 OkHttpClient（拦截器、超时、缓存等），原生支持 `suspend` 函数和 `Flow` 返回类型。
+`net-retrofit` 基于 Retrofit 提供声明式接口能力，并复用 `Net.instance` 的 OkHttpClient。它适合接口数量多、希望通过注解定义 API 的 Kotlin 项目。
 
-## 包含功能
+## 使用场景总览
 
-- `NetRetrofit.Builder` — 快速构建 Retrofit 实例
-- `Net.retrofit` 入口 — 一行代码获取 Builder
-- `NetFlowCallAdapterFactory` — 支持 `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>` / `Flow<TypedBusinessResult<T>>` 返回类型
-- 自动继承 Net 全局 OkHttpClient、拦截器、加密、监控
-- 支持自定义 Converter（Moshi/Jackson/Scalars）和 CallAdapter（RxJava）
+| 使用场景 | 推荐 API | 适用条件 | 什么时候使用 | 关键约束 |
+| --- | --- | --- | --- | --- |
+| [声明式 API](./doc/01-retrofit-basics.md) | `Net.instance.retrofit.baseUrl(...).build().create<T>()` | 已使用 Retrofit 注解 | 接口多、路径和参数适合写在 Service 中 | `baseUrl` 必须以 `/` 结尾 |
+| [Flow 结果模型](./doc/02-retrofit-advanced.md) | `Flow<T>` / `Flow<NetResponse<T>>` / `Flow<NetResult>` / `Flow<BusinessResult>` / `Flow<TypedBusinessResult<T>>` | Kotlin Flow | 需要和 `net-flow` 保持一致的错误模型 | 普通 `suspend` 仍按 Retrofit 默认行为工作 |
 
-## 快速开始
+## 文档目录
+
+| 文档 | 内容 |
+| --- | --- |
+| [01. Retrofit 基础](./doc/01-retrofit-basics.md) | 构建 Service、复用 Net 配置、普通接口 |
+| [02. Retrofit 进阶](./doc/02-retrofit-advanced.md) | Flow 适配、结果模型、自定义 Converter 和 CallAdapter |
+
+## 最小示例
 
 ```kotlin
-// 依赖引入
-implementation project(':net-retrofit')
-
-// 定义 Service
 interface UserService {
-    @GET("user/{id}")
-    suspend fun getUser(@Path("id") id: String): User
-
-    @POST("user/login")
-    suspend fun login(@Body request: LoginRequest): NetResponse<LoginResponse>
+    @GET("user/profile")
+    fun profile(): Flow<NetResult>
 }
 
-// 构建实例
-val userService = Net.instance.retrofit
+val service = Net.instance.retrofit
     .baseUrl("https://api.example.com/")
     .build()
     .create<UserService>()
-
-// 使用
-lifecycleScope.launch {
-    val response = userService.login(LoginRequest("admin", "123456"))
-    if (response.isSuccessful) navigateToHome(response.body)
-}
 ```
 
-## 详细文档
+`NetRetrofit` 默认会：
 
-| 文档 | 内容 |
-|---|---|
-| [01. Retrofit 声明式 API](./doc/01-retrofit-basics.md) | Service 定义、构建、suspend/Flow/NetResponse |
-| [02. Retrofit 高级配置](./doc/02-retrofit-advanced.md) | 自定义 Converter/CallAdapter、多 Base URL、ProGuard |
-
-完整场景总览请查看 [项目 README](../README.md)。
-
-## 返回类型速查
-
-| Service 返回类型 | 非 2xx 行为 |
-|---|---|
-| `T` (suspend) | 抛 `HttpException` |
-| `Response<T>` (suspend) | 正常返回，body() 为 null |
-| `NetResponse<T>` (suspend) | 正常返回，rawBody 含错误信息 |
-| `Flow<T>` | 以 `NetFlowException` 关闭 |
-| `Flow<NetResponse<T>>` | 正常发送，.code 体现错误 |
-| `Flow<NetResult>` | 发射 `Success` / `HttpError` / `NetworkError` |
-| `Flow<BusinessResult>` | 发射业务责任链处理后的结果 |
-| `Flow<TypedBusinessResult<T>>` | 业务成功时把 `data` 直接转换成 `T` |
+- 使用 `Net.instance.okhttpManager.okHttpClient`。
+- 添加自定义 Converter 后，仍保留 Gson 兜底，除非你自己已经添加了 `GsonConverterFactory`。
+- 添加自定义 CallAdapter 后，仍保留 `NetFlowCallAdapterFactory`，除非你自己已经添加了它。

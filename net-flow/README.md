@@ -1,55 +1,51 @@
-# net-flow - Kotlin Flow 扩展
+# net-flow
 
-`net-flow` 将 `net` 的回调式请求和下载能力桥接为 Kotlin Flow，适合使用协程、生命周期感知收集和统一异常处理的 Android 项目。
+`net-flow` 为 `net` 增加 Kotlin Flow API。它适合 Kotlin + 协程项目，把回调式请求转换成可 `collect`、`catch`、随协程取消自动取消网络请求的冷流。
 
 ## 使用场景总览
 
-| 使用场景 | 推荐 API | 适用条件 | 选择理由 |
-| --- | --- | --- | --- |
-| [请求返回字符串 Flow](./doc/01-flow-basics.md) | `flowString()` | 只需要原始响应体 | 最轻量，适合已有业务解析逻辑 |
-| [请求结构化结果 Flow](./doc/01-flow-basics.md) | `flowResult()` | 需要区分 HTTP 错误和网络异常 | 与 `sendResult()` 语义一致，便于统一错误处理 |
-| [业务码 Flow](./doc/01-flow-basics.md) | `flowBusinessResult()` | 后端使用 `code/message/data` 等业务包装 | 复用 `ApiEnvelopeParser` 和业务码责任链 |
-| [类型化业务数据 Flow](./doc/01-flow-basics.md) | `flowTypedBusinessResult<T>()` | 需要把 `data` 直接转成业务类 | 复用全局 `BusinessDataConverter`，默认使用 Gson |
-| [下载进度 Flow](./doc/02-flow-download.md) | `TaskBuilder.flow()` / `flowDownload { ... }` | 需要用协程观察下载进度 | 接入 `net` 统一下载监听注册表，取消 Flow 会取消底层下载 |
-
-## 快速开始
-
-```kotlin
-import android.util.Log
-import androidx.lifecycle.lifecycleScope
-import com.itg.net.Net
-import com.itg.net.flow.flowString
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.launch
-
-lifecycleScope.launch {
-    Net.instance.get()
-        .path("/user/profile")
-        .flowString()
-        .catch { error ->
-            Log.e("NetFlow", "请求失败", error)
-        }
-        .collect { body ->
-            updateUi(body)
-        }
-}
-```
+| 使用场景 | 推荐 API | 适用条件 | 什么时候使用 | 关键约束 |
+| --- | --- | --- | --- | --- |
+| [普通接口转 Flow](./doc/01-flow-requests.md) | `flowString` / `flowResult` / `flowBusinessResult` / `flowTypedBusinessResult` / `flowResponse` | Kotlin 协程环境 | ViewModel、Repository、Compose 或 LifecycleScope | Flow 是冷流，只有 collect 后才会发请求 |
+| [下载转 Flow](./doc/02-flow-download.md) | `TaskBuilder.flow()` / `Net.instance.flowDownload { ... }` | 需要下载进度流 | 下载页、资源预加载、离线包 | collect 被取消且任务未结束时，会取消下载 |
 
 ## 文档目录
 
 | 文档 | 内容 |
 | --- | --- |
-| [01. Flow 化请求](./doc/01-flow-basics.md) | `flowString`、`flowResult`、`flowBusinessResult`、`flowTypedBusinessResult`、`flowResponse` |
-| [02. 下载进度 Flow](./doc/02-flow-download.md) | `TaskBuilder.flow`、`DownloadProgress`、下载取消和事件生命周期 |
+| [01. Flow 请求](./doc/01-flow-requests.md) | Flow 请求入口、错误模型、业务结果、类型转换 |
+| [02. Flow 下载](./doc/02-flow-download.md) | 下载进度阶段、取消、无 Content-Length 场景 |
 
-## 线程模型
+## 最小示例
 
-| 调用方式 | 结果所在上下文 | 是否可直接更新 UI |
-| --- | --- | --- |
-| `flowString().collect {}` | 启动 `collect` 的协程上下文 | 在 `lifecycleScope.launch {}` 默认主线程中可以 |
-| `flowResponse().collect {}` | 启动 `collect` 的协程上下文 | 在 `lifecycleScope.launch {}` 默认主线程中可以 |
-| `TaskBuilder.flow().collect {}` | 启动 `collect` 的协程上下文 | 在 `lifecycleScope.launch {}` 默认主线程中可以 |
+```kotlin
+lifecycleScope.launch {
+    Net.instance.flowGet {
+        url("user/profile")
+    }
+        .catch { e ->
+            // flowString 或 Flow<T> 类型会用异常表示 HTTP/网络错误。
+        }
+        .collect { body ->
+            render(body)
+        }
+}
+```
 
-Flow API 与 `net` 的回调 API 共存，底层共享同一个 OkHttpClient、请求配置、业务码解析和下载调度体系。
+更推荐结构化处理：
 
-完整项目场景请查看 [项目 README](../README.md)。
+```kotlin
+lifecycleScope.launch {
+    Net.instance.get()
+        .url("user/profile")
+        .flowResult()
+        .collect { result ->
+            when (result) {
+                is NetResult.Success -> render(result.body)
+                is NetResult.HttpError -> showError("HTTP ${result.code}")
+                is NetResult.ResponseTooLarge -> showError(result.message)
+                is NetResult.NetworkError -> showError(result.message)
+            }
+        }
+}
+```
