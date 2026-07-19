@@ -10,6 +10,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class EncryptInterceptorTest {
@@ -34,6 +35,18 @@ class EncryptInterceptorTest {
         client.newCall(request).execute().close()
 
         assertEquals(requestBody, capturedBody.toString())
+    }
+
+    @Test
+    fun aesGcmUsesUniqueIvAndCanDecryptPayload() {
+        val key = "1234567890123456".toByteArray()
+
+        val first = EncryptUtil.encrypt("secret", key, Algorithm.AES_GCM_NO_PADDING)
+        val second = EncryptUtil.encrypt("secret", key, Algorithm.AES_GCM_NO_PADDING)
+
+        assertNotEquals(first, second)
+        assertEquals("secret", EncryptUtil.decrypt(first, key, Algorithm.AES_GCM_NO_PADDING))
+        assertEquals("secret", EncryptUtil.decrypt(second, key, Algorithm.AES_GCM_NO_PADDING))
     }
 
     private fun captureRequestBody(capturedBody: StringBuilder): Interceptor {

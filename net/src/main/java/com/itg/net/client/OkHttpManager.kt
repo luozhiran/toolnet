@@ -45,6 +45,7 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         }
     }
 
+    @Volatile
     var okHttpClient: OkHttpClient = createClient(ddNetConfig)
 
     internal fun dispatchMonitorEvent(event: MonitorEvent) {

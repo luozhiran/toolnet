@@ -1,6 +1,9 @@
 package com.itg.net.util
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 object UrlTools {
 
@@ -34,7 +37,7 @@ object UrlTools {
         if (pastMap == null) return urlParams
         val resultParams = StringBuilder()
         pastMap.forEach { entry ->
-            val paramEntry = "${entry.key}$POUND_SIGN_TRUNCATION_TAG${entry.value}"
+            val paramEntry = "${entry.key.paramEncode()}$POUND_SIGN_TRUNCATION_TAG${entry.value.toString().paramEncode()}"
             if (!resultParams.contains(paramEntry)) {
                 resultParams.append(paramEntry).append(DOLLAR_TRUNCATION_TAG)
             }
@@ -56,7 +59,7 @@ object UrlTools {
         urlParams.split(DOLLAR_TRUNCATION_TAG).forEach { param ->
             val keyValue = param.split(POUND_SIGN_TRUNCATION_TAG, limit = 2)
             if (keyValue.size == 2) {
-                resultMap[keyValue[0]] = keyValue[1]
+                resultMap[keyValue[0].paramDecode()] = keyValue[1].paramDecode()
             }
         }
         return resultMap
@@ -74,10 +77,18 @@ object UrlTools {
     fun appendUrlParamsToStr(parentStringBuilder: StringBuilder, key: String?, value: String?): StringBuilder {
         if (key.isNullOrBlank() || value == null) return parentStringBuilder
         parentStringBuilder
-            .append(key)
+            .append(key.paramEncode())
             .append(POUND_SIGN_TRUNCATION_TAG)
-            .append(value)
+            .append(value.paramEncode())
             .append(DOLLAR_TRUNCATION_TAG)
         return parentStringBuilder
+    }
+
+    private fun String.paramEncode(): String {
+        return URLEncoder.encode(this, StandardCharsets.UTF_8.name())
+    }
+
+    private fun String.paramDecode(): String {
+        return URLDecoder.decode(this, StandardCharsets.UTF_8.name())
     }
 }

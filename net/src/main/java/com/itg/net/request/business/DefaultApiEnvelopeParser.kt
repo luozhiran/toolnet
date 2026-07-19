@@ -14,16 +14,26 @@ class DefaultApiEnvelopeParser(
     override fun parse(rawBody: String?): ApiEnvelope {
         if (rawBody.isNullOrBlank()) {
             return ApiEnvelope(
-                code = null,
-                message = null,
+                code = "EMPTY_BODY",
+                message = "Response body is empty",
                 dataRaw = null,
                 rawBody = rawBody,
-                success = true
+                success = false
             )
         }
 
         return runCatching {
-            val json = JsonParser.parseString(rawBody).asJsonObject
+            val root = JsonParser.parseString(rawBody)
+            if (!root.isJsonObject) {
+                return@runCatching ApiEnvelope(
+                    code = "INVALID_JSON_OBJECT",
+                    message = "Response body is not a JSON object",
+                    dataRaw = rawBody,
+                    rawBody = rawBody,
+                    success = false
+                )
+            }
+            val json = root.asJsonObject
             val code = firstValue(json, codeKeys)
             val message = firstValue(json, messageKeys)
             val dataRaw = firstRawValue(json, dataKeys)
@@ -32,15 +42,15 @@ class DefaultApiEnvelopeParser(
                 message = message,
                 dataRaw = dataRaw,
                 rawBody = rawBody,
-                success = code == null || successCodes.contains(code)
+                success = code != null && successCodes.contains(code)
             )
         }.getOrElse {
             ApiEnvelope(
-                code = null,
-                message = null,
+                code = "INVALID_JSON",
+                message = it.message ?: it.javaClass.simpleName,
                 dataRaw = rawBody,
                 rawBody = rawBody,
-                success = true
+                success = false
             )
         }
     }

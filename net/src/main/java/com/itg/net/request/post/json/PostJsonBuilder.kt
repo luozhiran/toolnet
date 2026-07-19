@@ -28,14 +28,15 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
     }
 
     protected fun getRequestBody(): RequestBody {
+        val requestJson = JSONObject(jsonObject.toString())
         if (!this.noGlobalParams) {
             Net.instance.ddNetConfig.globalParams.forEach {
-                if (it.key.isNotBlank()) {
-                    jsonObject.put(it.key, it.value)
+                if (it.key.isNotBlank() && !requestJson.has(it.key)) {
+                    requestJson.put(it.key, it.value)
                 }
             }
         }
-        return jsonObject.toString().toRequestBody("application/json;charset=utf-8".toMediaType())
+        return requestJson.toString().toRequestBody("application/json;charset=utf-8".toMediaType())
     }
 
     fun addAppendParams(key: String?, value: String?): PostJsonBuilder {
@@ -80,7 +81,7 @@ abstract class PostJsonBuilder : ParamsBuilder(), GetBuilder {
             this.jsonObject = JsonTools.deepMerge(JSONObject(json), this.jsonObject)
             hasExplicitJsonBody = true
         } catch (e: Exception) {
-            return this
+            throw IllegalArgumentException("Invalid JSON body", e)
         }
         return this
     }

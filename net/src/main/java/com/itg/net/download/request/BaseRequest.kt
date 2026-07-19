@@ -114,7 +114,12 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         if (taskStateInstance.isCheckMd5(task) && !checkMd5(file.absolutePath, task)) {
             failCallback.invoke(ERROR_MD5_CHECK_FAILED, MonitorEvent.ErrorType.MD5_MISMATCH)
         } else {
-            val distFile = File(file.absolutePath.removeSuffix(".tmp"))
+            val targetPath = task.path?.takeIf { it.isNotBlank() }
+            if (targetPath == null) {
+                failCallback.invoke(ERROR_INVALID_DOWNLOAD_TASK, MonitorEvent.ErrorType.DISK_WRITE_ERROR)
+                return
+            }
+            val distFile = File(targetPath)
             try {
                 if (distFile.exists()) {
                     if (!task.overwrite) {

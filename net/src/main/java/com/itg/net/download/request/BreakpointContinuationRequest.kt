@@ -48,7 +48,7 @@ class BreakpointContinuationRequest(private val task: Task, taskStateInstance: T
             val message = if (call.isCanceled() || isTaskCanceled()) {
                 ERROR_DOWNLOAD_CANCELED
             } else {
-                ioException.message.toString()
+                ioException.message ?: ioException.javaClass.simpleName
             }
             failureCallback?.invoke(task, message)
         })

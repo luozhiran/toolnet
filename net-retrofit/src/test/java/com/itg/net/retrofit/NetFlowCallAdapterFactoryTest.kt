@@ -58,6 +58,19 @@ class NetFlowCallAdapterFactoryTest {
     }
 
     @Test
+    fun flowNetResultKeepsHttpErrorWhenErrorBodyIsTooLarge() = runBlocking {
+        Net.configure {
+            maxResponseBodyBytes(4)
+        }
+        server.enqueue(MockResponse().setResponseCode(500).setBody("too-large-error-body"))
+
+        val result = api.netResult().first()
+
+        assertTrue("actual=$result", result is NetResult.HttpError)
+        assertEquals(500, (result as NetResult.HttpError).code)
+    }
+
+    @Test
     fun flowBusinessResultUsesConfiguredInterceptorChain() = runBlocking {
         Net.configure {
             clearBusinessInterceptors()
@@ -149,6 +162,7 @@ class NetFlowCallAdapterFactoryTest {
         Net.configure {
             clearBusinessInterceptors()
             businessEnvelopeParser(DefaultApiEnvelopeParser())
+            maxResponseBodyBytes(0)
         }
     }
 
@@ -164,6 +178,7 @@ class NetFlowCallAdapterFactoryTest {
 
         @GET("user")
         fun user(): Call<UserDto>
+
     }
 
     data class UserDto(val name: String)

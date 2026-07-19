@@ -24,10 +24,6 @@ class GsonNetConverter<T>(
 ) : NetConverter<T> {
 
     override fun convert(raw: String?): T? {
-        return try {
-            raw?.let { gson.fromJson(it, type) }
-        } catch (e: Exception) {
-            null
-        }
+        return raw?.let { gson.fromJson(it, type) }
     }
 }

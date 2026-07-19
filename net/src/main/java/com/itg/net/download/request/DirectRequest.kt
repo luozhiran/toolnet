@@ -32,7 +32,7 @@ class DirectRequest(private val task: Task, taskStateInstance: TaskState) : Base
             val message = if (call.isCanceled() || isTaskCanceled()) {
                 ERROR_DOWNLOAD_CANCELED
             } else {
-                ioException.message.toString()
+                ioException.message ?: ioException.javaClass.simpleName
             }
             PrintLog.logd { "下载失败 ${task.url} $message" }
             failureCallback?.invoke(task, message)

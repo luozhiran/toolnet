@@ -30,6 +30,7 @@ fun ParamsBuilder.sendBusinessResult(callback: BusinessResultCallback?) {
                 is BusinessResult.BusinessError -> callback?.onBusinessError(businessResult)
                 is BusinessResult.HttpError -> callback?.onHttpError(businessResult)
                 is BusinessResult.NetworkError -> callback?.onNetworkError(businessResult)
+                is BusinessResult.InterceptorError -> callback?.onInterceptorError(businessResult)
                 is BusinessResult.Consumed -> callback?.onConsumed(businessResult)
             }
         }

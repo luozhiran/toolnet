@@ -158,7 +158,7 @@ abstract class PostMulBuilderImpl : ParamsBuilder(), PostBuilder, GetBuilder {
         for (index in 0 until postFile.getCount()) {
             val partName = postFile.getFileName(index)?.takeIf { it.isNotBlank() } ?: "file"
             val file = postFile.getFile(index) ?: continue
-            val body = postFile.getRequestBody(index)
+            val body = postFile.getRequestBody(index) ?: continue
             builder.addFormDataPart(partName, file.name, body)
             hasValue = true
         }

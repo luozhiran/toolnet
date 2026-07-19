@@ -251,8 +251,10 @@ class EncryptConfig {
      */
     internal fun matchesAnyEncryptPath(requestPath: String): Boolean {
         for (rule in rules) {
-            if (rule is EncryptRule.ByPath && rule.pathPattern.matches(requestPath)) {
-                return true
+            when (rule) {
+                is EncryptRule.ByFieldName,
+                is EncryptRule.ByFieldPattern -> return true
+                is EncryptRule.ByPath -> if (rule.pathPattern.matches(requestPath)) return true
             }
         }
         return false

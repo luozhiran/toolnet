@@ -60,6 +60,26 @@ class BaseRequestTest {
         assertFalse(nullTempFile.exists())
     }
 
+    @Test
+    fun targetPathEndingWithTmpIsPreserved() {
+        val file = File("build/tmp/download-${UUID.randomUUID()}.tmp")
+        val task = Task().apply {
+            url = "https://example.com/file.txt"
+            path = file.absolutePath
+            overwrite = true
+        }
+        val request = TestRequest(task)
+        val events = mutableListOf<String>()
+        request.setSuccessCallback { _, message -> events.add("success:$message") }
+
+        request.handle(testResponse(UnknownLengthBody("hello")))
+
+        assertEquals(listOf("success:$DOWNLOAD_SUCCESS_MESSAGE"), events)
+        assertTrue(file.exists())
+        assertEquals("hello", file.readText())
+        file.delete()
+    }
+
     private class TestRequest(task: Task) : BaseRequest(task, TaskState()) {
         fun handle(response: Response) {
             handleResponse(response)

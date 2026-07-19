@@ -8,7 +8,9 @@ import okhttp3.Callback
 interface SentBuilder {
     fun send(callback: DdCallback?)
     fun send(handler: Handler?, what: Int, errorWhat: Int)
-    fun send(response: Callback?,task: Task?){}
+    fun send(response: Callback?, task: Task?) {
+        throw UnsupportedOperationException("Raw OkHttp callback send is not implemented by this request type")
+    }
 
     /**
      * 构建 OkHttp [Call] 但不立即执行，由调用方管理生命周期

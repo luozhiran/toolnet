@@ -4,7 +4,9 @@ import android.app.Activity
 import android.os.Handler
 import com.itg.net.request.base.DdCallback
 import com.itg.net.request.SendTool
+import com.itg.net.download.data.Task
 import okhttp3.Call
+import okhttp3.Callback
 
 class PostResumeFile: PostResumeGenerator() {
 
@@ -16,16 +18,25 @@ class PostResumeFile: PostResumeGenerator() {
     }
 
     override fun send(callback: DdCallback?) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(),cacheControl, encryptFlag, monitorFlag, monitorExtra)
+        val body = getRequestBody()
+        val call = body?.let { sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,it,cacheControl, encryptFlag, monitorFlag, monitorExtra) }
         sendTool.send(callback, call, consumeAutoCancelActivity())
     }
 
     override fun send(handler: Handler?, what: Int, errorWhat: Int) {
-        val call = sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,getRequestBody(),cacheControl, encryptFlag, monitorFlag, monitorExtra)
+        val body = getRequestBody()
+        val call = body?.let { sendTool.combineParamsAndRCall(getHeader(),getUrl(),tag,it,cacheControl, encryptFlag, monitorFlag, monitorExtra) }
         sendTool.send(handler,what,errorWhat,call, consumeAutoCancelActivity())
     }
 
+    override fun send(response: Callback?, task: Task?) {
+        val body = getRequestBody()
+        val call = body?.let { sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, it, cacheControl, encryptFlag, monitorFlag, monitorExtra) }
+        sendTool.send(response, call, consumeAutoCancelActivity())
+    }
+
     override fun buildCall(): Call? {
-        return sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, getRequestBody(), cacheControl, encryptFlag, monitorFlag, monitorExtra)
+        val body = getRequestBody() ?: return null
+        return sendTool.combineParamsAndRCall(getHeader(), getUrl(), tag, body, cacheControl, encryptFlag, monitorFlag, monitorExtra)
     }
 }

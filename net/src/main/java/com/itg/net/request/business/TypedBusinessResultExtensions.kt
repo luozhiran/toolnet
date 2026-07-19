@@ -37,6 +37,7 @@ fun <T> BusinessResult.toTypedBusinessResult(type: Type): TypedBusinessResult<T>
         )
         is BusinessResult.HttpError -> TypedBusinessResult.HttpError(this)
         is BusinessResult.NetworkError -> TypedBusinessResult.NetworkError(this)
+        is BusinessResult.InterceptorError -> TypedBusinessResult.InterceptorError(this)
         is BusinessResult.Consumed -> TypedBusinessResult.Consumed(this)
     }
 }
@@ -59,6 +60,10 @@ fun <T> ParamsBuilder.sendTypedBusinessResult(
         }
 
         override fun onNetworkError(error: BusinessResult.NetworkError) {
+            dispatchTypedResult(error.toTypedBusinessResult(type), callback)
+        }
+
+        override fun onInterceptorError(error: BusinessResult.InterceptorError) {
             dispatchTypedResult(error.toTypedBusinessResult(type), callback)
         }
 
@@ -90,6 +95,7 @@ private fun <T> dispatchTypedResult(
         is TypedBusinessResult.BusinessError -> callback?.onBusinessError(result)
         is TypedBusinessResult.HttpError -> callback?.onHttpError(result)
         is TypedBusinessResult.NetworkError -> callback?.onNetworkError(result)
+        is TypedBusinessResult.InterceptorError -> callback?.onInterceptorError(result)
         is TypedBusinessResult.Consumed -> callback?.onConsumed(result)
     }
 }

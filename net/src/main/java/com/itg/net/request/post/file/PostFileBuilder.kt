@@ -37,8 +37,9 @@ abstract class PostFileBuilder : ParamsBuilder() {
         return getRequestBody(0)
     }
 
-    fun getRequestBody(index: Int): RequestBody {
-        val file = files.getOrNull(index) ?: File("")
+    fun getRequestBody(index: Int): RequestBody? {
+        val file = files.getOrNull(index) ?: return null
+        if (!file.isFile) return null
         val mediaType = fileMediaTypes.getOrNull(index)
             ?.takeIf { it.isNotBlank() }
             ?.toMediaTypeOrNull()

@@ -1,9 +1,11 @@
 package com.itg.net.encrypt
 
-import android.util.Base64
+import okio.ByteString.Companion.decodeBase64
+import okio.ByteString.Companion.toByteString
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
@@ -16,6 +18,8 @@ import javax.crypto.spec.SecretKeySpec
 object EncryptUtil {
 
     private const val AES_ALGORITHM = "AES"
+    private const val GCM_IV_SIZE = 12
+    private const val GCM_TAG_BITS = 128
 
     /**
      * 线程级 Cipher 缓存
@@ -39,9 +43,19 @@ object EncryptUtil {
      */
     fun encrypt(plaintext: String, key: ByteArray, algorithm: Algorithm, iv: ByteArray? = null): String {
         val cipher = getCachedCipher(algorithm)
-        initCipher(cipher, Cipher.ENCRYPT_MODE, key, algorithm, iv)
+        val actualIv = if (algorithm == Algorithm.AES_GCM_NO_PADDING) {
+            generateRandomBytes(GCM_IV_SIZE)
+        } else {
+            iv
+        }
+        initCipher(cipher, Cipher.ENCRYPT_MODE, key, algorithm, actualIv)
         val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(encrypted, Base64.NO_WRAP)
+        val payload = if (algorithm == Algorithm.AES_GCM_NO_PADDING) {
+            actualIv!! + encrypted
+        } else {
+            encrypted
+        }
+        return payload.toByteString().base64()
     }
 
     /**
@@ -55,9 +69,18 @@ object EncryptUtil {
      */
     fun decrypt(ciphertext: String, key: ByteArray, algorithm: Algorithm, iv: ByteArray? = null): String {
         val cipher = getCachedCipher(algorithm)
-        initCipher(cipher, Cipher.DECRYPT_MODE, key, algorithm, iv)
-        val decoded = Base64.decode(ciphertext, Base64.NO_WRAP)
-        val decrypted = cipher.doFinal(decoded)
+        val decoded = ciphertext.decodeBase64()?.toByteArray()
+            ?: throw IllegalArgumentException("Invalid Base64 ciphertext")
+        val encryptedBytes = if (algorithm == Algorithm.AES_GCM_NO_PADDING) {
+            require(decoded.size > GCM_IV_SIZE) { "Invalid AES-GCM payload" }
+            val actualIv = decoded.copyOfRange(0, GCM_IV_SIZE)
+            initCipher(cipher, Cipher.DECRYPT_MODE, key, algorithm, actualIv)
+            decoded.copyOfRange(GCM_IV_SIZE, decoded.size)
+        } else {
+            initCipher(cipher, Cipher.DECRYPT_MODE, key, algorithm, iv)
+            decoded
+        }
+        val decrypted = cipher.doFinal(encryptedBytes)
         return String(decrypted, Charsets.UTF_8)
     }
 
@@ -91,6 +114,12 @@ object EncryptUtil {
         return iv
     }
 
+    private fun generateRandomBytes(size: Int): ByteArray {
+        val bytes = ByteArray(size)
+        SecureRandom().nextBytes(bytes)
+        return bytes
+    }
+
     // ==================== 内部方法 ====================
 
     /** 从缓存获取或创建 Cipher 实例 */
@@ -110,10 +139,24 @@ object EncryptUtil {
         iv: ByteArray?
     ) {
         val secretKey = SecretKeySpec(key, AES_ALGORITHM)
-        if (iv != null && algorithm != Algorithm.AES_ECB_PKCS7) {
-            cipher.init(mode, secretKey, IvParameterSpec(iv))
-        } else {
-            cipher.init(mode, secretKey)
+        when {
+            algorithm == Algorithm.AES_GCM_NO_PADDING -> {
+                require(iv != null && iv.size == GCM_IV_SIZE) { "AES-GCM requires a $GCM_IV_SIZE-byte IV" }
+                cipher.init(mode, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
+            }
+            iv != null && algorithm != Algorithm.AES_ECB_PKCS7 -> {
+                require(iv.size == 16) { "${algorithm.name} requires a 16-byte IV" }
+                cipher.init(mode, secretKey, IvParameterSpec(iv))
+            }
+            algorithm == Algorithm.AES_CBC_PKCS7 -> {
+                throw IllegalArgumentException("${algorithm.name} requires a 16-byte IV")
+            }
+            algorithm == Algorithm.AES_ECB_PKCS7 -> {
+                cipher.init(mode, secretKey)
+            }
+            else -> {
+                cipher.init(mode, secretKey)
+            }
         }
     }
 }

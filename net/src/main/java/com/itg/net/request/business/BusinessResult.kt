@@ -52,6 +52,13 @@ sealed class BusinessResult {
             get() = error.body
     }
 
+    data class InterceptorError(
+        val error: Throwable,
+        val index: Int,
+        override val httpCode: Int?,
+        override val rawBody: String?
+    ) : BusinessResult()
+
     data class Consumed(
         val reason: String? = null,
         override val httpCode: Int? = null,

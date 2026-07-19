@@ -192,7 +192,7 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
 
             when (val bodyResult = response.errorBody().readSafely()) {
                 is BodyReadResult.Text -> close(NetFlowException(response.code(), bodyResult.value))
-                is BodyReadResult.TooLarge -> close(NetFlowException(null, bodyResult.message))
+                is BodyReadResult.TooLarge -> close(NetFlowException(response.code(), bodyResult.message))
             }
         }
 
@@ -207,10 +207,19 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 response.errorBody().readSafely()
             }
             if (rawBodyResult is BodyReadResult.TooLarge) {
-                close(NetFlowException(null, rawBodyResult.message))
+                val netResponse = NetResponse<Any?>(
+                    body = null,
+                    rawBody = null,
+                    code = response.code(),
+                    headers = headers
+                )
+                trySend(netResponse)
                 return
             }
-            val rawBody = (rawBodyResult as BodyReadResult.Text).value
+            val rawBody = when (rawBodyResult) {
+                is BodyReadResult.Text -> rawBodyResult.value
+                is BodyReadResult.TooLarge -> null
+            }
             val convertedBody = if (response.isSuccessful) {
                 convertNetResponseBody(rawBody, contentType)
             } else {
@@ -238,7 +247,8 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             if (rawBody == null) return null
             if (netResponseBodyType == String::class.java) return rawBody
             if (netResponseBodyType == ResponseBody::class.java) return rawBody.toResponseBody(contentType)
-            val converter = netResponseConverter ?: return null
+            val converter = netResponseConverter
+                ?: throw IllegalStateException("No Retrofit converter found for $netResponseBodyType")
             return converter.convert(rawBody.toResponseBody(contentType))
         }
 
@@ -251,9 +261,21 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 errorBody().readSafely()
             }
             if (rawBodyResult is BodyReadResult.TooLarge) {
-                return NetResult.NetworkError(rawBodyResult.asIOException())
+                return if (isSuccessful) {
+                    NetResult.NetworkError(rawBodyResult.asIOException())
+                } else {
+                    NetResult.HttpError(
+                        body = null,
+                        code = code(),
+                        message = rawBodyResult.message,
+                        headers = headers
+                    )
+                }
             }
-            val rawBody = (rawBodyResult as BodyReadResult.Text).value
+            val rawBody = when (rawBodyResult) {
+                is BodyReadResult.Text -> rawBodyResult.value
+                is BodyReadResult.TooLarge -> null
+            }
 
             return if (isSuccessful) {
                 NetResult.Success(

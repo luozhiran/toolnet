@@ -70,6 +70,16 @@ sealed class TypedBusinessResult<out T> {
             get() = error.rawBody
     }
 
+    data class InterceptorError(
+        val error: BusinessResult.InterceptorError
+    ) : TypedBusinessResult<Nothing>() {
+        override val httpCode: Int?
+            get() = error.httpCode
+
+        override val rawBody: String?
+            get() = error.rawBody
+    }
+
     data class Consumed(
         val result: BusinessResult.Consumed
     ) : TypedBusinessResult<Nothing>() {
