@@ -95,6 +95,22 @@ class NetFlowCallAdapterFactoryTest {
         assertTrue("actual=$result", result is TypedBusinessResult.DataConvertError)
     }
 
+    @Test
+    fun flowCanBeCollectedMoreThanOnce() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"code":"0","data":"first"}"""))
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"code":"0","data":"second"}"""))
+        val flow = api.netResult()
+
+        val first = flow.first()
+        val second = flow.first()
+
+        assertTrue(first is NetResult.Success)
+        assertTrue((first as NetResult.Success).body.orEmpty().contains("first"))
+        assertTrue(second is NetResult.Success)
+        assertTrue((second as NetResult.Success).body.orEmpty().contains("second"))
+        assertEquals(2, server.requestCount)
+    }
+
     private fun resetBusinessConfig() {
         Net.configure {
             clearBusinessInterceptors()

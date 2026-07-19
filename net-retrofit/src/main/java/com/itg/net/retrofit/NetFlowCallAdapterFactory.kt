@@ -110,9 +110,10 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
         override fun responseType(): Type = bodyType
 
         override fun adapt(call: Call<T>): Flow<Any> = callbackFlow {
-            call.enqueue(object : Callback<T> {
+            val flowCall = call.clone()
+            flowCall.enqueue(object : Callback<T> {
                 override fun onResponse(call: Call<T>, response: Response<T>) {
-                    if (call.isCanceled) return
+                    if (flowCall.isCanceled) return
 
                     when (mode) {
                         ResultMode.Body -> emitBody(response)
@@ -134,7 +135,7 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 }
 
                 override fun onFailure(call: Call<T>, t: Throwable) {
-                    if (call.isCanceled) return
+                    if (flowCall.isCanceled) return
 
                     when (mode) {
                         ResultMode.NetResult -> {
@@ -158,7 +159,7 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             })
 
             awaitClose {
-                call.cancel()
+                flowCall.cancel()
             }
         }
 

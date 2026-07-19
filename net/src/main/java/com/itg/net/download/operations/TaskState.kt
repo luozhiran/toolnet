@@ -23,7 +23,6 @@ class TaskState {
     fun scheduleTask(task: Task): ScheduleResult {
         val url = task.url?.takeIf { it.isNotBlank() }
         if (url == null || waitingTaskUrls.contains(url) || runningTaskUrls.contains(url)) {
-            HoldActivityCallbackMap.removeProgressCallback(task)
             return ScheduleResult.REJECTED
         }
         return if (runningTasks.size < maxDownloadSize()) {
@@ -43,7 +42,6 @@ class TaskState {
         val task = waitingTasks.removeAt(0)
         val url = task.url?.takeIf { it.isNotBlank() }
         if (url == null) {
-            HoldActivityCallbackMap.removeProgressCallback(task)
             return null
         }
         waitingTaskUrls.remove(url)
@@ -56,14 +54,12 @@ class TaskState {
     fun addWaitTask(task: Task): Boolean {
         val url = task.url?.takeIf { it.isNotBlank() }
         if (url == null || waitingTaskUrls.contains(url)) {
-            HoldActivityCallbackMap.removeProgressCallback(task)
             return false
         }
         if (waitingTasks.add(task)) {
             waitingTaskUrls.add(url)
             return true
         }
-        HoldActivityCallbackMap.removeProgressCallback(task)
         return false
     }
 
@@ -88,14 +84,12 @@ class TaskState {
         if (task == null) return false
         val url = task.url?.takeIf { it.isNotBlank() }
         if (url == null || runningTaskUrls.contains(url)) {
-            HoldActivityCallbackMap.removeProgressCallback(task)
             return false
         }
         if (runningTasks.add(task)) {
             runningTaskUrls.add(url)
             return true
         }
-        HoldActivityCallbackMap.removeProgressCallback(task)
         return false
     }
 
@@ -151,7 +145,7 @@ class TaskState {
     }
 
     fun isInvalidTask(task: Task?): Boolean {
-        return task == null || task.url.isNullOrBlank() || task.url == task.cancelUrl
+        return task == null || task.url.isNullOrBlank() || task.path.isNullOrBlank() || task.url == task.cancelUrl
     }
 
     fun isBreakpointContinuation(task: Task): Boolean {

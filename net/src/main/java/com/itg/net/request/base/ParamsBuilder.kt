@@ -25,10 +25,12 @@ abstract class ParamsBuilder : Builder, SentBuilder {
             return if (this.path.isNullOrEmpty()) {
                 field
             } else {
-                if (field?.endsWith("/") == true) {
-                    field + this.path
+                val baseUrl = field ?: return null
+                val requestPath = this.path.orEmpty().trimStart('/')
+                if (baseUrl.endsWith("/")) {
+                    baseUrl + requestPath
                 } else {
-                    field +'/'+this.path
+                    "$baseUrl/$requestPath"
                 }
             }
         }

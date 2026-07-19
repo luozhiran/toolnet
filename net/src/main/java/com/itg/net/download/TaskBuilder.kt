@@ -58,15 +58,20 @@ class TaskBuilder {
         object : AbstractProgressCallback() {
             override fun onConnecting(task: Task) {
                 DownloadEndNotify.connectNotify(task)
+                externalProgressCallback?.onConnecting(task)
             }
 
             override fun onProgress(task: Task, complete: Boolean) {
                 if (complete) {
                     DownloadEndNotify.completeNotify(task)
+                    externalProgressCallback?.onProgress(task, true)
                     DownloadEndNotify.finishNotify(task)
+                    externalProgressCallback?.onFinish(task)
+                    externalProgressCallback = null
                     removeActivityLifecycleObserver()
                 } else {
                     DownloadEndNotify.progressNotify(task)
+                    externalProgressCallback?.onProgress(task, false)
                 }
             }
 
@@ -78,7 +83,10 @@ class TaskBuilder {
                     return
                 }
                 DownloadEndNotify.failNotify(task, error)
+                externalProgressCallback?.onFail(error, task)
                 DownloadEndNotify.finishNotify(task)
+                externalProgressCallback?.onFinish(task)
+                externalProgressCallback = null
                 removeActivityLifecycleObserver()
             }
 
@@ -90,6 +98,8 @@ class TaskBuilder {
      * 在 Activity 销毁时会自动移除以防止内存泄露。
      */
     private var holdActivityRef: IProgressCallback? = null
+
+    private var externalProgressCallback: IProgressCallback? = null
 
     /**
      * 绑定到 Activity 的生命周期和观察者的包装对象。
@@ -259,7 +269,7 @@ class TaskBuilder {
      * @return 返回自身，支持链式调用
      */
     fun setProgressCallback(callback: IProgressCallback): TaskBuilder {
-        task.progressCallback = callback
+        externalProgressCallback = callback
         return this
     }
 
@@ -337,14 +347,20 @@ class TaskBuilder {
         // 校验任务是否为无效任务（URL 或保存路径未配置等）
         if (taskState.isInvalidTask(task)) {
             holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
+            externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
             holdActivityRef?.onFinish(task)
+            externalProgressCallback?.onFinish(task)
+            externalProgressCallback = null
             removeActivityLifecycleObserver()
             return task
         }
         // 目标文件已存在且未开启覆盖
         if (!task.overwrite && File(task.path.orEmpty()).exists()) {
             holdActivityRef?.onFail(ERROR_TARGET_FILE_EXISTS, task)
+            externalProgressCallback?.onFail(ERROR_TARGET_FILE_EXISTS, task)
             holdActivityRef?.onFinish(task)
+            externalProgressCallback?.onFinish(task)
+            externalProgressCallback = null
             removeActivityLifecycleObserver()
             return task
         }
@@ -360,6 +376,12 @@ class TaskBuilder {
             Download.instance.dispatchTool.download(task)
         }
         if (!accepted) {
+            holdActivityRef?.let { HoldActivityCallbackMap.removeProgressCallback(task, it) }
+            holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
+            externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
+            holdActivityRef?.onFinish(task)
+            externalProgressCallback?.onFinish(task)
+            externalProgressCallback = null
             removeActivityLifecycleObserver()
         }
         return task

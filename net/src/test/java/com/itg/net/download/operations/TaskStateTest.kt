@@ -2,7 +2,9 @@ package com.itg.net.download.operations
 
 import com.itg.net.download.data.Task
 import com.itg.net.Net
+import com.itg.net.download.callback.AbstractProgressCallback
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,6 +23,7 @@ class TaskStateTest {
         val taskState = TaskState()
         val task = Task().apply {
             url = "https://example.com/file.zip"
+            path = "build/tmp/file.zip"
         }
 
         assertTrue(taskState.addRunningTask(task))
@@ -41,6 +44,7 @@ class TaskStateTest {
         }
         val task = Task().apply {
             url = "https://example.com/file.zip"
+            path = "build/tmp/file.zip"
         }
 
         assertTrue(taskState.addRunningTask(task))
@@ -51,5 +55,38 @@ class TaskStateTest {
         }
 
         assertTrue(taskState.runningQueueCanAcceptTask())
+    }
+
+    @Test
+    fun invalidTaskRequiresSavePath() {
+        val taskState = TaskState()
+        val task = Task().apply {
+            url = "https://example.com/file.zip"
+        }
+
+        assertTrue(taskState.isInvalidTask(task))
+    }
+
+    @Test
+    fun rejectedDuplicateTaskDoesNotClearExistingUrlListeners() {
+        val taskState = TaskState()
+        val firstTask = Task().apply {
+            url = "https://example.com/file.zip"
+            path = "build/tmp/file.zip"
+        }
+        val duplicateTask = Task().apply {
+            url = firstTask.url
+            path = "build/tmp/duplicate.zip"
+        }
+        val listener = object : AbstractProgressCallback() {}
+
+        HoldActivityCallbackMap.setProgressCallback(firstTask, listener)
+        assertEquals(1, HoldActivityCallbackMap.getUrlProgressCallbackNum(firstTask))
+
+        assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(firstTask))
+        assertEquals(TaskState.ScheduleResult.REJECTED, taskState.scheduleTask(duplicateTask))
+        assertEquals(1, HoldActivityCallbackMap.getUrlProgressCallbackNum(firstTask))
+
+        taskState.deleteRunningTask(firstTask)
     }
 }
