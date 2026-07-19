@@ -63,7 +63,7 @@ class TaskBuilder {
                 if (complete) {
                     DownloadEventPublisher.complete(task)
                     DownloadEventPublisher.finished(task)
-                    externalProgressCallback = null
+                    releaseCallbacks()
                     removeActivityLifecycleObserver()
                 } else {
                     DownloadEventPublisher.progress(task)
@@ -79,7 +79,7 @@ class TaskBuilder {
                 }
                 DownloadEventPublisher.failed(task, error)
                 DownloadEventPublisher.finished(task)
-                externalProgressCallback = null
+                releaseCallbacks()
                 removeActivityLifecycleObserver()
             }
 
@@ -236,6 +236,12 @@ class TaskBuilder {
         }
     }
 
+    private fun releaseCallbacks() {
+        holdActivityRef = null
+        externalProgressCallback = null
+        task.progressCallback = null
+    }
+
     /**
      * 设置下载进度监听器
      *
@@ -343,7 +349,7 @@ class TaskBuilder {
             externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
             holdActivityRef?.onFinish(task)
             externalProgressCallback?.onFinish(task)
-            externalProgressCallback = null
+            releaseCallbacks()
             removeActivityLifecycleObserver()
             return task
         }
@@ -353,7 +359,7 @@ class TaskBuilder {
             externalProgressCallback?.onFail(ERROR_TARGET_FILE_EXISTS, task)
             holdActivityRef?.onFinish(task)
             externalProgressCallback?.onFinish(task)
-            externalProgressCallback = null
+            releaseCallbacks()
             removeActivityLifecycleObserver()
             return task
         }
@@ -376,7 +382,7 @@ class TaskBuilder {
             externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
             holdActivityRef?.onFinish(task)
             externalProgressCallback?.onFinish(task)
-            externalProgressCallback = null
+            releaseCallbacks()
             removeActivityLifecycleObserver()
         }
         return task

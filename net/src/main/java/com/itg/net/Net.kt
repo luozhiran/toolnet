@@ -16,6 +16,7 @@ import com.itg.net.request.post.json.PostJson
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.data.Task
 import com.itg.net.util.PrintLog
+import okhttp3.Call
 import okhttp3.OkHttpClient
 
 /**
@@ -191,7 +192,15 @@ class Net {
     /**
      * OkHttp 客户端管理器，基于 [ddNetConfig] 构建 OkHttpClient 实例
      */
-    val okhttpManager: OkHttpManager by lazy { OkHttpManager(ddNetConfig) }
+    private val okhttpManagerLock = Any()
+
+    @Volatile
+    private var okhttpManagerRef: OkHttpManager? = null
+
+    val okhttpManager: OkHttpManager
+        get() = okhttpManagerRef ?: synchronized(okhttpManagerLock) {
+            okhttpManagerRef ?: OkHttpManager(ddNetConfig).also { okhttpManagerRef = it }
+        }
 
     /**
      * 当前 Net 使用的 OkHttpClient。
@@ -213,7 +222,13 @@ class Net {
      * @return 返回自身，支持链式调用
      */
     fun configure(block: NetConfig.() -> Unit): Net {
-        ddNetConfig.block()
+        synchronized(okhttpManagerLock) {
+            ddNetConfig.block()
+            okhttpManagerRef?.shutdownMonitor()
+            if (okhttpManagerRef != null) {
+                okhttpManagerRef = OkHttpManager(ddNetConfig)
+            }
+        }
         return this
     }
 
@@ -391,12 +406,7 @@ class Net {
      * 取消所有正在排队和正在执行的 OkHttp 请求
      */
     fun cancelAll() {
-        okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
-            it.cancel()
-        }
-        okhttpManager.okHttpClient.dispatcher.runningCalls().forEach {
-            it.cancel()
-        }
+        okhttpManager.okHttpClient.dispatcher.cancelAll()
     }
 
     /**
@@ -412,12 +422,12 @@ class Net {
     fun cancelTag(tag: Any?) {
         if (tag == null) return
         okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
-            if (tag == it.request().tag()) {
+            if (it.matchesTag(tag)) {
                 it.cancel()
             }
         }
         okhttpManager.okHttpClient.dispatcher.runningCalls().forEach {
-            if (tag == it.request().tag()) {
+            if (it.matchesTag(tag)) {
                 it.cancel()
             }
         }
@@ -490,18 +500,25 @@ class Net {
     fun cancelFirstTag(tag: Any?): Boolean {
         if (tag == null) return false
         okhttpManager.okHttpClient.dispatcher.queuedCalls().forEach {
-            if (tag == it.request().tag()) {
+            if (it.matchesTag(tag)) {
                 it.cancel()
                 return true
             }
         }
         okhttpManager.okHttpClient.dispatcher.runningCalls().forEach {
-            if (tag == it.request().tag()) {
+            if (it.matchesTag(tag)) {
                 it.cancel()
                 return true
             }
         }
         return false
+    }
+
+    private fun Call.matchesTag(tag: Any): Boolean {
+        val request = request()
+        return request.tag() == tag ||
+            request.tag(String::class.java) == tag ||
+            request.url.toString() == tag
     }
 
 }

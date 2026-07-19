@@ -16,8 +16,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import retrofit2.CallAdapter
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import java.lang.reflect.Type
 
 class NetFlowCallAdapterFactoryTest {
 
@@ -111,6 +113,21 @@ class NetFlowCallAdapterFactoryTest {
         assertEquals(2, server.requestCount)
     }
 
+    @Test
+    fun netRetrofitKeepsDefaultFlowAdapterWhenCustomAdapterIsAdded() = runBlocking {
+        val service = NetRetrofit.builder()
+            .baseUrl(server.url("/").toString())
+            .addCallAdapterFactory(NoopCallAdapterFactory())
+            .build()
+            .create<Api>()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"code":"0","data":"ok"}"""))
+
+        val result = service.netResult().first()
+
+        assertTrue(result is NetResult.Success)
+        assertTrue((result as NetResult.Success).body.orEmpty().contains("ok"))
+    }
+
     private fun resetBusinessConfig() {
         Net.configure {
             clearBusinessInterceptors()
@@ -130,4 +147,12 @@ class NetFlowCallAdapterFactoryTest {
     }
 
     data class UserDto(val name: String)
+
+    private class NoopCallAdapterFactory : CallAdapter.Factory() {
+        override fun get(
+            returnType: Type,
+            annotations: Array<Annotation>,
+            retrofit: Retrofit
+        ): CallAdapter<*, *>? = null
+    }
 }

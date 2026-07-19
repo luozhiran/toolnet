@@ -15,6 +15,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.CancellationException
 
 /**
  * 将当前请求构建器转为 [Flow]<[String]>，emission 为响应体字符串
@@ -48,14 +49,16 @@ fun <T : ParamsBuilder> T.flowString(): Flow<String> = callbackFlow {
 
     call.enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
-            if (!call.isCanceled()) {
-                close(NetFlowException(null, e.message))
-            }
+            closeFlowForFailure(call, e)
         }
 
         override fun onResponse(call: Call, response: Response) {
             response.use { response ->
-                if (!call.isCanceled()) {
+                try {
+                    if (call.isCanceled()) {
+                        close(requestCancellation())
+                        return@use
+                    }
                     val body = response.body?.string()
                     if (response.isSuccessful) {
                         trySend(body.orEmpty())
@@ -63,6 +66,8 @@ fun <T : ParamsBuilder> T.flowString(): Flow<String> = callbackFlow {
                     } else {
                         close(NetFlowException(response.code, body ?: response.message))
                     }
+                } catch (e: Exception) {
+                    closeFlowForResponseException(call, e)
                 }
             }
         }
@@ -97,15 +102,21 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
 
     call.enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
-            if (!call.isCanceled()) {
-                trySend(NetResult.NetworkError(e))
-                close()
+            if (call.isCanceled()) {
+                close(requestCancellation(e))
+                return
             }
+            trySend(NetResult.NetworkError(e))
+            close()
         }
 
         override fun onResponse(call: Call, response: Response) {
             response.use { response ->
-                if (!call.isCanceled()) {
+                try {
+                    if (call.isCanceled()) {
+                        close(requestCancellation())
+                        return@use
+                    }
                     val rawBody = response.body?.string()
                     val headers = response.headers.toMultimap()
                         .mapValues { (_, values) -> values.joinToString(", ") }
@@ -125,6 +136,13 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
                     }
                     trySend(result)
                     close()
+                } catch (e: Exception) {
+                    if (call.isCanceled()) {
+                        close(requestCancellation(e))
+                    } else {
+                        trySend(NetResult.NetworkError(e.asIOException()))
+                        close()
+                    }
                 }
             }
         }
@@ -220,14 +238,16 @@ fun <T> ParamsBuilder.flowResponse(
 
     call.enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
-            if (!call.isCanceled()) {
-                close(NetFlowException(null, e.message))
-            }
+            closeFlowForFailure(call, e)
         }
 
         override fun onResponse(call: Call, response: Response) {
             try {
-                if (!call.isCanceled()) {
+                if (call.isCanceled()) {
+                    close(requestCancellation())
+                    return
+                }
+                try {
                     val rawBody = response.body?.string()
                     val body = converter(rawBody)
                     val headers = response.headers.toMultimap()
@@ -242,6 +262,8 @@ fun <T> ParamsBuilder.flowResponse(
                         )
                     )
                     close()
+                } catch (e: Exception) {
+                    closeFlowForResponseException(call, e)
                 }
             } finally {
                 response.close()
@@ -252,4 +274,33 @@ fun <T> ParamsBuilder.flowResponse(
     awaitClose {
         call.cancel()
     }
+}
+
+private fun kotlinx.coroutines.channels.ProducerScope<*>.closeFlowForFailure(call: Call, error: IOException) {
+    if (call.isCanceled()) {
+        close(requestCancellation(error))
+    } else {
+        close(NetFlowException(null, error.message))
+    }
+}
+
+private fun kotlinx.coroutines.channels.ProducerScope<*>.closeFlowForResponseException(
+    call: Call,
+    error: Exception
+) {
+    if (call.isCanceled()) {
+        close(requestCancellation(error))
+    } else {
+        close(NetFlowException(null, error.message))
+    }
+}
+
+private fun requestCancellation(cause: Throwable? = null): CancellationException {
+    return CancellationException("request canceled").apply {
+        if (cause != null) initCause(cause)
+    }
+}
+
+private fun Throwable.asIOException(): IOException {
+    return this as? IOException ?: IOException(message, this)
 }

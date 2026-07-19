@@ -20,6 +20,7 @@ import retrofit2.Converter
 import retrofit2.Response
 import retrofit2.Retrofit
 import java.io.IOException
+import java.util.concurrent.CancellationException
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 
@@ -113,30 +114,39 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             val flowCall = call.clone()
             flowCall.enqueue(object : Callback<T> {
                 override fun onResponse(call: Call<T>, response: Response<T>) {
-                    if (flowCall.isCanceled) return
+                    if (flowCall.isCanceled) {
+                        close(requestCancellation())
+                        return
+                    }
 
-                    when (mode) {
-                        ResultMode.Body -> emitBody(response)
-                        ResultMode.NetResponse -> emitNetResponse(response)
-                        ResultMode.NetResult -> {
-                            trySend(response.toNetResult())
+                    try {
+                        when (mode) {
+                            ResultMode.Body -> emitBody(response)
+                            ResultMode.NetResponse -> emitNetResponse(response)
+                            ResultMode.NetResult -> {
+                                trySend(response.toNetResult())
+                            }
+                            ResultMode.BusinessResult -> {
+                                trySend(response.toNetResult().toBusinessResult())
+                            }
+                            ResultMode.TypedBusinessResult -> {
+                                val result = response.toNetResult()
+                                    .toBusinessResult()
+                                    .toTypedBusinessResult<Any>(typedBusinessType ?: Any::class.java)
+                                trySend(result)
+                            }
                         }
-                        ResultMode.BusinessResult -> {
-                            trySend(response.toNetResult().toBusinessResult())
-                        }
-                        ResultMode.TypedBusinessResult -> {
-                            val result = response.toNetResult()
-                                .toBusinessResult()
-                                .toTypedBusinessResult<Any>(typedBusinessType ?: Any::class.java)
-                            trySend(result)
-                        }
+                    } catch (e: Exception) {
+                        emitResponseException(flowCall, e)
                     }
                     close()
                 }
 
                 override fun onFailure(call: Call<T>, t: Throwable) {
-                    if (flowCall.isCanceled) return
-
+                    if (flowCall.isCanceled) {
+                        close(requestCancellation(t))
+                        return
+                    }
                     when (mode) {
                         ResultMode.NetResult -> {
                             trySend(NetResult.NetworkError(t.asIOException()))
@@ -245,6 +255,33 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
 
         private fun Throwable.asIOException(): IOException {
             return this as? IOException ?: IOException(message, this)
+        }
+
+        private fun kotlinx.coroutines.channels.ProducerScope<Any>.emitResponseException(
+            call: Call<T>,
+            error: Exception
+        ) {
+            if (call.isCanceled) {
+                close(requestCancellation(error))
+                return
+            }
+            when (mode) {
+                ResultMode.NetResult -> trySend(NetResult.NetworkError(error.asIOException()))
+                ResultMode.BusinessResult -> trySend(NetResult.NetworkError(error.asIOException()).toBusinessResult())
+                ResultMode.TypedBusinessResult -> {
+                    val result = NetResult.NetworkError(error.asIOException())
+                        .toBusinessResult()
+                        .toTypedBusinessResult<Any>(typedBusinessType ?: Any::class.java)
+                    trySend(result)
+                }
+                else -> close(NetFlowException(null, error.message))
+            }
+        }
+
+        private fun requestCancellation(cause: Throwable? = null): CancellationException {
+            return CancellationException("request canceled").apply {
+                if (cause != null) initCause(cause)
+            }
         }
     }
 }

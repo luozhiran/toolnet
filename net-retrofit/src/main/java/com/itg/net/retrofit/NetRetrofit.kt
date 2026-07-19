@@ -118,10 +118,9 @@ class NetRetrofit private constructor(
             }
 
             // CallAdapter：用户自定义优先，否则默认 NetFlowCallAdapterFactory + Retrofit 内置
-            if (callAdapterFactories.isEmpty()) {
+            callAdapterFactories.forEach { retrofitBuilder.addCallAdapterFactory(it) }
+            if (callAdapterFactories.none { it is NetFlowCallAdapterFactory }) {
                 retrofitBuilder.addCallAdapterFactory(NetFlowCallAdapterFactory())
-            } else {
-                callAdapterFactories.forEach { retrofitBuilder.addCallAdapterFactory(it) }
             }
 
             return NetRetrofit(retrofitBuilder.build())

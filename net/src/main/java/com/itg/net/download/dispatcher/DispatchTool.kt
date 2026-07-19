@@ -14,7 +14,6 @@ import com.itg.net.download.operations.TaskState
 import com.itg.net.download.request.BreakpointContinuationRequest
 import com.itg.net.download.request.DirectRequest
 import com.itg.net.util.PrintLog
-import com.itg.net.util.TaskTools
 
 class DispatchTool : Dispatch {
 
@@ -170,8 +169,7 @@ class DispatchTool : Dispatch {
                 PrintLog.logd("删除任务")
             }
         } else if (type == RESULT_DOWNLOAD_SUCCESS) {
-            val progress = TaskTools.getDownloadProgress(task)
-            task.progressCallback?.onProgress(task, progress == 100)
+            task.progressCallback?.onProgress(task, true)
             taskStateInstance.deleteRunningTask(task)
             PrintLog.logd("下载任务完成，删除任务")
         }
