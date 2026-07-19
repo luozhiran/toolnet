@@ -21,7 +21,6 @@ abstract class PostFormBuilder : ParamsBuilder(), GetBuilder {
         UrlTools.cutOffStrToMap(params.toString())?.let {
             totalParamsMap.putAll(it)
         }
-        if (totalParamsMap.isEmpty()) return null
         val builder = FormBody.Builder()
         totalParamsMap.forEach {
             if (it.key.isNotBlank()) {

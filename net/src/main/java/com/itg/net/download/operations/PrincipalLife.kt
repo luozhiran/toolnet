@@ -15,6 +15,7 @@ import java.util.WeakHashMap
 
 object PrincipalLife {
     private val callWeakHash by lazy { WeakHashMap<Activity, MutableList<Call>>() }
+    private val callActivityHash by lazy { WeakHashMap<Call, Activity>() }
     private val observerWeakHash by lazy { WeakHashMap<Activity, LifecycleEventObserver>() }
     private val lockCall = LockData()
 
@@ -34,6 +35,7 @@ object PrincipalLife {
                 if (!taskList.contains(call)) {
                     taskList.add(call)
                 }
+                callActivityHash[call] = activity
                 if (!observerWeakHash.containsKey(activity)) {
                     observerToAdd = createDestroyObserver()
                     observerWeakHash[activity] = observerToAdd
@@ -59,13 +61,15 @@ object PrincipalLife {
                 ThreadTool.executeOnBackground {
                     val calls = synchronized(lockCall) {
                         observerWeakHash.remove(ownerActivity)
-                        callWeakHash.remove(ownerActivity)?.toList().orEmpty()
+                        callWeakHash.remove(ownerActivity)?.toList().orEmpty().also { removedCalls ->
+                            removedCalls.forEach { callActivityHash.remove(it) }
+                        }
                     }
                     calls.forEach { it.cancel() }
                     ThreadTool.runOnUIThread {
                         source.lifecycle.removeObserver(this)
                     }
-                    PrintLog.logr("activity destroyed, canceled ${calls.size} lifecycle-bound calls")
+                    PrintLog.logr { "activity destroyed, canceled ${calls.size} lifecycle-bound calls" }
                 }
             }
         }
@@ -76,17 +80,11 @@ object PrincipalLife {
         val observersToRemove = mutableListOf<Pair<Activity, LifecycleEventObserver>>()
 
         synchronized(lockCall) {
-            val iterator = callWeakHash.iterator()
-            while (iterator.hasNext()) {
-                val entry = iterator.next()
-                val calls = entry.value
-                calls.remove(call)
-                if (calls.isEmpty()) {
-                    observerWeakHash.remove(entry.key)?.let { observer ->
-                        observersToRemove.add(entry.key to observer)
-                    }
-                    iterator.remove()
-                }
+            val activity = callActivityHash.remove(call)
+            if (activity != null) {
+                removeCallFromActivity(activity, call, observersToRemove)
+            } else {
+                removeCallByScan(call, observersToRemove)
             }
         }
 
@@ -96,6 +94,40 @@ object PrincipalLife {
                     (activity as? ComponentActivity)?.lifecycle?.removeObserver(observer)
                 }
             }
+        }
+    }
+
+    private fun removeCallFromActivity(
+        activity: Activity,
+        call: Call,
+        observersToRemove: MutableList<Pair<Activity, LifecycleEventObserver>>
+    ) {
+        val calls = callWeakHash[activity] ?: return
+        calls.remove(call)
+        if (calls.isEmpty()) {
+            observerWeakHash.remove(activity)?.let { observer ->
+                observersToRemove.add(activity to observer)
+            }
+            callWeakHash.remove(activity)
+        }
+    }
+
+    private fun removeCallByScan(
+        call: Call,
+        observersToRemove: MutableList<Pair<Activity, LifecycleEventObserver>>
+    ) {
+        val iterator = callWeakHash.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            val calls = entry.value
+            if (!calls.remove(call)) continue
+            if (calls.isEmpty()) {
+                observerWeakHash.remove(entry.key)?.let { observer ->
+                    observersToRemove.add(entry.key to observer)
+                }
+                iterator.remove()
+            }
+            return
         }
     }
 

@@ -27,9 +27,9 @@ abstract class PostContentBuilder : ParamsBuilder() {
     }
 
     protected fun getRequestBody(): RequestBody? {
-        if (contents.isEmpty()) return null
+        if (contents.isEmpty()) return "".toRequestBody(null)
         val mediaType = contentMediaTypes.getOrNull(0)?.toMediaTypeOrNull()
-        return contents.getOrNull(0)?.toRequestBody(mediaType)
+        return contents.getOrNull(0).orEmpty().toRequestBody(mediaType)
     }
 
     fun getCount(): Int {

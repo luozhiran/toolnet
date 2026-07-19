@@ -18,12 +18,12 @@ class DirectRequest(private val task: Task, taskStateInstance: TaskState) : Base
         val okHttpCallback = DownloadRequestCallback(onResponse = { _, response ->
             val code = response.code
             if (code == 200) {
-                PrintLog.logd("下载成功 ${task.url} ")
+                PrintLog.logd { "下载成功 ${task.url} " }
                 handleResponse(response)
             } else {
                 response.use {
                     val message = "请求失败：response.code=${code}"
-                    PrintLog.logd("下载失败 ${task.url} $message")
+                    PrintLog.logd { "下载失败 ${task.url} $message" }
                     failureCallback?.invoke(task, message)
                 }
             }
@@ -34,7 +34,7 @@ class DirectRequest(private val task: Task, taskStateInstance: TaskState) : Base
             } else {
                 ioException.message.toString()
             }
-            PrintLog.logd("下载失败 ${task.url} $message")
+            PrintLog.logd { "下载失败 ${task.url} $message" }
             failureCallback?.invoke(task, message)
         })
         getBuilder().send(okHttpCallback, task)

@@ -6,6 +6,7 @@ import com.itg.net.download.data.DOWNLOAD_SUCCESS_MESSAGE
 import com.itg.net.download.data.ERROR_CREATE_DOWNLOAD_DIR_FAILED
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_EMPTY_RESPONSE_BODY
+import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
 import com.itg.net.download.data.ERROR_MD5_CHECK_FAILED
 import com.itg.net.download.data.ERROR_RENAME_TEMP_FILE_FAILED
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
@@ -17,6 +18,7 @@ import com.itg.net.monitor.MonitorMarker
 import com.itg.net.request.base.ParamsBuilder
 import com.itg.net.util.CheckTools
 import com.itg.net.util.TaskTools
+import com.itg.net.util.ThreadTool
 import okhttp3.Response
 import java.io.*
 import java.util.concurrent.ThreadLocalRandom
@@ -27,6 +29,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
     companion object {
         /** 下载专用请求 ID 生成器 */
         private val downloadIdCounter = AtomicLong(0)
+        private const val DOWNLOAD_BUFFER_SIZE = 128 * 1024
     }
 
     private var successCallback: ((Task, String) -> Unit)? = null
@@ -86,6 +89,12 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         task.downloadSize = size
     }
 
+    private fun dispatchProgress(task: Task, complete: Boolean) {
+        ThreadTool.runOnUIThread(Runnable {
+            task.progressCallback?.onProgress(task, complete)
+        })
+    }
+
     //如果不支持断点续传，则取消任务时删除下载的部分数据
     protected fun deletePreDownloadData(file: File) {
         file.delete()
@@ -133,7 +142,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
         inputStream: InputStream,
         file: File,
     ) {
-        val buffer = ByteArray(1024 shl 5)
+        val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
         var length: Int
         try {
             val out = FileOutputStream(file, task.append)
@@ -165,7 +174,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                                     })
                                 return
                             } else {
-                                task.progressCallback?.onProgress(task, cur == 100)
+                                dispatchProgress(task, cur == 100)
                             }
                         } else {
                             if (taskCancel(task)) {
@@ -179,7 +188,10 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
                 }
             }
             updateTask(writtenSize, task)
-            if (task.contentLength <= 0L || writtenSize >= task.contentLength) {
+            if (task.contentLength <= 0L) {
+                task.contentLength = writtenSize
+            }
+            if (writtenSize >= task.contentLength) {
                 lastOneCheck(
                     file,
                     { msg ->
@@ -203,10 +215,22 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
     }
 
     protected fun handleResponse(response: Response) {
-        val file = File(task.path + ".tmp")
+        val savePath = task.path?.takeIf { it.isNotBlank() }
+        if (savePath == null) {
+            response.close()
+            reportDownloadEvent(0, MonitorEvent.ErrorType.DISK_WRITE_ERROR, ERROR_INVALID_DOWNLOAD_TASK, null)
+            failureCallback?.invoke(task, ERROR_INVALID_DOWNLOAD_TASK)
+            return
+        }
+        val file = File("$savePath.tmp")
         val body = response.body
         val localSize = if (task.append && file.exists()) file.length() else 0L
-        task.contentLength = localSize + (body?.contentLength() ?: 0)
+        val remoteLength = body?.contentLength() ?: -1L
+        task.contentLength = if (remoteLength >= 0L) {
+            localSize + remoteLength
+        } else {
+            -1L
+        }
         // 记录 URL 供下载阶段事件使用
         monitoredUrl = task.url
         try {
@@ -317,7 +341,7 @@ abstract class BaseRequest(private val task: Task, private val taskStateInstance
             return false
         }
 
-        if (errorType != MonitorEvent.ErrorType.CANCELLED && task.tryAgainCount > 0) {
+        if (errorType != MonitorEvent.ErrorType.CANCELLED && task.canRetryDownload()) {
             return false
         }
 

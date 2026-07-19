@@ -247,7 +247,7 @@ class Net {
      * @return 对应类型的 [ParamsBuilder]，用于链式设置参数并最终发起请求
      */
     fun builder(type: ModeType): ParamsBuilder {
-        PrintLog.logr("创建 ${type.name} 类型")
+        PrintLog.logr { "创建 ${type.name} 类型" }
         return create(type)
     }
 

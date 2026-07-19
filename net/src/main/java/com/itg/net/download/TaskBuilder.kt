@@ -197,7 +197,7 @@ class TaskBuilder {
                         Download.instance.listenerRegistry.debugPrint()
                     }
                     holdActivityRef = null
-                    PrintLog.logSubd("自动取消下载任务 ${task.url}")
+                    PrintLog.logSubd { "自动取消下载任务 ${task.url}" }
                     Download.instance.cancel(task)
                     removeActivityLifecycleObserver()
                     PrintLog.logSubd("销毁Activity 资源释放完成")
@@ -209,7 +209,7 @@ class TaskBuilder {
         if (!bound) {
             lifecycleDestroyed = true
             task.cancelUrl = task.url
-            PrintLog.logd("bind lifecycle timeout, cancel download ${task.url}")
+            PrintLog.logd { "bind lifecycle timeout, cancel download ${task.url}" }
         }
         return this
 

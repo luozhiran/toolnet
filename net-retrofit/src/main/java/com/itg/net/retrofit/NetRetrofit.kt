@@ -111,10 +111,9 @@ class NetRetrofit private constructor(
                 .client(client)
 
             // Converter：用户自定义优先，否则默认 Gson
-            if (converterFactories.isEmpty()) {
+            converterFactories.forEach { retrofitBuilder.addConverterFactory(it) }
+            if (converterFactories.none { it is GsonConverterFactory }) {
                 retrofitBuilder.addConverterFactory(GsonConverterFactory.create())
-            } else {
-                converterFactories.forEach { retrofitBuilder.addConverterFactory(it) }
             }
 
             // CallAdapter：用户自定义优先，否则默认 NetFlowCallAdapterFactory + Retrofit 内置

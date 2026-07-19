@@ -123,8 +123,8 @@ class EncryptInterceptor(
         if (exceedsBodyLimit(body)) return request
 
         val bodyString = body.readString()
-        if (bodyString.isBlank()) return request
-        if (exceedsBodyLimit(bodyString)) return request
+        if (bodyString.isBlank()) return request.withBody(bodyString, contentType)
+        if (exceedsBodyLimit(bodyString)) return request.withBody(bodyString, contentType)
 
         val encryptedBody = when {
             contentType.subtype.contains("json", ignoreCase = true) ->
@@ -134,9 +134,9 @@ class EncryptInterceptor(
             else -> null
         }
 
-        if (encryptedBody == null) return request
+        if (encryptedBody == null) return request.withBody(bodyString, contentType)
 
-        PrintLog.logr("$TAG: request fields encrypted for ${request.url.encodedPath}")
+        PrintLog.logr { "$TAG: request fields encrypted for ${request.url.encodedPath}" }
         return request.newBuilder()
             .method(request.method, encryptedBody.toRequestBody(contentType))
             .build()
@@ -159,7 +159,7 @@ class EncryptInterceptor(
                 }
             }
         } catch (e: Exception) {
-            PrintLog.logr("$TAG: encrypt json failed, skip. ${e.message}")
+            PrintLog.logr { "$TAG: encrypt json failed, skip. ${e.message}" }
             null
         }
     }
@@ -228,7 +228,7 @@ class EncryptInterceptor(
             }
             if (modified) sb.toString() else null
         } catch (e: Exception) {
-            PrintLog.logr("$TAG: encrypt form failed, skip. ${e.message}")
+            PrintLog.logr { "$TAG: encrypt form failed, skip. ${e.message}" }
             null
         }
     }
@@ -260,7 +260,7 @@ class EncryptInterceptor(
             return response.withBody(bodyString, contentType)
         }
 
-        PrintLog.logr("$TAG: response fields decrypted for ${response.request.url.encodedPath}")
+        PrintLog.logr { "$TAG: response fields decrypted for ${response.request.url.encodedPath}" }
         return response.newBuilder()
             .body(decryptedBody.toResponseBody(contentType))
             .build()
@@ -283,7 +283,7 @@ class EncryptInterceptor(
                 }
             }
         } catch (e: Exception) {
-            PrintLog.logr("$TAG: decrypt json failed, skip. ${e.message}")
+            PrintLog.logr { "$TAG: decrypt json failed, skip. ${e.message}" }
             null
         }
     }
@@ -352,7 +352,7 @@ class EncryptInterceptor(
             }
             if (modified) sb.toString() else null
         } catch (e: Exception) {
-            PrintLog.logr("$TAG: decrypt form failed, skip. ${e.message}")
+            PrintLog.logr { "$TAG: decrypt form failed, skip. ${e.message}" }
             null
         }
     }
@@ -439,7 +439,7 @@ class EncryptInterceptor(
 
     private fun exceedsBodyLimit(bodyString: String): Boolean {
         val limit = config.maxBodyBytes
-        return limit > 0L && bodyString.toByteArray(StandardCharsets.UTF_8).size > limit
+        return limit > 0L && bodyString.utf8ByteCountExceeds(limit)
     }
 }
 
@@ -449,6 +449,12 @@ class EncryptInterceptor(
 private fun Response.withBody(bodyString: String, contentType: MediaType): Response {
     return newBuilder()
         .body(bodyString.toResponseBody(contentType))
+        .build()
+}
+
+private fun Request.withBody(bodyString: String, contentType: MediaType): Request {
+    return newBuilder()
+        .method(method, bodyString.toRequestBody(contentType))
         .build()
 }
 
@@ -464,4 +470,24 @@ private fun RequestBody.readString(): String {
     val buffer = Buffer()
     writeTo(buffer)
     return buffer.readUtf8()
+}
+
+private fun String.utf8ByteCountExceeds(limit: Long): Boolean {
+    var bytes = 0L
+    var index = 0
+    while (index < length) {
+        val char = this[index]
+        bytes += when {
+            char.code <= 0x7F -> 1
+            char.code <= 0x7FF -> 2
+            char.isHighSurrogate() && index + 1 < length && this[index + 1].isLowSurrogate() -> {
+                index++
+                4
+            }
+            else -> 3
+        }
+        if (bytes > limit) return true
+        index++
+    }
+    return false
 }

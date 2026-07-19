@@ -1,9 +1,12 @@
 package com.itg.net.download.data
 
 import com.itg.net.download.callback.IProgressCallback
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.UUID
 
 class Task {
+    private val remainingTryAgainCount = AtomicInteger(1)
+
     //请求地址
     var url: String? = null
     // 请求文件的md5
@@ -35,7 +38,25 @@ class Task {
     // 携带的额外数据
     var extra: String? = null
     // 下载可以尝试的次数
-    var tryAgainCount = 1
+    var tryAgainCount: Int
+        get() = remainingTryAgainCount.get()
+        set(value) {
+            remainingTryAgainCount.set(value.coerceAtLeast(0))
+        }
+
+    fun consumeDownloadAttempt(): Int {
+        while (true) {
+            val current = remainingTryAgainCount.get()
+            val next = (current - 1).coerceAtLeast(0)
+            if (remainingTryAgainCount.compareAndSet(current, next)) {
+                return next
+            }
+        }
+    }
+
+    fun canRetryDownload(): Boolean {
+        return remainingTryAgainCount.get() > 0
+    }
     // 是否跳过全局参数，默认 false（附带全局参数）
     var noGlobalParams = false
     // 创建任务的唯一标识

@@ -21,7 +21,7 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
     }
 
     PrincipalLife.observeActivityLife(call, consumeAutoCancelActivity())
-    PrintLog.logr("start request ${call.request().url}")
+    PrintLog.logr { "start request ${call.request().url}" }
 
     call.enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
@@ -29,7 +29,7 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
                 if (!call.isCanceled()) {
                     callback?.onNetworkError(NetResult.NetworkError(e))
                 }
-                PrintLog.logr("request failed ${call.request().url}")
+                PrintLog.logr { "request failed ${call.request().url}" }
             } finally {
                 PrincipalLife.removeCall(call)
             }
@@ -71,7 +71,7 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
                         }
                     }
                 }
-                PrintLog.logr("request finished ${call.request().url} code=${response.code}")
+                PrintLog.logr { "request finished ${call.request().url} code=${response.code}" }
             } finally {
                 response.close()
                 PrincipalLife.removeCall(call)

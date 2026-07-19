@@ -16,7 +16,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import retrofit2.Call
 import retrofit2.CallAdapter
+import retrofit2.Converter
 import retrofit2.Retrofit
 import retrofit2.http.GET
 import java.lang.reflect.Type
@@ -128,6 +130,21 @@ class NetFlowCallAdapterFactoryTest {
         assertTrue((result as NetResult.Success).body.orEmpty().contains("ok"))
     }
 
+    @Test
+    fun netRetrofitKeepsGsonConverterWhenCustomConverterIsAdded() {
+        val service = NetRetrofit.builder()
+            .baseUrl(server.url("/").toString())
+            .addConverterFactory(NoopConverterFactory())
+            .build()
+            .create<Api>()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"name":"Ada"}"""))
+
+        val response = service.user().execute()
+
+        assertTrue(response.isSuccessful)
+        assertEquals("Ada", response.body()?.name)
+    }
+
     private fun resetBusinessConfig() {
         Net.configure {
             clearBusinessInterceptors()
@@ -144,6 +161,9 @@ class NetFlowCallAdapterFactoryTest {
 
         @GET("typed")
         fun typedBusinessResult(): Flow<TypedBusinessResult<UserDto>>
+
+        @GET("user")
+        fun user(): Call<UserDto>
     }
 
     data class UserDto(val name: String)
@@ -155,4 +175,6 @@ class NetFlowCallAdapterFactoryTest {
             retrofit: Retrofit
         ): CallAdapter<*, *>? = null
     }
+
+    private class NoopConverterFactory : Converter.Factory()
 }

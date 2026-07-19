@@ -1,8 +1,6 @@
 package com.itg.net.request.post.content
 
 import android.app.Activity
-import com.itg.net.request.post.form.PostFormBuilder
-import com.itg.net.request.post.json.PostJsonBuilder
 import okhttp3.Cookie
 
 abstract class PostContentGenerator : PostContentBuilder() {
@@ -18,6 +16,7 @@ abstract class PostContentGenerator : PostContentBuilder() {
     }
 
     override fun autoCancel(activity: Activity?): PostContentGenerator {
+        super.autoCancel(activity)
         return this
     }
 

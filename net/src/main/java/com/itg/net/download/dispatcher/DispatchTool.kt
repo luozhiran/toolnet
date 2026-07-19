@@ -13,6 +13,7 @@ import com.itg.net.download.operations.TaskState
 import com.itg.net.download.request.BreakpointContinuationRequest
 import com.itg.net.download.request.DirectRequest
 import com.itg.net.util.PrintLog
+import com.itg.net.util.ThreadTool
 
 class DispatchTool : Dispatch {
 
@@ -79,8 +80,8 @@ class DispatchTool : Dispatch {
     }
 
     private fun startDirectDownload(task: Task) {
-        task.tryAgainCount -= 1
-        task.progressCallback?.onConnecting(task)
+        task.consumeDownloadAttempt()
+        dispatchCallback { task.progressCallback?.onConnecting(task) }
         DirectRequest(task, taskStateInstance)
             .setFailCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_FAILED, msg) }
             .setSuccessCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_SUCCESS, msg) }
@@ -88,8 +89,8 @@ class DispatchTool : Dispatch {
     }
 
     private fun startBreakpointDownload(task: Task) {
-        task.tryAgainCount -= 1
-        task.progressCallback?.onConnecting(task)
+        task.consumeDownloadAttempt()
+        dispatchCallback { task.progressCallback?.onConnecting(task) }
         BreakpointContinuationRequest(task, taskStateInstance)
             .setFailCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_FAILED, msg) }
             .setSuccessCallback { tk, msg -> handleResult(tk, RESULT_DOWNLOAD_SUCCESS, msg) }
@@ -97,23 +98,23 @@ class DispatchTool : Dispatch {
     }
 
     private fun handleResult(task: Task, type: Int, tag: String) {
-        PrintLog.logd("download task finished, result=$type")
+        PrintLog.logd { "download task finished, result=$type" }
         taskStateInstance.debugPrint()
         if (type == RESULT_DOWNLOAD_FAILED) {
             if (tag == ERROR_DOWNLOAD_CANCELED || task.cancelUrl == task.url) {
-                task.progressCallback?.onFail(ERROR_DOWNLOAD_CANCELED, task)
+                dispatchCallback { task.progressCallback?.onFail(ERROR_DOWNLOAD_CANCELED, task) }
                 taskStateInstance.deleteRunningTask(task)
                 PrintLog.logd("download task canceled and removed")
-            } else if (task.tryAgainCount > 0) {
-                task.progressCallback?.onFail(ERROR_DOWNLOAD_RETRYING, task)
-                PrintLog.logd("download task retrying, remaining=${task.tryAgainCount}")
+            } else if (task.canRetryDownload()) {
+                dispatchCallback { task.progressCallback?.onFail(ERROR_DOWNLOAD_RETRYING, task) }
+                PrintLog.logd { "download task retrying, remaining=${task.tryAgainCount}" }
             } else {
-                task.progressCallback?.onFail(tag, task)
+                dispatchCallback { task.progressCallback?.onFail(tag, task) }
                 taskStateInstance.deleteRunningTask(task)
                 PrintLog.logd("download task failed and removed")
             }
         } else if (type == RESULT_DOWNLOAD_SUCCESS) {
-            task.progressCallback?.onProgress(task, true)
+            dispatchCallback { task.progressCallback?.onProgress(task, true) }
             taskStateInstance.deleteRunningTask(task)
             PrintLog.logd("download task complete and removed")
         }
@@ -139,6 +140,10 @@ class DispatchTool : Dispatch {
 
     private fun isAgainDownload(obj: Any?): Boolean {
         val task = obj as? Task ?: return false
-        return task.tryAgainCount > 0
+        return task.canRetryDownload()
+    }
+
+    private fun dispatchCallback(callback: () -> Unit) {
+        ThreadTool.runOnUIThread(Runnable { callback() })
     }
 }

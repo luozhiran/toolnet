@@ -98,8 +98,7 @@ class DefaultMonitorReportHandler(
     private var currentCooldownMs: Long = initialCooldownMs
 
     /** 半开探测进行中：冷却到期后只放行一个请求探测，成功则关闭熔断，失败则重新熔断 */
-    @Volatile
-    private var probeInFlight = false
+    private val probeInFlight = AtomicBoolean(false)
 
     /**
      * 熔断器检查，支持全开/半开/关闭三态：
@@ -120,7 +119,7 @@ class DefaultMonitorReportHandler(
             return true   // 全开，冷却中
         }
         // 冷却到期 → 半开状态
-        if (probeInFlight) {
+        if (probeInFlight.get()) {
             return true   // 已有探测进行中，其余请求等待
         }
         // 无探测 → 尝试抢占探测机会，抢到则通过（返回 false），未抢到则阻塞（返回 true）
@@ -129,16 +128,12 @@ class DefaultMonitorReportHandler(
 
     /** 尝试开始探测，返回 true 表示抢到探测机会 */
     private fun tryStartProbe(): Boolean {
-        synchronized(this) {
-            if (probeInFlight) return false
-            probeInFlight = true
-            return true
-        }
+        return probeInFlight.compareAndSet(false, true)
     }
 
     /** 探测结束 */
     private fun endProbe() {
-        probeInFlight = false
+        probeInFlight.set(false)
     }
 
     /** 上报成功：重置失败计数 + 冷却时间回归初始值 */

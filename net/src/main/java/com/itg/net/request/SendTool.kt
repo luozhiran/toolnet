@@ -72,14 +72,14 @@ class SendTool {
             return
         }
         PrincipalLife.observeActivityLife(call, autoCancelActivity)
-        PrintLog.logr("开始发起请求 ${call.request().url}")
+        PrintLog.logr { "开始发起请求 ${call.request().url}" }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
                     if (!call.isCanceled()) {
                         callback?.onFailure(e.message)
                     }
-                    PrintLog.logr("请求失败 ${call.request().url}")
+                    PrintLog.logr { "请求失败 ${call.request().url}" }
                 } finally {
                     PrincipalLife.removeCall(call)
                 }
@@ -99,7 +99,7 @@ class SendTool {
                             is BodyReadResult.TooLarge -> callback?.onFailure(bodyResult.message)
                         }
                     }
-                    PrintLog.logr("请求成功 ${call.request().url}")
+                    PrintLog.logr { "请求成功 ${call.request().url}" }
                 } finally {
                     response.close()
                     PrincipalLife.removeCall(call)
@@ -117,7 +117,7 @@ class SendTool {
             return
         }
         PrincipalLife.observeActivityLife(call, autoCancelActivity)
-        PrintLog.logr("开始发起请求 ${call.request().url}")
+        PrintLog.logr { "开始发起请求 ${call.request().url}" }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
@@ -127,7 +127,7 @@ class SendTool {
                         msg.obj = e.message
                         handler?.sendMessage(msg)
                     }
-                    PrintLog.logr("请求失败 ${call.request().url}")
+                    PrintLog.logr { "请求失败 ${call.request().url}" }
                 } finally {
                     PrincipalLife.removeCall(call)
                 }
@@ -154,7 +154,7 @@ class SendTool {
                         }
                         handler?.sendMessage(msg)
                     }
-                    PrintLog.logr("请求成功 ${call.request().url}")
+                    PrintLog.logr { "请求成功 ${call.request().url}" }
                 } finally {
                     response.close()
                     PrincipalLife.removeCall(call)
@@ -167,12 +167,12 @@ class SendTool {
         call ?: return
         callback ?: return
         PrincipalLife.observeActivityLife(call, autoCancelActivity)
-        PrintLog.logr("开始发起请求 ${call.request().url}")
+        PrintLog.logr { "开始发起请求 ${call.request().url}" }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 try {
                     callback.onFailure(call, e)
-                    PrintLog.logr("请求失败 ${call.request().url}")
+                    PrintLog.logr { "请求失败 ${call.request().url}" }
                 } finally {
                     PrincipalLife.removeCall(call)
                 }
@@ -181,7 +181,7 @@ class SendTool {
             override fun onResponse(call: Call, response: Response) {
                 try {
                     callback.onResponse(call, response)
-                    PrintLog.logr("请求成功 ${call.request().url}")
+                    PrintLog.logr { "请求成功 ${call.request().url}" }
                 } finally {
                     PrincipalLife.removeCall(call)
                 }

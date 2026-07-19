@@ -29,16 +29,33 @@ class PrintLog {
         }
 
         @JvmStatic
+        fun logr(message: () -> String) {
+            if (!open) return
+            runCatching { Log.i(TAG, "$SUB_TAG :${message()}") }
+        }
+
+        @JvmStatic
         fun logd(message: String) {
             if (!open) return
             runCatching { Log.i(TAG, "$SUB_DOWNLOAD :$message") }
         }
 
+        @JvmStatic
+        fun logd(message: () -> String) {
+            if (!open) return
+            runCatching { Log.i(TAG, "$SUB_DOWNLOAD :${message()}") }
+        }
 
         @JvmStatic
         fun logSubd(message: String) {
             if (!open) return
             runCatching { Log.i(TAG, "$SUB_DOWNLOAD :${SUB_CONTENT_START}$message${SUB_CONTENT_END}") }
+        }
+
+        @JvmStatic
+        fun logSubd(message: () -> String) {
+            if (!open) return
+            runCatching { Log.i(TAG, "$SUB_DOWNLOAD :${SUB_CONTENT_START}${message()}${SUB_CONTENT_END}") }
         }
     }
 }
