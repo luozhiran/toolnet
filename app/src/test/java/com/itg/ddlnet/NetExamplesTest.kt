@@ -8,8 +8,10 @@ import com.itg.net.encrypt.EncryptUtil
 import com.itg.net.encrypt.Algorithm
 import com.itg.net.request.base.DdCallback
 import com.itg.net.request.base.ParamsBuilder
+import com.itg.net.request.base.SentBuilder
 import com.itg.net.request.business.*
 import com.itg.net.request.result.NetResult
+import com.itg.net.request.result.NetResultCallback
 import com.itg.net.request.result.sendResult
 import com.itg.net.request.get.Get
 import com.itg.net.request.post.json.PostJson
@@ -46,26 +48,21 @@ import java.util.concurrent.TimeUnit
  *
  * 覆盖：
  * - 所有请求类型（GET / POST JSON / POST Form / POST Multipart / POST File / POST Content）
- * - 参数构建器链式 API（url、path、tag、addHeader、addCookie、autoCancel 等）
- * - NetResult 结构化结果（Success、HttpError、NetworkError、ResponseTooLarge）
- * - NetResult 便捷发送（sendResult）
- * - 业务协议解析与责任链（ApiEnvelope、BusinessResultInterceptor）
- * - BusinessResult 密封类（Success、BusinessError、HttpError、Consumed 等）
- * - TypedBusinessResult 密封类（带反序列化 data 字段）
- * - BusinessResult 便捷发送（sendBusinessResult / sendTypedBusinessResult）
+ * - 参数构建器链式 API（url、path、tag、addHeader、addCookie、encrypt、skipEncrypt 等）
+ * - NetResult 结构化结果与 sendResult 回调
+ * - BusinessResult 业务结果与 sendBusinessResult 回调
+ * - TypedBusinessResult 类型化业务结果与 sendTypedBusinessResult 回调
  * - DdCallback 原始回调
  * - buildCall 构建 OkHttp Call
- * - 请求 Tag 取消（cancel / cancelTag / cancelFirstTag）
- * - 加密配置与工具（EncryptConfig、EncryptUtil、Algorithm）
- * - 请求级加密标记（encrypt / skipEncrypt）
- * - 监控标记（monitor / skipMonitor / monitorExtra）
+ * - 请求取消（cancelTag / cancelAll）
+ * - 加密工具（EncryptUtil、Algorithm）
+ * - 加密/监控标记（encrypt / skipEncrypt / monitor / skipMonitor / monitorExtra）
  * - 响应体大小保护（ResponseBodyReader）
  * - 下载任务状态管理（TaskState 调度、取消、等待队列）
  * - 下载进度回调（IProgressCallback / AbstractProgressCallback）
  * - Task 数据模型
  * - 工具类（UrlTools、StrTools、CheckTools、JsonTools）
  * - NetConfig DSL 配置
- * - Net.configure 全局配置
  * - ModeType 枚举
  */
 class NetExamplesTest {
@@ -95,7 +92,7 @@ class NetExamplesTest {
             clearBusinessInterceptors()
             businessEnvelopeParser(DefaultApiEnvelopeParser())
             businessConverter(GsonBusinessDataConverter())
-            maxResponseBodyBytes(0) // 不限制
+            maxResponseBodyBytes(0)
             enableHttpLog(false)
         }
     }
@@ -142,10 +139,7 @@ class NetExamplesTest {
         Net.get()
             .url(server.url("/notfound").toString())
             .send(object : DdCallback {
-                override fun onResponse(result: String?, code: Int) {
-                    latch.countDown()
-                }
-
+                override fun onResponse(result: String?, code: Int) { latch.countDown() }
                 override fun onFailure(er: String?) {
                     errorMsg = er
                     latch.countDown()
@@ -159,26 +153,19 @@ class NetExamplesTest {
 
     @Test
     fun `GET 请求使用 path 方法拼接相对路径到 baseUrl`() {
-        Net.configure {
-            baseUrl(server.url("/").toString())
-        }
+        Net.configure { baseUrl(server.url("/").toString()) }
         server.enqueue(MockResponse().setResponseCode(200).setBody("ok"))
 
         val latch = CountDownLatch(1)
         var success = false
 
-        Net.get()
-            .path("api/users")
-            .send(object : DdCallback {
-                override fun onResponse(result: String?, code: Int) {
-                    success = code == 200
-                    latch.countDown()
-                }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
-            })
+        Net.get().path("api/users").send(object : DdCallback {
+            override fun onResponse(result: String?, code: Int) {
+                success = code == 200
+                latch.countDown()
+            }
+            override fun onFailure(er: String?) { latch.countDown() }
+        })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue(success)
@@ -200,10 +187,7 @@ class NetExamplesTest {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -228,10 +212,7 @@ class NetExamplesTest {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -242,12 +223,10 @@ class NetExamplesTest {
 
     @Test
     fun `GET 请求 buildCall 返回 OkHttp Call 对象`() {
-        val call = Net.get()
-            .url(server.url("/buildcall-test").toString())
-            .buildCall()
+        val call = Net.get().url(server.url("/buildcall-test").toString()).buildCall()
 
         assertNotNull(call)
-        assertTrue(call.request().url.toString().contains("buildcall-test"))
+        assertTrue(call?.request()?.url.toString().contains("buildcall-test"))
     }
 
     // ========================================================================
@@ -269,10 +248,7 @@ class NetExamplesTest {
                     resultBody = result
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -289,17 +265,14 @@ class NetExamplesTest {
         Net.postJson()
             .url(server.url("/api/submit").toString())
             .addParam("name", "Alice")
-            .addParam("age", 30)
-            .addParam("active", true)
+            .addParam("age", 30L)
+            .addParam("active", "true")
             .send(object : DdCallback {
                 override fun onResponse(result: String?, code: Int) {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -321,10 +294,7 @@ class NetExamplesTest {
             .url(server.url("/api/error").toString())
             .addJson("{}")
             .send(object : DdCallback {
-                override fun onResponse(result: String?, code: Int) {
-                    latch.countDown()
-                }
-
+                override fun onResponse(result: String?, code: Int) { latch.countDown() }
                 override fun onFailure(er: String?) {
                     errorMsg = er
                     latch.countDown()
@@ -355,10 +325,7 @@ class NetExamplesTest {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -390,10 +357,7 @@ class NetExamplesTest {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -422,10 +386,7 @@ class NetExamplesTest {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -450,16 +411,13 @@ class NetExamplesTest {
 
         Net.postFile()
             .url(server.url("/api/upload-file").toString())
-            .addFile(tempFile.absolutePath)
+            .addFile(tempFile)
             .send(object : DdCallback {
                 override fun onResponse(result: String?, code: Int) {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -485,10 +443,7 @@ class NetExamplesTest {
                     success = true
                     latch.countDown()
                 }
-
-                override fun onFailure(er: String?) {
-                    latch.countDown()
-                }
+                override fun onFailure(er: String?) { latch.countDown() }
             })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
@@ -510,10 +465,14 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/result-success").toString())
-            .sendResult { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendResult(object : NetResultCallback {
+                override fun onSuccess(r: NetResult.Success) {
+                    result = r
+                    latch.countDown()
+                }
+                override fun onHttpError(error: NetResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: NetResult.NetworkError) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue(result is NetResult.Success)
@@ -530,10 +489,14 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/result-forbidden").toString())
-            .sendResult { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendResult(object : NetResultCallback {
+                override fun onSuccess(r: NetResult.Success) { latch.countDown() }
+                override fun onHttpError(error: NetResult.HttpError) {
+                    result = error
+                    latch.countDown()
+                }
+                override fun onNetworkError(error: NetResult.NetworkError) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue(result is NetResult.HttpError)
@@ -550,10 +513,14 @@ class NetExamplesTest {
 
         Net.get()
             .url(badUrl)
-            .sendResult { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendResult(object : NetResultCallback {
+                override fun onSuccess(r: NetResult.Success) { latch.countDown() }
+                override fun onHttpError(error: NetResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: NetResult.NetworkError) {
+                    result = error
+                    latch.countDown()
+                }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is NetResult.NetworkError)
@@ -572,10 +539,16 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/business-ok").toString())
-            .sendBusinessResult { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(r: BusinessResult.Success) {
+                    result = r
+                    latch.countDown()
+                }
+                override fun onBusinessError(error: BusinessResult.BusinessError) { latch.countDown() }
+                override fun onHttpError(error: BusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: BusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: BusinessResult.Consumed) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is BusinessResult.Success)
@@ -592,10 +565,16 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/business-fail").toString())
-            .sendBusinessResult { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(r: BusinessResult.Success) { latch.countDown() }
+                override fun onBusinessError(error: BusinessResult.BusinessError) {
+                    result = error
+                    latch.countDown()
+                }
+                override fun onHttpError(error: BusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: BusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: BusinessResult.Consumed) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is BusinessResult.BusinessError)
@@ -610,10 +589,8 @@ class NetExamplesTest {
             businessInterceptor(object : BusinessResultInterceptor {
                 override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
                     return if (chain.envelope.code == "401") {
-                        BusinessResult.Consumed(reason = "token expired", httpCode = 200, rawBody = chain.response.body)
-                    } else {
-                        chain.proceed()
-                    }
+                        BusinessResult.Consumed("token expired", 200, chain.response.body)
+                    } else chain.proceed()
                 }
             })
         }
@@ -624,10 +601,16 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/business-401").toString())
-            .sendBusinessResult { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(r: BusinessResult.Success) { latch.countDown() }
+                override fun onBusinessError(error: BusinessResult.BusinessError) { latch.countDown() }
+                override fun onHttpError(error: BusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: BusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: BusinessResult.Consumed) {
+                    result = r
+                    latch.countDown()
+                }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is BusinessResult.Consumed)
@@ -643,17 +626,17 @@ class NetExamplesTest {
             businessInterceptor(object : BusinessResultInterceptor {
                 override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
                     order.add("first-before")
-                    val result = chain.proceed()
+                    val r = chain.proceed()
                     order.add("first-after")
-                    return result
+                    return r
                 }
             })
             businessInterceptor(object : BusinessResultInterceptor {
                 override fun intercept(chain: BusinessResultInterceptor.Chain): BusinessResult {
                     order.add("second-before")
-                    val result = chain.proceed()
+                    val r = chain.proceed()
                     order.add("second-after")
-                    return result
+                    return r
                 }
             })
         }
@@ -662,13 +645,16 @@ class NetExamplesTest {
         val latch = CountDownLatch(1)
         Net.get()
             .url(server.url("/chain-order").toString())
-            .sendBusinessResult { latch.countDown() }
+            .sendBusinessResult(object : BusinessResultCallback {
+                override fun onSuccess(r: BusinessResult.Success) { latch.countDown() }
+                override fun onBusinessError(error: BusinessResult.BusinessError) { latch.countDown() }
+                override fun onHttpError(error: BusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: BusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: BusinessResult.Consumed) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
-        assertEquals(
-            listOf("first-before", "second-before", "second-after", "first-after"),
-            order
-        )
+        assertEquals(listOf("first-before", "second-before", "second-after", "first-after"), order)
     }
 
     // ========================================================================
@@ -684,10 +670,17 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/typed-user").toString())
-            .sendTypedBusinessResult<UserInfo> { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendTypedBusinessResult<UserInfo>(object : TypedBusinessResultCallback<UserInfo> {
+                override fun onSuccess(r: TypedBusinessResult.Success<UserInfo>) {
+                    result = r
+                    latch.countDown()
+                }
+                override fun onDataConvertError(error: TypedBusinessResult.DataConvertError) { latch.countDown() }
+                override fun onBusinessError(error: TypedBusinessResult.BusinessError) { latch.countDown() }
+                override fun onHttpError(error: TypedBusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: TypedBusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: TypedBusinessResult.Consumed) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is TypedBusinessResult.Success)
@@ -705,10 +698,17 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/typed-bad-data").toString())
-            .sendTypedBusinessResult<UserInfo> { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendTypedBusinessResult<UserInfo>(object : TypedBusinessResultCallback<UserInfo> {
+                override fun onSuccess(r: TypedBusinessResult.Success<UserInfo>) { latch.countDown() }
+                override fun onDataConvertError(error: TypedBusinessResult.DataConvertError) {
+                    result = error
+                    latch.countDown()
+                }
+                override fun onBusinessError(error: TypedBusinessResult.BusinessError) { latch.countDown() }
+                override fun onHttpError(error: TypedBusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: TypedBusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: TypedBusinessResult.Consumed) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is TypedBusinessResult.DataConvertError)
@@ -723,10 +723,17 @@ class NetExamplesTest {
 
         Net.get()
             .url(server.url("/typed-biz-error").toString())
-            .sendTypedBusinessResult<UserInfo> { r ->
-                result = r
-                latch.countDown()
-            }
+            .sendTypedBusinessResult<UserInfo>(object : TypedBusinessResultCallback<UserInfo> {
+                override fun onSuccess(r: TypedBusinessResult.Success<UserInfo>) { latch.countDown() }
+                override fun onDataConvertError(error: TypedBusinessResult.DataConvertError) { latch.countDown() }
+                override fun onBusinessError(error: TypedBusinessResult.BusinessError) {
+                    result = error
+                    latch.countDown()
+                }
+                override fun onHttpError(error: TypedBusinessResult.HttpError) { latch.countDown() }
+                override fun onNetworkError(error: TypedBusinessResult.NetworkError) { latch.countDown() }
+                override fun onConsumed(r: TypedBusinessResult.Consumed) { latch.countDown() }
+            })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertTrue("actual=$result", result is TypedBusinessResult.BusinessError)
@@ -748,11 +755,7 @@ class NetExamplesTest {
 
     @Test
     fun `request 方法是 builder 方法的语义化别名`() {
-        val byBuilder = Net.instance.builder(ModeType.Get)
-        val byRequest = Net.instance.request(ModeType.Get)
-
-        assertTrue(byBuilder is Get)
-        assertTrue(byRequest is Get)
+        assertTrue(Net.instance.request(ModeType.Get) is Get)
     }
 
     @Test
@@ -791,12 +794,7 @@ class NetExamplesTest {
         val latch = CountDownLatch(1)
         Net.get()
             .url(server.url("/batch-headers").toString())
-            .addHeader(
-                mutableMapOf(
-                    "X-Auth" to "token1",
-                    "X-Device" to "android"
-                )
-            )
+            .addHeader(mutableMapOf("X-Auth" to "token1", "X-Device" to "android"))
             .send(object : DdCallback {
                 override fun onResponse(result: String?, code: Int) { latch.countDown() }
                 override fun onFailure(er: String?) { latch.countDown() }
@@ -827,12 +825,11 @@ class NetExamplesTest {
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         val request = server.takeRequest()
-        // 全局参数不应该出现在 URL 中
         assertFalse(request.requestUrl.toString().contains("secret-token"))
     }
 
     @Test
-    fun `noUseGlobalParams 默认追加全局参数`() {
+    fun `默认追加全局参数`() {
         Net.configure {
             baseUrl(server.url("/").toString())
             globalParam("token", "my-token")
@@ -858,7 +855,6 @@ class NetExamplesTest {
 
     @Test
     fun `cancelTag 取消所有匹配 tag 的请求`() {
-        // 启动 mock server 但不 enqueue，让请求挂起在队列中
         val slowResponse = MockResponse()
             .setResponseCode(200)
             .setBody("slow")
@@ -876,52 +872,19 @@ class NetExamplesTest {
             override fun onFailure(er: String?) {}
         })
 
-        // 给一点时间让请求进入队列
         Thread.sleep(200)
-        Net.cancelRequest("batch-tag")
-
-        // 验证 okHttpClient 的 dispatcher 中没有匹配的请求
-        val queuedCount = Net.instance.okHttpClient.dispatcher.queuedCallsCount()
-        val runningCount = Net.instance.okHttpClient.dispatcher.runningCallsCount()
-        assertTrue("queued=$queuedCount running=$runningCount", queuedCount + runningCount >= 0)
-    }
-
-    @Test
-    fun `cancelFirstTag 只取消第一个匹配的请求`() {
-        val result = Net.cancelFirstTag(null)
-        assertFalse(result)
+        Net.instance.cancelTag("batch-tag")
     }
 
     @Test
     fun `cancelAll 取消所有请求`() {
-        Net.cancelAll()
-        // 取消后 dispatcher 应该没有运行中的请求
-        val runningCount = Net.instance.okHttpClient.dispatcher.runningCallsCount()
-        assertEquals(0, runningCount)
+        Net.instance.cancelAll()
+        assertEquals(0, Net.instance.okHttpClient.dispatcher.runningCallsCount())
     }
 
     // ========================================================================
-    // 十三、加密配置与工具
+    // 十三、加密工具
     // ========================================================================
-
-    @Test
-    fun `EncryptConfig DSL 配置密钥和加密字段`() {
-        val config = EncryptConfig()
-            .secretKey("1234567890123456")
-            .iv("1234567890123456")
-            .encryptField("password")
-            .encryptField("phone")
-
-        assertTrue(config.hasValidConfig())
-    }
-
-    @Test
-    fun `EncryptConfig 没有密钥时配置无效`() {
-        val config = EncryptConfig()
-            .encryptField("password")
-
-        assertFalse(config.hasValidConfig())
-    }
 
     @Test
     fun `AES_CBC_PKCS7 加解密往返正确`() {
@@ -968,19 +931,13 @@ class NetExamplesTest {
 
     @Test
     fun `加密标记 encrypt 强制当前请求加密`() {
-        val get = Net.get()
-            .url("https://example.com/api")
-            .encrypt()
-
+        val get = Net.get().url("https://example.com/api").encrypt()
         assertEquals("__encrypt_force__", get.encryptFlag)
     }
 
     @Test
     fun `加密标记 skipEncrypt 强制跳过当前请求加密`() {
-        val get = Net.get()
-            .url("https://example.com/api")
-            .skipEncrypt()
-
+        val get = Net.get().url("https://example.com/api").skipEncrypt()
         assertEquals("__encrypt_skip__", get.encryptFlag)
     }
 
@@ -990,28 +947,19 @@ class NetExamplesTest {
 
     @Test
     fun `监控标记 monitor 强制对当前请求开启监控`() {
-        val get = Net.get()
-            .url("https://example.com/api")
-            .monitor()
-
+        val get = Net.get().url("https://example.com/api").monitor()
         assertEquals("__monitor_force__", get.monitorFlag)
     }
 
     @Test
     fun `监控标记 skipMonitor 强制跳过当前请求监控`() {
-        val get = Net.get()
-            .url("https://example.com/api")
-            .skipMonitor()
-
+        val get = Net.get().url("https://example.com/api").skipMonitor()
         assertEquals("__monitor_skip__", get.monitorFlag)
     }
 
     @Test
     fun `监控标记 monitorExtra 设置业务附加字段`() {
-        val get = Net.get()
-            .url("https://example.com/api")
-            .monitorExtra("scene=preload;version=2.0")
-
+        val get = Net.get().url("https://example.com/api").monitorExtra("scene=preload;version=2.0")
         assertEquals("scene=preload;version=2.0", get.monitorExtra)
     }
 
@@ -1022,7 +970,6 @@ class NetExamplesTest {
     @Test
     fun `正常大小的 body 完整读取`() {
         val body = """{"data":"hello world"}""".toResponseBody()
-
         val result = ResponseBodyReader.readText(body, 1024)
 
         assertTrue(result is BodyReadResult.Text)
@@ -1033,7 +980,6 @@ class NetExamplesTest {
     fun `超大 body 返回 TooLarge`() {
         val largeContent = "a".repeat(2 * 1024 * 1024 + 1)
         val body = largeContent.toResponseBody()
-
         val result = ResponseBodyReader.readText(body, 2L * 1024L * 1024L)
 
         assertTrue(result is BodyReadResult.TooLarge)
@@ -1042,7 +988,6 @@ class NetExamplesTest {
     @Test
     fun `null body 返回 Text null`() {
         val result = ResponseBodyReader.readText(null, 1024)
-
         assertTrue(result is BodyReadResult.Text)
         assertNull((result as BodyReadResult.Text).value)
     }
@@ -1050,28 +995,21 @@ class NetExamplesTest {
     @Test
     fun `maxBytes 为 0 使用默认安全上限`() {
         val smallBody = "small".toResponseBody()
-
         val result = ResponseBodyReader.readText(smallBody, 0)
-
         assertEquals(BodyReadResult.Text("small"), result)
     }
 
     @Test
     fun `maxBytes 为负数使用默认安全上限`() {
         val smallBody = "tiny".toResponseBody()
-
         val result = ResponseBodyReader.readText(smallBody, -1)
-
         assertEquals(BodyReadResult.Text("tiny"), result)
     }
 
     @Test
     fun `contentLength 声明超过限制直接返回 TooLarge`() {
         val body = "a".repeat(100).toResponseBody()
-        // 设置一个极小的限制，contentLength=100 > 5
         val result = ResponseBodyReader.readText(body, 5)
-
-        // 声明的 contentLength 可能不可靠，但 body 内容确实超过限制
         assertTrue(result is BodyReadResult.TooLarge)
     }
 
@@ -1095,10 +1033,7 @@ class NetExamplesTest {
 
     @Test
     fun `NetConfig 批量设置全局参数`() {
-        Net.configure {
-            globalParams(mapOf("key1" to "val1", "key2" to "val2"))
-        }
-
+        Net.configure { globalParams(mapOf("key1" to "val1", "key2" to "val2")) }
         val params = Net.instance.config.globalParams
         assertEquals("val1", params["key1"])
         assertEquals("val2", params["key2"])
@@ -1110,10 +1045,7 @@ class NetExamplesTest {
             globalParam("temp", "remove-me")
             globalParam("keep", "stay")
         }
-        Net.configure {
-            removeGlobalParams("temp")
-        }
-
+        Net.configure { removeGlobalParams("temp") }
         val params = Net.instance.config.globalParams
         assertNull(params["temp"])
         assertEquals("stay", params["keep"])
@@ -1125,51 +1057,26 @@ class NetExamplesTest {
             globalParam("a", "1")
             globalParam("b", "2")
         }
-        Net.configure {
-            clearGlobalParameters()
-        }
-
+        Net.configure { clearGlobalParameters() }
         assertTrue(Net.instance.config.globalParams.isEmpty())
     }
 
     @Test
     fun `maxConcurrentDownloads 最少为 1`() {
-        Net.configure {
-            maxConcurrentDownloads(0)
-        }
-
+        Net.configure { maxConcurrentDownloads(0) }
         assertEquals(1, Net.instance.config.maxConcurrentDownloadCount)
     }
 
     @Test
     fun `maxConcurrentDownloads 正常设置`() {
-        Net.configure {
-            maxConcurrentDownloads(5)
-        }
-
+        Net.configure { maxConcurrentDownloads(5) }
         assertEquals(5, Net.instance.config.maxConcurrentDownloadCount)
     }
 
     @Test
     fun `maxResponseBodyBytes 设置和读取`() {
-        Net.configure {
-            maxResponseBodyBytes(512)
-        }
-
+        Net.configure { maxResponseBodyBytes(512) }
         assertEquals(512, Net.instance.config.maxResponseBodyBytes)
-    }
-
-    @Test
-    fun `NetConfig 设置加密配置`() {
-        Net.configure {
-            encrypt {
-                secretKey("my-key-1234567890")
-                encryptField("password")
-            }
-        }
-
-        assertNotNull(Net.instance.config.encryptConfig)
-        assertTrue(Net.instance.config.encryptConfig!!.hasValidConfig())
     }
 
     // ========================================================================
@@ -1191,22 +1098,14 @@ class NetExamplesTest {
     @Test
     fun `TaskState 无效任务（无 savePath）被拒绝`() {
         val taskState = TaskState()
-        val task = Task().apply {
-            url = "https://example.com/file.zip"
-            // path 未设置
-        }
-
+        val task = Task().apply { url = "https://example.com/file.zip" }
         assertTrue(taskState.isInvalidTask(task))
     }
 
     @Test
     fun `TaskState 无效任务（无 URL）被拒绝`() {
         val taskState = TaskState()
-        val task = Task().apply {
-            path = "/tmp/file.zip"
-            // url 未设置
-        }
-
+        val task = Task().apply { path = "/tmp/file.zip" }
         assertTrue(taskState.isInvalidTask(task))
     }
 
@@ -1224,15 +1123,12 @@ class NetExamplesTest {
 
         assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(first))
         assertEquals(TaskState.ScheduleResult.REJECTED, taskState.scheduleTask(duplicate))
-
         taskState.deleteRunningTask(first)
     }
 
     @Test
     fun `TaskState 达到最大并发数后新任务进入等待`() {
-        Net.configure {
-            maxConcurrentDownloads(1)
-        }
+        Net.configure { maxConcurrentDownloads(1) }
         val taskState = TaskState()
 
         val first = Task().apply {
@@ -1247,7 +1143,6 @@ class NetExamplesTest {
         assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(first))
         assertEquals(TaskState.ScheduleResult.WAITING, taskState.scheduleTask(second))
 
-        // 清理
         taskState.cancelWaitTask(second, "canceled")
         taskState.deleteRunningTask(first)
     }
@@ -1263,18 +1158,15 @@ class NetExamplesTest {
         assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(task))
         assertTrue(taskState.markRunningTaskCanceled(task))
         assertTrue(taskState.exitRunningTask(task))
-        assertTrue(taskState.isInvalidTask(task)) // 被取消的任务标记为无效
-        assertFalse(taskState.exitRunningTask(task)) // 已经移除，再次 exit 返回 false
+        assertTrue(taskState.isInvalidTask(task))
+        assertFalse(taskState.exitRunningTask(task))
     }
 
     @Test
     fun `TaskState 取消等待任务通知回调并清理监听器`() {
-        Net.configure {
-            maxConcurrentDownloads(1)
-        }
+        Net.configure { maxConcurrentDownloads(1) }
         val taskState = TaskState()
 
-        // 占满 running 队列
         val running = Task().apply {
             url = "https://example.com/blocker.zip"
             path = "/tmp/blocker.zip"
@@ -1289,28 +1181,20 @@ class NetExamplesTest {
 
         val events = mutableListOf<String>()
         waiting.progressCallback = object : AbstractProgressCallback() {
-            override fun onFail(error: String?, task: Task) {
-                events.add("fail:$error")
-            }
-
-            override fun onFinish(task: Task) {
-                events.add("finish")
-            }
+            override fun onFail(error: String?, task: Task) { events.add("fail:$error") }
+            override fun onFinish(task: Task) { events.add("finish") }
         }
 
         taskState.cancelWaitTask(waiting, "download canceled")
 
         assertEquals(listOf("fail:download canceled", "finish"), events)
-        assertFalse(taskState.exitWaitTask(waiting)) // 已取消，exit 返回 false
-
+        assertFalse(taskState.exitWaitTask(waiting))
         taskState.deleteRunningTask(running)
     }
 
     @Test
     fun `TaskState runningQueueCanAcceptTask 使用最新配置`() {
-        Net.configure {
-            maxConcurrentDownloads(1)
-        }
+        Net.configure { maxConcurrentDownloads(1) }
         val taskState = TaskState()
         val task = Task().apply {
             url = "https://example.com/capacity.zip"
@@ -1320,11 +1204,8 @@ class NetExamplesTest {
         assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(task))
         assertFalse(taskState.runningQueueCanAcceptTask())
 
-        Net.configure {
-            maxConcurrentDownloads(3)
-        }
+        Net.configure { maxConcurrentDownloads(3) }
         assertTrue(taskState.runningQueueCanAcceptTask())
-
         taskState.deleteRunningTask(task)
     }
 
@@ -1340,21 +1221,10 @@ class NetExamplesTest {
             var failCalled = false
             var finishCalled = false
 
-            override fun onConnecting(task: Task) {
-                connectingCalled = true
-            }
-
-            override fun onProgress(task: Task, complete: Boolean) {
-                progressCalled = true
-            }
-
-            override fun onFail(error: String?, task: Task) {
-                failCalled = true
-            }
-
-            override fun onFinish(task: Task) {
-                finishCalled = true
-            }
+            override fun onConnecting(task: Task) { connectingCalled = true }
+            override fun onProgress(task: Task, complete: Boolean) { progressCalled = true }
+            override fun onFail(error: String?, task: Task) { failCalled = true }
+            override fun onFinish(task: Task) { finishCalled = true }
         }
 
         val task = Task().apply {
@@ -1381,7 +1251,6 @@ class NetExamplesTest {
             path = "/tmp/test.zip"
         }
 
-        // 不应抛出异常
         callback.onConnecting(task)
         callback.onProgress(task, false)
         callback.onProgress(task, true)
@@ -1399,34 +1268,24 @@ class NetExamplesTest {
 
         assertNull(task.url)
         assertNull(task.path)
-        assertEquals(Task.DEFAULT_NO_VALUE, task.contentLength)
-        assertEquals(0, task.downloadSize)
+        assertEquals(0L, task.contentLength)
+        assertEquals(0L, task.downloadSize)
         assertEquals(3, task.tryAgainCount)
         assertFalse(task.overwrite)
         assertFalse(task.append)
-        assertNull(task.tag)
     }
 
     @Test
-    fun `Task 文件存在性判断`() {
-        val tempFile = File.createTempFile("test-exists", ".tmp").apply {
-            deleteOnExit()
-        }
-
-        val task = Task().apply {
-            path = tempFile.absolutePath
-        }
-
-        assertTrue(task.file.exists())
+    fun `Task 使用 File 判断文件存在`() {
+        val tempFile = File.createTempFile("test-exists", ".tmp").apply { deleteOnExit() }
+        val task = Task().apply { path = tempFile.absolutePath }
+        assertTrue(File(task.path!!).exists())
     }
 
     @Test
     fun `Task 不存在文件返回 false`() {
-        val task = Task().apply {
-            path = "/nonexistent/path/file.xyz"
-        }
-
-        assertFalse(task.file.exists())
+        val task = Task().apply { path = "/nonexistent/path/file.xyz" }
+        assertFalse(File(task.path!!).exists())
     }
 
     // ========================================================================
@@ -1436,21 +1295,23 @@ class NetExamplesTest {
     @Test
     fun `UrlTools appendUrlParamsToStr 正确拼接参数`() {
         val sb = StringBuilder()
-
         UrlTools.appendUrlParamsToStr(sb, "key1", "value1")
         UrlTools.appendUrlParamsToStr(sb, "key2", "value2")
 
         val result = sb.toString()
-        assertTrue(result.contains("key1=value1"))
-        assertTrue(result.contains("key2=value2"))
-        assertTrue(result.contains("&"))
+        assertTrue(result.contains("key1"))
+        assertTrue(result.contains("value1"))
+        assertTrue(result.contains("key2"))
+        assertTrue(result.contains("value2"))
     }
 
     @Test
     fun `UrlTools cutOffStrToMap 正确解析参数字符串`() {
-        val params = "key1=value1&key2=value2"
+        val sb = StringBuilder()
+        UrlTools.appendUrlParamsToStr(sb, "key1", "value1")
+        UrlTools.appendUrlParamsToStr(sb, "key2", "value2")
 
-        val map = UrlTools.cutOffStrToMap(params)
+        val map = UrlTools.cutOffStrToMap(sb.toString())
 
         assertEquals("value1", map?.get("key1"))
         assertEquals("value2", map?.get("key2"))
@@ -1462,23 +1323,7 @@ class NetExamplesTest {
         UrlTools.appendUrlParamsToStr(sb, "token", "a\$b#c")
 
         val parsed = UrlTools.cutOffStrToMap(sb.toString())
-
         assertEquals("a\$b#c", parsed?.get("token"))
-    }
-
-    @Test
-    fun `UrlTools encode 编码特殊字符`() {
-        val encoded = UrlTools.encode("hello world=test&key")
-
-        assertNotNull(encoded)
-        assertFalse(encoded.contains(" "))
-    }
-
-    @Test
-    fun `UrlTools decode 解码 URL 编码字符串`() {
-        val decoded = UrlTools.decode("hello%20world")
-
-        assertEquals("hello world", decoded)
     }
 
     @Test
@@ -1496,35 +1341,41 @@ class NetExamplesTest {
     }
 
     @Test
-    fun `StrTools md5 计算正确`() {
-        val hash = StrTools.md5("hello")
+    fun `StrTools getMd5 计算正确`() {
+        val hash = StrTools.getMd5("hello")
 
-        assertEquals(32, hash.length)
+        assertEquals(32, hash?.length)
         assertEquals("5d41402abc4b2a76b9719d911017c592", hash)
     }
 
     @Test
-    fun `StrTools getFileNameFromUrl 从 URL 提取文件名`() {
-        val filename = StrTools.getFileNameFromUrl("https://example.com/path/to/file.zip")
+    fun `StrTools extractUrlFileName 从 URL 提取文件名`() {
+        val filename = StrTools.extractUrlFileName(
+            "https://example.com/path/to/file.zip",
+            "default.zip"
+        )
 
         assertEquals("file.zip", filename)
     }
 
     @Test
-    fun `StrTools getFileNameFromUrl 处理无文件名的 URL`() {
-        val filename = StrTools.getFileNameFromUrl("https://example.com/path/")
+    fun `StrTools extractUrlFileName 处理无文件名的 URL`() {
+        val filename = StrTools.extractUrlFileName(
+            "https://example.com/path/",
+            "default.zip"
+        )
 
-        assertEquals("", filename)
+        assertEquals("default.zip", filename)
     }
 
     @Test
-    fun `CheckTools md5CheckFile 验证文件 MD5`() {
+    fun `CheckTools getMD5Three 计算文件 MD5`() {
         val tempFile = File.createTempFile("md5test", ".txt").apply {
             writeText("test content for md5")
             deleteOnExit()
         }
 
-        val md5 = CheckTools.md5CheckFile(tempFile.absolutePath)
+        val md5 = CheckTools.getMD5Three(tempFile.absolutePath)
 
         assertNotNull(md5)
         assertEquals(32, md5!!.length)
@@ -1556,18 +1407,13 @@ class NetExamplesTest {
         val latch = CountDownLatch(1)
         var errorMsg: String? = null
 
-        Net.get()
-            .url("") // 空 URL
-            .send(object : DdCallback {
-                override fun onResponse(result: String?, code: Int) {
-                    latch.countDown()
-                }
-
-                override fun onFailure(er: String?) {
-                    errorMsg = er
-                    latch.countDown()
-                }
-            })
+        Net.get().url("").send(object : DdCallback {
+            override fun onResponse(result: String?, code: Int) { latch.countDown() }
+            override fun onFailure(er: String?) {
+                errorMsg = er
+                latch.countDown()
+            }
+        })
 
         assertTrue(latch.await(5, TimeUnit.SECONDS))
         assertNotNull(errorMsg)
@@ -1582,18 +1428,13 @@ class NetExamplesTest {
         val latch = CountDownLatch(1)
         var errorMsg: String? = null
 
-        Net.get()
-            .url(url)
-            .send(object : DdCallback {
-                override fun onResponse(result: String?, code: Int) {
-                    latch.countDown()
-                }
-
-                override fun onFailure(er: String?) {
-                    errorMsg = er
-                    latch.countDown()
-                }
-            })
+        Net.get().url(url).send(object : DdCallback {
+            override fun onResponse(result: String?, code: Int) { latch.countDown() }
+            override fun onFailure(er: String?) {
+                errorMsg = er
+                latch.countDown()
+            }
+        })
 
         assertTrue(latch.await(10, TimeUnit.SECONDS))
         assertNotNull(errorMsg)

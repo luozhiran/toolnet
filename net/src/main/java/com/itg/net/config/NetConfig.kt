@@ -454,6 +454,6 @@ class NetConfig {
 
     private companion object {
         private const val MAX_LOG_FILE_SIZE = 1024 * 1024 * 5
-        private const val DEFAULT_RESPONSE_BODY_LIMIT_BYTES = 2L * 1024L * 1024L
+        private const val DEFAULT_RESPONSE_BODY_LIMIT_BYTES = 5L * 1024L * 1024L
     }
 }
