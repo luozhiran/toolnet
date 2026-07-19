@@ -334,6 +334,26 @@ Net.instance.postJson()
 
 > `monitorExtra` 不会影响请求本身，只会在监控上报时附加到 `MonitorEvent.extra` 字段。需要全局开启监控（`monitor { enabled(true) }`）才生效。
 
+### OkHttp 原生 Callback
+
+适用于需要直接使用 OkHttp `okhttp3.Callback` 的场景：
+
+```kotlin
+Net.instance.get()
+    .url("https://api.example.com/data")
+    .send(object : okhttp3.Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            // 网络异常
+        }
+        override fun onResponse(call: Call, response: Response) {
+            val body = response.body?.string()
+            response.close()
+        }
+    }, task = null)  // task 参数用于下载场景，普通请求传 null
+```
+
+> 此方法在 `Get`、`PostJson`、`PostForm`、`PostFile`、`PostMul`、`PostContent`、`PostResumeFile` 中均已实现。默认实现会抛出 `UnsupportedOperationException`。
+
 ## 请求类型速查
 
 | 方法 | 返回类型 | Content-Type | 说明 |
@@ -345,6 +365,9 @@ Net.instance.postJson()
 | `postMultipart()` | `PostMul` | `multipart/form-data` | 混合内容 |
 | `postContent()` | `PostContent` | 自定义 | 自定义 Content-Type |
 | `builder(ModeType.PostResume)` | `PostResumeFile` | 自动推断 | 断点续传上传 |
+| `request(ModeType)` | 对应类型 | — | `builder()` 的别名 |
+| `uploadFile()` | `PostFile` | 自动推断 | `postFile()` 的别名 |
+| `uploadMultipart()` | `PostMul` | `multipart/form-data` | `postMultipart()` 的别名 |
 
 ## 通用 Builder 方法速查
 

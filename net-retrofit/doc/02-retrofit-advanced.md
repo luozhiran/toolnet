@@ -150,13 +150,22 @@ val service = Net.instance.retrofit
 
 ## NetRetrofit.Builder 完整 API
 
+```kotlin
+// 两种入口等价
+val builder1 = NetRetrofit.builder()        // 静态工厂方法
+val builder2 = Net.instance.retrofit        // Net 扩展属性（推荐）
+```
+
 | 方法 | 说明 |
 |---|---|
+| `NetRetrofit.builder()` | 静态工厂，创建 Builder 实例 |
+| `Net.instance.retrofit` | 扩展属性，等价于 `NetRetrofit.builder()`（推荐日常使用） |
 | `baseUrl(url: String)` | 设置 Base URL（**必选**，须以 `/` 结尾） |
 | `client(client: OkHttpClient)` | 自定义 OkHttpClient（默认使用 Net 库全局 client） |
 | `addConverterFactory(factory)` | 添加 Converter.Factory（默认 `GsonConverterFactory`） |
 | `addCallAdapterFactory(factory)` | 添加 CallAdapter.Factory（默认 `NetFlowCallAdapterFactory`） |
 | `build(): NetRetrofit` | 构建实例 |
+| `create<T>(): T` | 创建 Service 接口的动态代理实现 |
 
 ## ProGuard / R8 规则
 

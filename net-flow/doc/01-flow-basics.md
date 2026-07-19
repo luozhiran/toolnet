@@ -221,7 +221,12 @@ data class NetResponse<T>(
     val code: Int,                      // HTTP 状态码
     val headers: Map<String, String>,    // 响应头
     val isSuccessful: Boolean           // code ∈ 200..299
-)
+) {
+    companion object {
+        // 从原始值构建 NetResponse（body = rawBody）
+        fun from(rawBody: String?, code: Int, headers: Map<String, String> = emptyMap()): NetResponse<String>
+    }
+}
 ```
 
 按状态码处理：
@@ -273,12 +278,14 @@ Net.instance.flowGetResponse(GsonNetConverter<User>(type = User::class.java)) {
 
 | 方法 | 返回类型 | 说明 |
 |---|---|---|
-| `Net.flowGet { }` | `Flow<String>` | GET 请求 |
-| `Net.flowPostJson { }` | `Flow<String>` | POST JSON 请求 |
-| `Net.flowPostForm { }` | `Flow<String>` | POST Form 请求 |
-| `ParamsBuilder.flowResult()` | `Flow<NetResult>` | 区分 2xx、4xx/5xx、网络异常 |
+| `ParamsBuilder.flowString()` | `Flow<String>` | 响应体字符串 Flow（所有请求类型通用） |
+| `ParamsBuilder.flowResponse(converter)` | `Flow<NetResponse<T>>` | 带自定义反序列化的响应 Flow |
+| `ParamsBuilder.flowResult()` | `Flow<NetResult>` | 区分 Success / HttpError / ResponseTooLarge / NetworkError |
 | `ParamsBuilder.flowBusinessResult()` | `Flow<BusinessResult>` | 支持业务码责任链 |
 | `ParamsBuilder.flowTypedBusinessResult<T>()` | `Flow<TypedBusinessResult<T>>` | 业务成功时把 data 转成指定类型 |
+| `Net.flowGet { }` | `Flow<String>` | GET 请求便捷入口 |
+| `Net.flowPostJson { }` | `Flow<String>` | POST JSON 请求便捷入口 |
+| `Net.flowPostForm { }` | `Flow<String>` | POST Form 请求便捷入口 |
 | `Net.flowGetResponse(converter) { }` | `Flow<NetResponse<T>>` | GET + 反序列化 |
 | `Net.flowPostJsonResponse(converter) { }` | `Flow<NetResponse<T>>` | POST JSON + 反序列化 |
 | `Net.flowDownload { }` | `Flow<DownloadProgress>` | 下载进度 |

@@ -116,6 +116,27 @@ Task.progressCallback
 
 `TaskBuilder.addDownloadListener(callback)` 是扩展模块使用的内部桥接 API，目前用于 `net-flow` 将下载进度转换为 Flow。普通业务代码推荐使用 `listener(callback)`。
 
+## 其他下载 API
+
+```kotlin
+// 跳过全局参数（下载第三方 CDN 文件时避免泄露内部参数）
+Net.instance.newDownload()
+    .savePath(path)
+    .url("https://cdn.example.com/file.zip")
+    .noUseGlobalParams()
+    .start()
+
+// 查询下载状态
+if (Net.instance.isDownloadQueued("https://example.com/file.zip")) {
+    // 该 URL 正在下载或排队中
+}
+```
+
+| 方法 | 说明 |
+|------|------|
+| `TaskBuilder.noUseGlobalParams()` | 下载 URL 不附加全局参数 |
+| `Net.instance.isDownloadQueued(url)` | 判断指定 URL 是否正在下载或排队 |
+
 ## 回调语义
 
 | 回调 | 含义 | 说明 |

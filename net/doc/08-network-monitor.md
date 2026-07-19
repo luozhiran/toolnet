@@ -246,7 +246,15 @@ class MyApp : Application() {
   "exceptionClass": null,
   "networkType": "WIFI",
   "eventStage": "HTTP",
-  "timestamp": 1719000000000
+  "timestamp": 1719000000000,
+  "extra": "orderId=ORD-2024",
+  "downloadSize": 0,
+  "contentLength": 0,
+  "isAppend": false,
+  "retryCount": 0,
+  "downloadSpeed": 0,
+  "downloadError": "NONE",
+  "carrierName": null
 }
 ```
 
@@ -255,6 +263,7 @@ class MyApp : Application() {
 | 方法 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `enabled(bool)` | 必选 | `false` | 全局监控开关 |
+| `disabled()` | 可选 | — | 等同于 `enabled(false)`，语义更明确 |
 | `reportUrl(url)` | 可选 | `null` | HTTP 批量上报地址 |
 | `reportMode(mode)` | 可选 | `FAILURE_ONLY` | 上报模式 |
 | `sampleRate(rate)` | 可选 | `1.0f` | 采样率 0.0~1.0 |
@@ -280,6 +289,25 @@ class MyApp : Application() {
 |---|---|---|
 | `DefaultMonitorReportHandler` | `true` | HTTP 批量上报（队列+后台线程+三态熔断器+指数退避） |
 | `ResilientReportHandler` | `false` | 本地文件兜底（含磁盘 I/O），线程安全 |
+
+## Net 级别监控生命周期 API
+
+```kotlin
+// 主动刷新缓冲区（App 进后台时调用）
+Net.instance.flushMonitor()
+
+// 异步关闭监控，优雅释放资源（OkHttpClient 重建前）
+Net.instance.shutdownMonitorAsync()
+
+// 同步阻塞关闭监控，确保数据不丢失（进程终止前）
+Net.instance.shutdownMonitorBlocking()
+```
+
+| 方法 | 行为 | 调用时机 |
+|------|------|---------|
+| `flushMonitor()` | 立即排空内存队列并 POST | App 进后台、即将终止 |
+| `shutdownMonitorAsync()` | 异步关闭：等待队列排空 → 释放线程池 → 释放网络连接 | 切换环境 / 重建 OkHttpClient |
+| `shutdownMonitorBlocking()` | 同步阻塞关闭，等待全部完成后返回 | 进程 `onTerminate()` |
 
 ## 架构概览
 

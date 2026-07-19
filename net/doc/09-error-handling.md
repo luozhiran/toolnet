@@ -507,6 +507,96 @@ Net.instance.get()
     .collect { body -> render(body) }
 ```
 
+## 响应体过大 (ResponseTooLarge)
+
+当服务器返回的响应体超过 `NetConfig.maxResponseBodyBytes`（默认 64KB）时，库不会静默截断数据，而是通过 `ResponseTooLarge` 通知调用方。这在三层结果体系中都有对应的处理入口。
+
+与 `NetworkError` 的区别：
+- `NetworkError`：没有收到 HTTP 响应（断网、超时、DNS 失败）
+- `ResponseTooLarge`：收到了 HTTP 响应，只是 Body 超过了预设的大小限制
+
+### 使用示例
+
+```kotlin
+import com.itg.net.request.result.NetResult
+import com.itg.net.request.result.NetResultCallback
+import com.itg.net.request.result.sendResult
+
+// 全局配置中调整限制（按需）
+Net.instance.configure {
+    maxResponseBodyBytes(128 * 1024)  // 128KB，默认 64KB
+}
+
+// NetResult 层
+Net.instance.get()
+    .url("https://api.example.com/large-data")
+    .sendResult(object : NetResultCallback {
+        override fun onSuccess(result: NetResult.Success) { /* ... */ }
+        override fun onHttpError(error: NetResult.HttpError) { /* ... */ }
+        override fun onResponseTooLarge(error: NetResult.ResponseTooLarge) {
+            // error.code 携带 HTTP 状态码
+            // error.contentLength 是实际响应体大小
+            // error.maxBytes 是配置的限制大小
+            showError("响应数据过大(${error.contentLength} bytes)，超过限制 ${error.maxBytes} bytes")
+        }
+        override fun onNetworkError(error: NetResult.NetworkError) { /* ... */ }
+    })
+
+// BusinessResult 层
+Net.instance.get()
+    .url("https://api.example.com/large-data")
+    .sendBusinessResult(object : BusinessResultCallback {
+        override fun onSuccess(result: BusinessResult.Success) { /* ... */ }
+        override fun onBusinessError(error: BusinessResult.BusinessError) { /* ... */ }
+        override fun onHttpError(error: BusinessResult.HttpError) { /* ... */ }
+        override fun onResponseTooLarge(error: BusinessResult.ResponseTooLarge) {
+            showError("响应过大: HTTP ${error.httpCode}")
+        }
+        override fun onNetworkError(error: BusinessResult.NetworkError) { /* ... */ }
+        override fun onConsumed(result: BusinessResult.Consumed) { /* ... */ }
+    })
+
+// TypedBusinessResult 层
+Net.instance.get()
+    .url("https://api.example.com/large-data")
+    .sendTypedBusinessResult<UserList>(object : TypedBusinessResultCallback<UserList> {
+        override fun onSuccess(result: TypedBusinessResult.Success<UserList>) { /* ... */ }
+        override fun onDataConvertError(error: TypedBusinessResult.DataConvertError) { /* ... */ }
+        override fun onBusinessError(error: TypedBusinessResult.BusinessError) { /* ... */ }
+        override fun onHttpError(error: TypedBusinessResult.HttpError) { /* ... */ }
+        override fun onResponseTooLarge(error: TypedBusinessResult.ResponseTooLarge) {
+            showError("响应过大: HTTP ${error.httpCode}")
+        }
+        override fun onNetworkError(error: TypedBusinessResult.NetworkError) { /* ... */ }
+        override fun onConsumed(result: TypedBusinessResult.Consumed) { /* ... */ }
+    })
+```
+
+> 所有 `onResponseTooLarge` 方法都有默认空实现 `= Unit`，不处理时不会编译报错但响应会被静默丢弃。
+
+## 拦截器异常 (InterceptorError)
+
+`BusinessResultInterceptor.intercept()` 中抛出的异常会被捕获并包装为 `BusinessResult.InterceptorError`（不再是 `NetworkError`），便于调用方区分"网络真的不可用"和"全局业务拦截器出错"。
+
+```kotlin
+Net.instance.get()
+    .url("https://api.example.com/user/info")
+    .sendBusinessResult(object : BusinessResultCallback {
+        override fun onSuccess(result: BusinessResult.Success) { /* ... */ }
+        override fun onBusinessError(error: BusinessResult.BusinessError) { /* ... */ }
+        override fun onHttpError(error: BusinessResult.HttpError) { /* ... */ }
+        override fun onNetworkError(error: BusinessResult.NetworkError) { /* ... */ }
+        override fun onInterceptorError(error: BusinessResult.InterceptorError) {
+            // error.error 是拦截器抛出的原始异常
+            // error.index 指示是第几个拦截器抛出
+            Log.e("TAG", "拦截器 #${error.index} 异常", error.error)
+        }
+        override fun onConsumed(result: BusinessResult.Consumed) { /* ... */ }
+    })
+```
+
+> `TypedBusinessResultCallback` 同样提供 `onInterceptorError(error: TypedBusinessResult.InterceptorError)`。
+
 ## 常见错误
 
 - 不要把所有失败都放到 `onNetworkError`。4xx/5xx 是服务器明确返回的 HTTP 响应，应走 `onHttpError`。

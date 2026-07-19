@@ -125,6 +125,30 @@ Net.instance.get()
 - `application()` 为基础配置，否则部分功能（如缓存、日志）无法正常工作
 - 全局参数（`globalParam` / `globalParams`）会自动附加到所有请求，单个请求可通过 `noUseGlobalParams()` 跳过
 
+## 常用入口
+
+除了通过 `Net.instance.configure {}` 统一配置外，以下入口提供了对网络库内部组件的直接访问：
+
+```kotlin
+// 直接获取共享的 OkHttpClient（用于第三方库集成）
+val okHttpClient = Net.instance.okHttpClient
+
+// 获取当前 NetConfig（只读）
+val config = Net.instance.config
+
+// Retrofit 声明式 API 入口（需引入 net-retrofit 模块）
+val api = Net.instance.retrofit
+    .baseUrl("https://api.example.com/")
+    .build()
+    .create<MyApiService>()
+```
+
+| 入口 | 类型 | 说明 |
+|------|------|------|
+| `Net.instance.okHttpClient` | `OkHttpClient` | 共享的 OkHttpClient，继承全部拦截器、超时、缓存配置 |
+| `Net.instance.config` | `NetConfig` | 获取当前全局配置的只读快照 |
+| `Net.instance.retrofit` | `NetRetrofit.Builder` | Retrofit 声明式 API 构建器入口（依赖 `net-retrofit` 模块） |
+
 ## 模块关系
 
 ```

@@ -52,10 +52,14 @@ Net.instance.get()
 ```kotlin
 // 按 URL 取消下载
 Net.instance.cancelDownload("https://example.com/file.zip")
+// 别名（语义更明确）
+Net.instance.cancelDownloadByUrl("https://example.com/file.zip")
 
 // 按 Task 取消下载
 val task = Net.instance.newDownload()/*...*/.start()
 Net.instance.cancelDownload(task)
+// 别名
+Net.instance.cancelDownloadTask(task)
 ```
 
 ## 关键说明

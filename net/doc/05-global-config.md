@@ -37,6 +37,15 @@
 | 批量业务责任链 | `businessInterceptors(list)` | — | 批量添加业务结果拦截器 |
 | 清空业务责任链 | `clearBusinessInterceptors()` | — | 清空所有业务结果拦截器 |
 | 读取业务责任链 | `businessInterceptors()` | — | 获取业务结果拦截器快照 |
+| 响应体大小限制 | `maxResponseBodyBytes(bytes)` | 65536 | 超过此大小的响应会触发 `ResponseTooLarge` 而非 `Success` |
+| 主线程 Handler | `uiHandler` | — | 主线程 `Handler`（只读，供内部及扩展模块使用） |
+| 加密配置 | `encryptConfig` | null | 获取当前字段加密配置（只读） |
+| 监控配置 | `monitorConfig` | null | 获取当前网络监控配置（只读） |
+| 业务解析器 | `businessEnvelopeParser` | — | 获取当前业务协议解析器（只读） |
+| 业务转换器 | `businessConverter` | — | 获取当前业务数据转换器（只读） |
+| 包名 | `packageName` | — | 获取 Application 包名（只读） |
+| 最大并行下载数 | `maxConcurrentDownloadCount` | 3 | 获取当前并行下载上限（只读） |
+| HTTP 日志状态 | `isHttpLogEnabled` | false | 获取 HTTP 日志是否开启（只读） |
 
 ## 完整示例
 
