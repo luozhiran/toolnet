@@ -49,47 +49,24 @@ class TaskState {
         return task
     }
 
-    @Synchronized
-    fun addWaitTask(task: Task): Boolean {
-        val url = task.url?.takeIf { it.isNotBlank() }
-        if (url == null || waitingTaskUrls.contains(url)) {
-            return false
-        }
-        if (waitingTasks.add(task)) {
-            waitingTaskUrls.add(url)
-            return true
-        }
-        return false
-    }
-
-    @Synchronized
-    fun deleteWaitTask(task: Task?) {
+    fun cancelWaitTask(task: Task?, error: String?) {
         if (task == null) return
-        if (waitingTasks.remove(task)) {
-            task.url?.let { waitingTaskUrls.remove(it) }
+        val removed = synchronized(this) {
+            if (waitingTasks.remove(task)) {
+                task.url?.let { waitingTaskUrls.remove(it) }
+                task
+            } else {
+                null
+            }
         }
-        Download.instance.listenerRegistry.removeTaskListeners(task)
+        removed?.let { finishCanceledWaitTask(it, error) }
     }
 
-    @Synchronized
-    fun deleteWaitTask(url: String?) {
-        removeTaskByUrl(waitingTasks, waitingTaskUrls, url)?.let {
-            Download.instance.listenerRegistry.removeTaskListeners(it)
+    fun cancelWaitTask(url: String?, error: String?) {
+        val removed = synchronized(this) {
+            removeTaskByUrl(waitingTasks, waitingTaskUrls, url)
         }
-    }
-
-    @Synchronized
-    fun addRunningTask(task: Task?): Boolean {
-        if (task == null) return false
-        val url = task.url?.takeIf { it.isNotBlank() }
-        if (url == null || runningTaskUrls.contains(url)) {
-            return false
-        }
-        if (runningTasks.add(task)) {
-            runningTaskUrls.add(url)
-            return true
-        }
-        return false
+        removed?.let { finishCanceledWaitTask(it, error) }
     }
 
     @Synchronized
@@ -156,25 +133,8 @@ class TaskState {
         return runningTasks.size < maxDownloadSize()
     }
 
-    @Synchronized
-    fun getTaskFromWaitQueue(task: Task?): Task? {
-        return if (task == null) {
-            findFirstTaskFromWaitQueue()
-        } else if (runningQueueCanAcceptTask()) {
-            task
-        } else {
-            addWaitTask(task)
-            findFirstTaskFromWaitQueue()
-        }
-    }
-
     fun isCheckMd5(task: Task): Boolean {
         return task.md5.orEmpty().isNotBlank()
-    }
-
-    @Synchronized
-    fun canNextTask(): Boolean {
-        return runningQueueCanAcceptTask() && waitingTasks.isNotEmpty()
     }
 
     fun isTryAgainDownload(tag: String?): Boolean {
@@ -199,15 +159,16 @@ class TaskState {
         return tasks.removeAt(position)
     }
 
-    @Synchronized
-    private fun findFirstTaskFromWaitQueue(): Task? {
-        if (waitingTasks.isEmpty()) return null
-        val task = waitingTasks.removeAt(0)
-        task.url?.let { waitingTaskUrls.remove(it) }
-        return task
-    }
-
     private fun maxDownloadSize(): Int {
         return Net.instance.ddNetConfig.maxDownloadNum.coerceAtLeast(1)
+    }
+
+    private fun finishCanceledWaitTask(task: Task, error: String?) {
+        task.cancelUrl = task.url
+        val callback = task.progressCallback
+        callback?.onFail(error, task)
+        callback?.onFinish(task)
+        task.progressCallback = null
+        Download.instance.listenerRegistry.removeTaskListeners(task)
     }
 }

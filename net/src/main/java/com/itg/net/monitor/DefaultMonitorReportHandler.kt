@@ -65,6 +65,7 @@ class DefaultMonitorReportHandler(
 
     /** 是否正在运行 */
     private val running = AtomicBoolean(true)
+    private val reportInFlight = AtomicBoolean(false)
 
     /** 强制刷新标志：flush() 时设为 true，消费者线程检测后立即 flush 当前 batch */
     @Volatile
@@ -169,7 +170,7 @@ class DefaultMonitorReportHandler(
             if (!forceFlush) return
             forceFlush = false
             if (batch.isNotEmpty()) {
-                doFlushAsync(batch.toList())
+                doFlushAsync(batch.toList(), awaitCompletion = true)
                 batch.clear()
                 lastFlushTime = System.currentTimeMillis()
             }
@@ -217,7 +218,7 @@ class DefaultMonitorReportHandler(
 
         // 退出前最后一次刷新
         if (batch.isNotEmpty()) {
-            doFlushAsync(batch.toList())
+            doFlushAsync(batch.toList(), awaitCompletion = true)
         }
     }, "monitor-reporter").apply {
         isDaemon = true
@@ -260,7 +261,7 @@ class DefaultMonitorReportHandler(
         val pending = mutableListOf<MonitorEvent>()
         queue.drainTo(pending)
         if (pending.isNotEmpty()) {
-            doFlushAsync(pending)
+            runFlushWorker(pending)
         }
         // 通知消费者线程立即 flush 当前 batch（事件已被 take 但尚未到 flush 窗口）
         // forceFlush 是 volatile，interrupt 只用于唤醒阻塞中的 take/poll。
@@ -277,7 +278,7 @@ class DefaultMonitorReportHandler(
         try {
             consumerThread.join(5000)
         } catch (_: InterruptedException) {
-            // ignore
+            Thread.currentThread().interrupt()
         }
         // 排空队列 + 二次排空（捕获 drainTo 之后竞态到达的事件）
         val remaining = mutableListOf<MonitorEvent>()
@@ -316,6 +317,11 @@ class DefaultMonitorReportHandler(
             Log.w(TAG, "Circuit open, dropping ${events.size} events")
             return
         }
+        if (!acquireReportSlot(awaitCompletion)) {
+            endProbe()
+            Log.w(TAG, "Report in flight, dropping ${events.size} events")
+            return
+        }
 
         try {
             val jsonArray = JSONArray()
@@ -343,6 +349,7 @@ class DefaultMonitorReportHandler(
                         recordFailure("IO error: ${e.message}")
                     } finally {
                         endProbe()
+                        releaseReportSlot()
                         latch?.countDown()
                     }
                 }
@@ -358,6 +365,7 @@ class DefaultMonitorReportHandler(
                     } finally {
                         endProbe()
                         response.close()
+                        releaseReportSlot()
                         latch?.countDown()
                     }
                 }
@@ -373,6 +381,42 @@ class DefaultMonitorReportHandler(
             Log.w(TAG, "Report exception: ${e.message}")
             recordFailure("exception: ${e.message}")
             endProbe()
+            releaseReportSlot()
+        }
+    }
+
+    private fun acquireReportSlot(awaitCompletion: Boolean): Boolean {
+        if (reportInFlight.compareAndSet(false, true)) {
+            return true
+        }
+        if (!awaitCompletion) {
+            return false
+        }
+        val deadline = System.currentTimeMillis() + 5000L
+        while (System.currentTimeMillis() < deadline) {
+            if (reportInFlight.compareAndSet(false, true)) {
+                return true
+            }
+            try {
+                Thread.sleep(50L)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return false
+    }
+
+    private fun releaseReportSlot() {
+        reportInFlight.set(false)
+    }
+
+    private fun runFlushWorker(events: List<MonitorEvent>) {
+        Thread({
+            doFlushAsync(events, awaitCompletion = true)
+        }, "monitor-flush").apply {
+            isDaemon = true
+            start()
         }
     }
 }

@@ -1,7 +1,10 @@
 package com.itg.net.retrofit
 
+import com.itg.net.Net
 import com.itg.net.flow.NetFlowException
 import com.itg.net.flow.NetResponse
+import com.itg.net.response.BodyReadResult
+import com.itg.net.response.ResponseBodyReader
 import com.itg.net.request.business.BusinessResult
 import com.itg.net.request.business.TypedBusinessResult
 import com.itg.net.request.business.toBusinessResult
@@ -115,6 +118,7 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             flowCall.enqueue(object : Callback<T> {
                 override fun onResponse(call: Call<T>, response: Response<T>) {
                     if (flowCall.isCanceled) {
+                        response.closeAllBody()
                         close(requestCancellation())
                         return
                     }
@@ -138,6 +142,8 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                         }
                     } catch (e: Exception) {
                         emitResponseException(flowCall, e)
+                    } finally {
+                        response.closeConsumedBody(mode)
                     }
                     close()
                 }
@@ -184,7 +190,10 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 return
             }
 
-            close(NetFlowException(response.code(), response.errorBody()?.string()))
+            when (val bodyResult = response.errorBody().readSafely()) {
+                is BodyReadResult.Text -> close(NetFlowException(response.code(), bodyResult.value))
+                is BodyReadResult.TooLarge -> close(NetFlowException(null, bodyResult.message))
+            }
         }
 
         private fun kotlinx.coroutines.channels.ProducerScope<Any>.emitNetResponse(response: Response<T>) {
@@ -192,11 +201,16 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
                 .mapValues { (_, values) -> values.joinToString(", ") }
             val contentType = (response.body() as? ResponseBody)?.contentType()
                 ?: response.errorBody()?.contentType()
-            val rawBody = if (response.isSuccessful) {
-                (response.body() as? ResponseBody)?.string() ?: response.body()?.toString()
+            val rawBodyResult = if (response.isSuccessful) {
+                (response.body() as? ResponseBody).readSafelyOrObjectString(response.body())
             } else {
-                response.errorBody()?.string()
+                response.errorBody().readSafely()
             }
+            if (rawBodyResult is BodyReadResult.TooLarge) {
+                close(NetFlowException(null, rawBodyResult.message))
+                return
+            }
+            val rawBody = (rawBodyResult as BodyReadResult.Text).value
             val convertedBody = if (response.isSuccessful) {
                 convertNetResponseBody(rawBody, contentType)
             } else {
@@ -231,11 +245,15 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
         private fun Response<T>.toNetResult(): NetResult {
             val headers = headers().toMultimap()
                 .mapValues { (_, values) -> values.joinToString(", ") }
-            val rawBody = if (isSuccessful) {
-                (body() as? ResponseBody)?.string() ?: body()?.toString()
+            val rawBodyResult = if (isSuccessful) {
+                (body() as? ResponseBody).readSafelyOrObjectString(body())
             } else {
-                errorBody()?.string()
+                errorBody().readSafely()
             }
+            if (rawBodyResult is BodyReadResult.TooLarge) {
+                return NetResult.NetworkError(rawBodyResult.asIOException())
+            }
+            val rawBody = (rawBodyResult as BodyReadResult.Text).value
 
             return if (isSuccessful) {
                 NetResult.Success(
@@ -282,6 +300,30 @@ class NetFlowCallAdapterFactory : CallAdapter.Factory() {
             return CancellationException("request canceled").apply {
                 if (cause != null) initCause(cause)
             }
+        }
+
+        private fun ResponseBody?.readSafely(): BodyReadResult {
+            return ResponseBodyReader.readText(this, Net.instance.ddNetConfig.maxResponseBodyBytes)
+        }
+
+        private fun ResponseBody?.readSafelyOrObjectString(body: Any?): BodyReadResult {
+            return if (this != null) {
+                readSafely()
+            } else {
+                BodyReadResult.Text(body?.toString())
+            }
+        }
+
+        private fun Response<T>.closeConsumedBody(mode: ResultMode) {
+            if (mode != ResultMode.Body || !isSuccessful) {
+                (body() as? ResponseBody)?.close()
+                errorBody()?.close()
+            }
+        }
+
+        private fun Response<T>.closeAllBody() {
+            (body() as? ResponseBody)?.close()
+            errorBody()?.close()
         }
     }
 }

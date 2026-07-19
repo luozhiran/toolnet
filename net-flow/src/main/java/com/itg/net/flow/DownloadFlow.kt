@@ -3,6 +3,7 @@ package com.itg.net.flow
 import com.itg.net.Net
 import com.itg.net.download.TaskBuilder
 import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.Task
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -93,6 +94,10 @@ fun TaskBuilder.flow(): Flow<DownloadProgress> = callbackFlow {
     // 注入回调并启动下载
     taskRef.addDownloadListener(flowCallback)
     val task = taskRef.start()
+    if (task.cancelUrl == task.url && task.url != null) {
+        trySend(DownloadProgress(task, DownloadPhase.Failed))
+        close(NetFlowException(null, ERROR_DOWNLOAD_CANCELED))
+    }
 
     awaitClose {
         Net.instance.cancelDownload(task)

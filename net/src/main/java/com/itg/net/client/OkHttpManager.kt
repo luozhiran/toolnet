@@ -9,6 +9,8 @@ import com.itg.net.monitor.IMonitorReportHandler
 import com.itg.net.monitor.MonitorInterceptor
 import com.itg.net.monitor.MonitorEvent
 import com.itg.net.monitor.NetworkTypeCache
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -78,11 +80,26 @@ class OkHttpManager(ddNetConfig: NetConfig) {
         }
     }
 
+    internal fun cancelAllRequests() {
+        okHttpClient.dispatcher.cancelAll()
+    }
+
+    internal fun releaseIdleResources() {
+        okHttpClient.connectionPool.evictAll()
+    }
+
     private fun createClient(ddNetConfig: NetConfig): OkHttpClient {
-        val builder = ddNetConfig.client()?.newBuilder() ?: OkHttpClient.Builder().apply {
-            connectTimeout(15, TimeUnit.SECONDS)
-            readTimeout(20, TimeUnit.SECONDS)
-            writeTimeout(35, TimeUnit.SECONDS)
+        val customClient = ddNetConfig.client()
+        val builder = if (customClient != null) {
+            customClient.newBuilder()
+                .dispatcher(Dispatcher())
+                .connectionPool(ConnectionPool())
+        } else {
+            OkHttpClient.Builder().apply {
+                connectTimeout(15, TimeUnit.SECONDS)
+                readTimeout(20, TimeUnit.SECONDS)
+                writeTimeout(35, TimeUnit.SECONDS)
+            }
         }
         ddNetConfig.interceptors().forEach { builder.addInterceptor(it) }
         ddNetConfig.cache()?.let {

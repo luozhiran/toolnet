@@ -5,7 +5,6 @@ import android.os.HandlerThread
 import android.os.Message
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
-import com.itg.net.download.data.LockData
 import com.itg.net.download.data.MSG_START_NEXT_DOWNLOAD
 import com.itg.net.download.data.RESULT_DOWNLOAD_FAILED
 import com.itg.net.download.data.RESULT_DOWNLOAD_SUCCESS
@@ -22,8 +21,6 @@ class DispatchTool : Dispatch {
     @Volatile
     private var handler: Handler? = null
 
-    private val lock by lazy { LockData() }
-
     init {
         val thread = HandlerThread("itg-net-download")
         thread.start()
@@ -33,7 +30,7 @@ class DispatchTool : Dispatch {
     override fun download(task: Task): Boolean {
         return when (taskStateInstance.scheduleTask(task)) {
             TaskState.ScheduleResult.RUNNING -> {
-                logisticsDownload(task)
+                startDirectDownload(task)
                 true
             }
             TaskState.ScheduleResult.WAITING -> true
@@ -41,14 +38,10 @@ class DispatchTool : Dispatch {
         }
     }
 
-    /**
-     * 断点续传下载
-     * @param task DTask
-     */
     override fun appendDownload(task: Task): Boolean {
         return when (taskStateInstance.scheduleTask(task)) {
             TaskState.ScheduleResult.RUNNING -> {
-                logisticsBreakpointContinuation(task)
+                startBreakpointDownload(task)
                 true
             }
             TaskState.ScheduleResult.WAITING -> true
@@ -64,64 +57,28 @@ class DispatchTool : Dispatch {
         return taskStateInstance
     }
 
-    /**
-     * 从任务队列中获取下载任务
-     */
     private fun downloadNextTask() {
         val task = taskStateInstance.pollNextTaskToRun() ?: return
         if (taskStateInstance.isBreakpointContinuation(task)) {
-            logisticsBreakpointContinuation(task)
+            startBreakpointDownload(task)
         } else {
-            logisticsDownload(task)
+            startDirectDownload(task)
         }
     }
 
-    /**
-     * 任务有重试次数，再一次发起上次失败的任务。
-     * 如果任务已不在运行队列中（可能被并发取消），但有剩余重试次数，
-     * 则将任务重新加入等待队列，避免任务被静默丢弃。
-     */
-    private fun tryAgainDownloadTask(preTask: Task) {
-        if (taskStateInstance.exitRunningTask(preTask)) {
-            if (taskStateInstance.isBreakpointContinuation(preTask)) {
-                logisticsBreakpointContinuation(preTask)
-            } else {
-                logisticsDownload(preTask)
-            }
-        } else {
+    private fun retryDownloadTask(task: Task) {
+        if (!taskStateInstance.exitRunningTask(task)) {
             downloadNextTask()
+            return
+        }
+        if (taskStateInstance.isBreakpointContinuation(task)) {
+            startBreakpointDownload(task)
+        } else {
+            startDirectDownload(task)
         }
     }
 
-    /**
-     * 立刻下载数据
-     * @param task DTask
-     */
-    private fun immediatelyDownload(task: Task) {
-        synchronized(lock) {
-            val downloadTask = taskStateInstance.getTaskFromWaitQueue(task) ?: return
-            if (!taskStateInstance.addRunningTask(downloadTask)) return
-            logisticsDownload(downloadTask)
-        }
-    }
-
-    /**
-     * 发起断点位置请求
-     * @param task DTask
-     */
-    private fun immediatelyBreakpointContinuationRequest(task: Task) {
-        synchronized(lock) {
-            val downloadTask = taskStateInstance.getTaskFromWaitQueue(task) ?: return
-            if (!taskStateInstance.addRunningTask(downloadTask)) return
-            logisticsBreakpointContinuation(downloadTask)
-        }
-    }
-
-    /**
-     * 转发下载
-     * @param task DTask
-     */
-    private fun logisticsDownload(task: Task) {
+    private fun startDirectDownload(task: Task) {
         task.tryAgainCount -= 1
         task.progressCallback?.onConnecting(task)
         DirectRequest(task, taskStateInstance)
@@ -130,11 +87,7 @@ class DispatchTool : Dispatch {
             .start()
     }
 
-    /**
-     * 转发断点续传
-     * @param task DTask
-     */
-    private fun logisticsBreakpointContinuation(task: Task) {
+    private fun startBreakpointDownload(task: Task) {
         task.tryAgainCount -= 1
         task.progressCallback?.onConnecting(task)
         BreakpointContinuationRequest(task, taskStateInstance)
@@ -143,38 +96,28 @@ class DispatchTool : Dispatch {
             .start()
     }
 
-    /**
-     * 等待未来下载数据
-     */
-    private fun pendingDownload(task: Task) {
-        if (taskStateInstance.addWaitTask(task) && taskStateInstance.canNextTask()) {
-            sendMsg(null, MSG_START_NEXT_DOWNLOAD)
-        }
-    }
-
     private fun handleResult(task: Task, type: Int, tag: String) {
-        PrintLog.logd("开始处理完成或失败任务")
+        PrintLog.logd("download task finished, result=$type")
         taskStateInstance.debugPrint()
         if (type == RESULT_DOWNLOAD_FAILED) {
             if (tag == ERROR_DOWNLOAD_CANCELED || task.cancelUrl == task.url) {
                 task.progressCallback?.onFail(ERROR_DOWNLOAD_CANCELED, task)
                 taskStateInstance.deleteRunningTask(task)
-                PrintLog.logd("删除任务")
+                PrintLog.logd("download task canceled and removed")
             } else if (task.tryAgainCount > 0) {
                 task.progressCallback?.onFail(ERROR_DOWNLOAD_RETRYING, task)
-                PrintLog.logd("不删除任务，重试请求 ${task.tryAgainCount}")
+                PrintLog.logd("download task retrying, remaining=${task.tryAgainCount}")
             } else {
                 task.progressCallback?.onFail(tag, task)
                 taskStateInstance.deleteRunningTask(task)
-                PrintLog.logd("删除任务")
+                PrintLog.logd("download task failed and removed")
             }
         } else if (type == RESULT_DOWNLOAD_SUCCESS) {
             task.progressCallback?.onProgress(task, true)
             taskStateInstance.deleteRunningTask(task)
-            PrintLog.logd("下载任务完成，删除任务")
+            PrintLog.logd("download task complete and removed")
         }
         taskStateInstance.debugPrint()
-        PrintLog.logd("任务处理完成，准备开启下个任务")
         sendMsg(task, type)
     }
 
@@ -187,7 +130,7 @@ class DispatchTool : Dispatch {
 
     private fun execNextDownloadRequest(message: Message): Boolean {
         if (message.what == RESULT_DOWNLOAD_FAILED && isAgainDownload(message.obj)) {
-            tryAgainDownloadTask(message.obj as Task)
+            retryDownloadTask(message.obj as Task)
         } else {
             downloadNextTask()
         }

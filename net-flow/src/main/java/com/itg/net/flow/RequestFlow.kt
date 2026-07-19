@@ -7,6 +7,9 @@ import com.itg.net.request.business.toTypedBusinessResult
 import com.itg.net.request.result.NetResult
 import com.itg.net.request.base.ParamsBuilder
 import com.google.gson.reflect.TypeToken
+import com.itg.net.Net
+import com.itg.net.response.BodyReadResult
+import com.itg.net.response.ResponseBodyReader
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -59,12 +62,16 @@ fun <T : ParamsBuilder> T.flowString(): Flow<String> = callbackFlow {
                         close(requestCancellation())
                         return@use
                     }
-                    val body = response.body?.string()
-                    if (response.isSuccessful) {
-                        trySend(body.orEmpty())
-                        close()
-                    } else {
-                        close(NetFlowException(response.code, body ?: response.message))
+                    when (val bodyResult = response.readBodySafely()) {
+                        is BodyReadResult.Text -> {
+                            if (response.isSuccessful) {
+                                trySend(bodyResult.value.orEmpty())
+                                close()
+                            } else {
+                                close(NetFlowException(response.code, bodyResult.value ?: response.message))
+                            }
+                        }
+                        is BodyReadResult.TooLarge -> close(NetFlowException(null, bodyResult.message))
                     }
                 } catch (e: Exception) {
                     closeFlowForResponseException(call, e)
@@ -117,22 +124,26 @@ fun <T : ParamsBuilder> T.flowResult(): Flow<NetResult> = callbackFlow {
                         close(requestCancellation())
                         return@use
                     }
-                    val rawBody = response.body?.string()
                     val headers = response.headers.toMultimap()
                         .mapValues { (_, values) -> values.joinToString(", ") }
-                    val result = if (response.isSuccessful) {
-                        NetResult.Success(
-                            body = rawBody,
-                            code = response.code,
-                            headers = headers
-                        )
-                    } else {
-                        NetResult.HttpError(
-                            body = rawBody,
-                            code = response.code,
-                            message = response.message,
-                            headers = headers
-                        )
+                    val result = when (val bodyResult = response.readBodySafely()) {
+                        is BodyReadResult.Text -> {
+                            if (response.isSuccessful) {
+                                NetResult.Success(
+                                    body = bodyResult.value,
+                                    code = response.code,
+                                    headers = headers
+                                )
+                            } else {
+                                NetResult.HttpError(
+                                    body = bodyResult.value,
+                                    code = response.code,
+                                    message = response.message,
+                                    headers = headers
+                                )
+                            }
+                        }
+                        is BodyReadResult.TooLarge -> NetResult.NetworkError(bodyResult.asIOException())
                     }
                     trySend(result)
                     close()
@@ -248,20 +259,26 @@ fun <T> ParamsBuilder.flowResponse(
                     return
                 }
                 try {
-                    val rawBody = response.body?.string()
-                    val body = converter(rawBody)
-                    val headers = response.headers.toMultimap()
-                        .mapValues { (_, values) -> values.joinToString(", ") }
+                    when (val bodyResult = response.readBodySafely()) {
+                        is BodyReadResult.Text -> {
+                            val body = converter(bodyResult.value)
+                            val headers = response.headers.toMultimap()
+                                .mapValues { (_, values) -> values.joinToString(", ") }
 
-                    trySend(
-                        NetResponse(
-                            body = body,
-                            rawBody = rawBody,
-                            code = response.code,
-                            headers = headers
+                            trySend(
+                                NetResponse(
+                                    body = body,
+                                    rawBody = bodyResult.value,
+                                    code = response.code,
+                                    headers = headers
+                                )
+                            )
+                            close()
+                        }
+                        is BodyReadResult.TooLarge -> close(
+                            NetFlowException(null, bodyResult.message)
                         )
-                    )
-                    close()
+                    }
                 } catch (e: Exception) {
                     closeFlowForResponseException(call, e)
                 }
@@ -303,4 +320,8 @@ private fun requestCancellation(cause: Throwable? = null): CancellationException
 
 private fun Throwable.asIOException(): IOException {
     return this as? IOException ?: IOException(message, this)
+}
+
+private fun Response.readBodySafely(): BodyReadResult {
+    return ResponseBodyReader.readText(body, Net.instance.ddNetConfig.maxResponseBodyBytes)
 }

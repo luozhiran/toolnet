@@ -360,7 +360,8 @@ class EncryptInterceptor(
     // ==================== 字段规则匹配 ====================
 
     private fun shouldEncrypt(fieldName: String, requestPath: String): Boolean {
-        for (rule in config.rules) {
+        val rules = config.rules
+        for (rule in rules) {
             if (rule.direction == Direction.RESPONSE_ONLY) continue
             if (ruleMatches(rule, fieldName, requestPath)) return true
         }
@@ -368,7 +369,8 @@ class EncryptInterceptor(
     }
 
     private fun shouldDecrypt(fieldName: String, requestPath: String): Boolean {
-        for (rule in config.rules) {
+        val rules = config.rules
+        for (rule in rules) {
             if (rule.direction == Direction.REQUEST_ONLY) continue
             if (ruleMatches(rule, fieldName, requestPath)) return true
         }
@@ -396,7 +398,8 @@ class EncryptInterceptor(
         val simpleNames = config.collectSimpleFieldNames()
         if (simpleNames.isEmpty()) return true
 
-        for (rule in config.rules) {
+        val rules = config.rules
+        for (rule in rules) {
             if (forEncrypt && rule.direction == Direction.RESPONSE_ONLY) continue
             if (!forEncrypt && rule.direction == Direction.REQUEST_ONLY) continue
 

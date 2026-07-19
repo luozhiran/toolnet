@@ -222,11 +222,19 @@ class Net {
      * @return 返回自身，支持链式调用
      */
     fun configure(block: NetConfig.() -> Unit): Net {
+        var oldManager: OkHttpManager? = null
         synchronized(okhttpManagerLock) {
             ddNetConfig.block()
-            okhttpManagerRef?.shutdownMonitor()
             if (okhttpManagerRef != null) {
+                oldManager = okhttpManagerRef
                 okhttpManagerRef = OkHttpManager(ddNetConfig)
+            }
+        }
+        oldManager?.let { manager ->
+            manager.cancelAllRequests()
+            runDaemon("itg-net-reconfigure-cleanup") {
+                manager.shutdownMonitor()
+                manager.releaseIdleResources()
             }
         }
         return this
@@ -406,7 +414,7 @@ class Net {
      * 取消所有正在排队和正在执行的 OkHttp 请求
      */
     fun cancelAll() {
-        okhttpManager.okHttpClient.dispatcher.cancelAll()
+        okhttpManager.cancelAllRequests()
     }
 
     /**
@@ -486,7 +494,17 @@ class Net {
      * - 手动释放监控资源时
      */
     fun shutdownMonitor() {
-        okhttpManager.shutdownMonitor()
+        shutdownMonitorAsync()
+    }
+
+    /**
+     * 非阻塞关闭监控上报资源，适合在主线程或进程生命周期回调中调用。
+     */
+    fun shutdownMonitorAsync() {
+        val manager = okhttpManagerRef ?: return
+        runDaemon("itg-net-monitor-shutdown") {
+            manager.shutdownMonitor()
+        }
     }
 
     /**
@@ -519,6 +537,13 @@ class Net {
         return request.tag() == tag ||
             request.tag(String::class.java) == tag ||
             request.url.toString() == tag
+    }
+
+    private fun runDaemon(name: String, block: () -> Unit) {
+        Thread(block, name).apply {
+            isDaemon = true
+            start()
+        }
     }
 
 }

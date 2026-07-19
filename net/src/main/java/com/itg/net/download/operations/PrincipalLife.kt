@@ -22,49 +22,52 @@ object PrincipalLife {
         if (call == null || activity == null) return
         val componentActivity = activity as? ComponentActivity ?: return
 
-        var needObserve = false
-        synchronized(lockCall) {
-            val taskList = callWeakHash.getOrPut(activity) {
-                needObserve = true
-                mutableListOf()
+        val observed = ThreadTool.runOnUIThreadBlocking {
+            if (componentActivity.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+                call.cancel()
+                return@runOnUIThreadBlocking
             }
-            if (!taskList.contains(call)) {
-                taskList.add(call)
-            }
-            needObserve = needObserve && !observerWeakHash.containsKey(activity)
-        }
 
-        if (!needObserve) return
-
-        ThreadTool.runOnUIThread {
-            val shouldAddObserver = synchronized(lockCall) {
-                callWeakHash.containsKey(activity) && !observerWeakHash.containsKey(activity)
-            }
-            if (!shouldAddObserver) return@runOnUIThread
-
-            val observer = object : LifecycleEventObserver {
-                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
-                    if (event != Lifecycle.Event.ON_DESTROY) return
-
-                    val ownerActivity = source as? Activity ?: return
-                    ThreadTool.runOnExecutor {
-                        val calls = synchronized(lockCall) {
-                            observerWeakHash.remove(ownerActivity)
-                            callWeakHash.remove(ownerActivity)?.toList().orEmpty()
-                        }
-                        calls.forEach { it.cancel() }
-                        ThreadTool.runOnUIThread {
-                            source.lifecycle.removeObserver(this)
-                        }
-                        PrintLog.logr("activity destroyed, canceled ${calls.size} lifecycle-bound calls")
-                    }
+            var observerToAdd: LifecycleEventObserver? = null
+            synchronized(lockCall) {
+                val taskList = callWeakHash.getOrPut(activity) { mutableListOf() }
+                if (!taskList.contains(call)) {
+                    taskList.add(call)
+                }
+                if (!observerWeakHash.containsKey(activity)) {
+                    observerToAdd = createDestroyObserver()
+                    observerWeakHash[activity] = observerToAdd
                 }
             }
 
-            synchronized(lockCall) {
-                observerWeakHash[activity] = observer
+            observerToAdd?.let {
+                componentActivity.lifecycle.addObserver(it)
             }
-            componentActivity.lifecycle.addObserver(observer)
+        }
+        if (!observed) {
+            call.cancel()
+            removeCall(call)
+        }
+    }
+
+    private fun createDestroyObserver(): LifecycleEventObserver {
+        return object : LifecycleEventObserver {
+            override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                if (event != Lifecycle.Event.ON_DESTROY) return
+
+                val ownerActivity = source as? Activity ?: return
+                ThreadTool.runOnExecutor {
+                    val calls = synchronized(lockCall) {
+                        observerWeakHash.remove(ownerActivity)
+                        callWeakHash.remove(ownerActivity)?.toList().orEmpty()
+                    }
+                    calls.forEach { it.cancel() }
+                    ThreadTool.runOnUIThread {
+                        source.lifecycle.removeObserver(this)
+                    }
+                    PrintLog.logr("activity destroyed, canceled ${calls.size} lifecycle-bound calls")
+                }
+            }
         }
     }
 

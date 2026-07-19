@@ -8,6 +8,8 @@ import com.itg.net.encrypt.EncryptMarker
 import com.itg.net.monitor.MonitorExtra
 import com.itg.net.monitor.MonitorMarker
 import com.itg.net.request.base.DdCallback
+import com.itg.net.response.BodyReadResult
+import com.itg.net.response.ResponseBodyReader
 import com.itg.net.download.operations.PrincipalLife
 import com.itg.net.util.PrintLog
 import okhttp3.*
@@ -86,7 +88,16 @@ class SendTool {
             override fun onResponse(call: Call, response: Response) {
                 try {
                     if (!call.isCanceled()) {
-                        callback?.onResponse(response.body?.string(), response.code)
+                        when (val bodyResult = response.readBodySafely()) {
+                            is BodyReadResult.Text -> {
+                                if (response.isSuccessful) {
+                                    callback?.onResponse(bodyResult.value, response.code)
+                                } else {
+                                    callback?.onFailure(response.failureMessage(bodyResult.value))
+                                }
+                            }
+                            is BodyReadResult.TooLarge -> callback?.onFailure(bodyResult.message)
+                        }
                     }
                     PrintLog.logr("请求成功 ${call.request().url}")
                 } finally {
@@ -126,8 +137,21 @@ class SendTool {
                 try {
                     if (!call.isCanceled()) {
                         val msg = Message.obtain()
-                        msg.what = what
-                        msg.obj = response.body?.string()
+                        when (val bodyResult = response.readBodySafely()) {
+                            is BodyReadResult.Text -> {
+                                if (response.isSuccessful) {
+                                    msg.what = what
+                                    msg.obj = bodyResult.value
+                                } else {
+                                    msg.what = errorWhat
+                                    msg.obj = response.failureMessage(bodyResult.value)
+                                }
+                            }
+                            is BodyReadResult.TooLarge -> {
+                                msg.what = errorWhat
+                                msg.obj = bodyResult.message
+                            }
+                        }
                         handler?.sendMessage(msg)
                     }
                     PrintLog.logr("请求成功 ${call.request().url}")
@@ -166,5 +190,13 @@ class SendTool {
         })
     }
 
+    private fun Response.failureMessage(body: String?): String {
+        val detail = body?.takeIf { it.isNotBlank() } ?: message
+        return "HTTP $code: $detail"
+    }
+
+    private fun Response.readBodySafely(): BodyReadResult {
+        return ResponseBodyReader.readText(body, Net.instance.ddNetConfig.maxResponseBodyBytes)
+    }
 
 }

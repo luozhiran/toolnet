@@ -4,6 +4,7 @@ import com.itg.net.download.data.Task
 import com.itg.net.Net
 import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.Download
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,7 +28,7 @@ class TaskStateTest {
             path = "build/tmp/file.zip"
         }
 
-        assertTrue(taskState.addRunningTask(task))
+        assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(task))
         assertTrue(taskState.markRunningTaskCanceled(task))
 
         assertTrue(taskState.exitRunningTask(task))
@@ -48,7 +49,7 @@ class TaskStateTest {
             path = "build/tmp/file.zip"
         }
 
-        assertTrue(taskState.addRunningTask(task))
+        assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(task))
         assertFalse(taskState.runningQueueCanAcceptTask())
 
         Net.configure {
@@ -89,5 +90,43 @@ class TaskStateTest {
         assertEquals(1, Download.instance.listenerRegistry.listenerCount(firstTask))
 
         taskState.deleteRunningTask(firstTask)
+    }
+
+    @Test
+    fun cancelWaitingTaskNotifiesFinishAndClearsListeners() {
+        val taskState = TaskState()
+        val task = Task().apply {
+            url = "https://example.com/waiting.zip"
+            path = "build/tmp/waiting.zip"
+        }
+        val events = mutableListOf<String>()
+        val taskCallback = object : AbstractProgressCallback() {
+            override fun onFail(error: String?, task: Task) {
+                events.add("fail:$error")
+            }
+
+            override fun onFinish(task: Task) {
+                events.add("finish")
+            }
+        }
+        val registryListener = object : AbstractProgressCallback() {}
+        task.progressCallback = taskCallback
+
+        Net.configure {
+            maxConcurrentDownloads(1)
+        }
+        assertEquals(TaskState.ScheduleResult.RUNNING, taskState.scheduleTask(Task().apply {
+            url = "https://example.com/running.zip"
+            path = "build/tmp/running.zip"
+        }))
+        assertEquals(TaskState.ScheduleResult.WAITING, taskState.scheduleTask(task))
+        Download.instance.listenerRegistry.addTaskListener(task, registryListener)
+
+        taskState.cancelWaitTask(task, ERROR_DOWNLOAD_CANCELED)
+
+        assertEquals(listOf("fail:$ERROR_DOWNLOAD_CANCELED", "finish"), events)
+        assertEquals(task.url, task.cancelUrl)
+        assertEquals(0, Download.instance.listenerRegistry.listenerCount(task))
+        assertFalse(taskState.exitWaitTask(task))
     }
 }

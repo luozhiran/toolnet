@@ -79,6 +79,9 @@ class NetConfig {
     private var okhttpCache: Cache? = null
 
     @Volatile
+    private var responseBodyLimitBytes: Long = DEFAULT_RESPONSE_BODY_LIMIT_BYTES
+
+    @Volatile
     var application: Application? = null
         private set
 
@@ -133,6 +136,9 @@ class NetConfig {
      */
     val isHttpLogEnabled: Boolean
         get() = httpLoggerEnabled
+
+    val maxResponseBodyBytes: Long
+        get() = responseBodyLimitBytes
 
     /**
      * 全局请求参数快照。
@@ -366,6 +372,17 @@ class NetConfig {
     }
 
     /**
+     * 配置普通 API 响应体最大读取字节数。
+     *
+     * 该限制只保护 `send`、`sendResult`、`net-flow`、`net-retrofit` 这类会把响应体读成
+     * 字符串的接口；文件下载不受影响。传入小于等于 0 的值会回落到默认安全上限。
+     */
+    fun maxResponseBodyBytes(bytes: Long): NetConfig {
+        responseBodyLimitBytes = if (bytes > 0L) bytes else DEFAULT_RESPONSE_BODY_LIMIT_BYTES
+        return this
+    }
+
+    /**
      * DSL 方式配置字段加解密。
      *
      * 示例：
@@ -429,5 +446,6 @@ class NetConfig {
 
     private companion object {
         private const val MAX_LOG_FILE_SIZE = 1024 * 1024 * 5
+        private const val DEFAULT_RESPONSE_BODY_LIMIT_BYTES = 2L * 1024L * 1024L
     }
 }

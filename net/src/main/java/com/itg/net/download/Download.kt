@@ -2,6 +2,7 @@ package com.itg.net.download
 
 import com.itg.net.Net
 import com.itg.net.download.callback.IProgressCallback
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.Task
 import com.itg.net.download.dispatcher.DispatchTool
 import com.itg.net.download.operations.DownloadEvent
@@ -112,7 +113,7 @@ internal class Download {
             return
         }
         if (taskState.exitWaitUrl(url)) {
-            taskState.deleteWaitTask(url)
+            taskState.cancelWaitTask(url, ERROR_DOWNLOAD_CANCELED)
         }
     }
 
@@ -130,7 +131,7 @@ internal class Download {
             return
         }
         if (taskState.exitWaitTask(task)) {
-            taskState.deleteWaitTask(task)
+            taskState.cancelWaitTask(task, ERROR_DOWNLOAD_CANCELED)
         }
     }
 

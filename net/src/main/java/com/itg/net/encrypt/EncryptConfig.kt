@@ -49,10 +49,16 @@ class EncryptConfig {
     // ==================== 加密规则 ====================
 
     /** 加密规则列表 */
-    val rules: MutableList<EncryptRule> = mutableListOf()
+    private val ruleList: MutableList<EncryptRule> = mutableListOf()
+
+    val rules: List<EncryptRule>
+        get() = synchronized(ruleList) { ruleList.toList() }
 
     /** 跳过路径列表（OPT_OUT 模式生效） */
-    val skipPaths: MutableList<Regex> = mutableListOf()
+    private val skipPathList: MutableList<Regex> = mutableListOf()
+
+    val skipPaths: List<Regex>
+        get() = synchronized(skipPathList) { skipPathList.toList() }
 
     // ==================== DSL 方法 ====================
 
@@ -152,7 +158,9 @@ class EncryptConfig {
      * 按字段名精确匹配加密（双向加解密）
      */
     fun encryptField(fieldName: String): EncryptConfig {
-        rules.add(EncryptRule.ByFieldName(fieldName).also { it.direction = Direction.BOTH })
+        synchronized(ruleList) {
+            ruleList.add(EncryptRule.ByFieldName(fieldName).also { it.direction = Direction.BOTH })
+        }
         return this
     }
 
@@ -160,7 +168,9 @@ class EncryptConfig {
      * 按字段名精确匹配解密（仅响应解密）
      */
     fun decryptField(fieldName: String): EncryptConfig {
-        rules.add(EncryptRule.ByFieldName(fieldName).also { it.direction = Direction.RESPONSE_ONLY })
+        synchronized(ruleList) {
+            ruleList.add(EncryptRule.ByFieldName(fieldName).also { it.direction = Direction.RESPONSE_ONLY })
+        }
         return this
     }
 
@@ -168,7 +178,9 @@ class EncryptConfig {
      * 按正则匹配字段（双向加解密）
      */
     fun encryptPattern(pattern: Regex): EncryptConfig {
-        rules.add(EncryptRule.ByFieldPattern(pattern).also { it.direction = Direction.BOTH })
+        synchronized(ruleList) {
+            ruleList.add(EncryptRule.ByFieldPattern(pattern).also { it.direction = Direction.BOTH })
+        }
         return this
     }
 
@@ -176,7 +188,9 @@ class EncryptConfig {
      * 按请求路径 + 字段列表匹配（双向加解密）
      */
     fun encryptPath(pathPattern: Regex, fieldNames: List<String>): EncryptConfig {
-        rules.add(EncryptRule.ByPath(pathPattern, fieldNames).also { it.direction = Direction.BOTH })
+        synchronized(ruleList) {
+            ruleList.add(EncryptRule.ByPath(pathPattern, fieldNames).also { it.direction = Direction.BOTH })
+        }
         return this
     }
 
@@ -187,7 +201,9 @@ class EncryptConfig {
      * 单请求可通过 [com.itg.net.request.base.ParamsBuilder.encrypt] 覆盖此跳过。
      */
     fun skipPath(pattern: Regex): EncryptConfig {
-        skipPaths.add(pattern)
+        synchronized(skipPathList) {
+            skipPathList.add(pattern)
+        }
         return this
     }
 

@@ -4,6 +4,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.itg.net.download.callback.AbstractProgressCallback
+import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
@@ -173,12 +174,12 @@ class TaskBuilder {
      * 如果生命周期已处于 DESTROYED 状态，则标记 [lifecycleDestroyed] 并取消任务。
      */
     private fun bindLife(lifecycle: Lifecycle): TaskBuilder {
-        ThreadTool.runOnUIThread {
+        val bound = ThreadTool.runOnUIThreadBlocking {
             if (lifecycle.currentState == Lifecycle.State.DESTROYED) {
                 lifecycleDestroyed = true
                 task.cancelUrl = task.url
                 PrintLog.logd("Activity已经销毁，无法绑定Activity")
-                return@runOnUIThread
+                return@runOnUIThreadBlocking
             }
             PrintLog.logd("绑定Activity")
             val observer = LifecycleEventObserver { source, event ->
@@ -204,6 +205,11 @@ class TaskBuilder {
             }
             activityBinding = ActivityLifecycleBinding(lifecycle, observer)
             lifecycle.addObserver(observer)
+        }
+        if (!bound) {
+            lifecycleDestroyed = true
+            task.cancelUrl = task.url
+            PrintLog.logd("bind lifecycle timeout, cancel download ${task.url}")
         }
         return this
 
@@ -240,6 +246,15 @@ class TaskBuilder {
         holdActivityRef = null
         externalProgressCallback = null
         task.progressCallback = null
+    }
+
+    private fun finishWithFailure(error: String?) {
+        holdActivityRef?.onFail(error, task)
+        externalProgressCallback?.onFail(error, task)
+        holdActivityRef?.onFinish(task)
+        externalProgressCallback?.onFinish(task)
+        releaseCallbacks()
+        removeActivityLifecycleObserver()
     }
 
     /**
@@ -341,26 +356,17 @@ class TaskBuilder {
         // 检查绑定的 Activity 是否已销毁
         if (lifecycleDestroyed) {
             task.cancelUrl = task.url
+            finishWithFailure(ERROR_DOWNLOAD_CANCELED)
             return task
         }
         // 校验任务是否为无效任务（URL 或保存路径未配置等）
         if (taskState.isInvalidTask(task)) {
-            holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
-            externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
-            holdActivityRef?.onFinish(task)
-            externalProgressCallback?.onFinish(task)
-            releaseCallbacks()
-            removeActivityLifecycleObserver()
+            finishWithFailure(ERROR_INVALID_DOWNLOAD_TASK)
             return task
         }
         // 目标文件已存在且未开启覆盖
         if (!task.overwrite && File(task.path.orEmpty()).exists()) {
-            holdActivityRef?.onFail(ERROR_TARGET_FILE_EXISTS, task)
-            externalProgressCallback?.onFail(ERROR_TARGET_FILE_EXISTS, task)
-            holdActivityRef?.onFinish(task)
-            externalProgressCallback?.onFinish(task)
-            releaseCallbacks()
-            removeActivityLifecycleObserver()
+            finishWithFailure(ERROR_TARGET_FILE_EXISTS)
             return task
         }
 
@@ -378,12 +384,7 @@ class TaskBuilder {
         if (!accepted) {
             holdActivityRef?.let { Download.instance.listenerRegistry.removeTaskListener(task, it) }
             externalProgressCallback?.let { Download.instance.listenerRegistry.removeTaskListener(task, it) }
-            holdActivityRef?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
-            externalProgressCallback?.onFail(ERROR_INVALID_DOWNLOAD_TASK, task)
-            holdActivityRef?.onFinish(task)
-            externalProgressCallback?.onFinish(task)
-            releaseCallbacks()
-            removeActivityLifecycleObserver()
+            finishWithFailure(ERROR_INVALID_DOWNLOAD_TASK)
         }
         return task
     }

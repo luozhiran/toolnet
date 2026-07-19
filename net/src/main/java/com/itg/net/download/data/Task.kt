@@ -11,10 +11,13 @@ class Task {
     // 下载文件保存地址
     var path: String? = null
     // 下载过程中的回调
+    @Volatile
     var progressCallback: IProgressCallback? = null
     // 内容长度
+    @Volatile
     var contentLength: Long = 0
     // 下载进度大小
+    @Volatile
     var downloadSize: Long = 0
     // 需要取消的任务url
     @Volatile
@@ -41,8 +44,10 @@ class Task {
     @Volatile
     var monitorFlag: String? = null
     // 下载开始时间戳（毫秒），用于计算下载总耗时和平均速度
+    @Volatile
     var startTime: Long = 0
     // 下载结束时间戳（毫秒）
+    @Volatile
     var endTime: Long = 0
     // 监控业务附加字段
     var monitorExtra: String? = null

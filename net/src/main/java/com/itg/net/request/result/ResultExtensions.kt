@@ -1,7 +1,10 @@
 package com.itg.net.request.result
 
+import com.itg.net.Net
 import com.itg.net.download.operations.PrincipalLife
 import com.itg.net.request.base.ParamsBuilder
+import com.itg.net.response.BodyReadResult
+import com.itg.net.response.ResponseBodyReader
 import com.itg.net.util.PrintLog
 import okhttp3.Call
 import okhttp3.Callback
@@ -35,26 +38,37 @@ fun ParamsBuilder.sendResult(callback: NetResultCallback?) {
         override fun onResponse(call: Call, response: Response) {
             try {
                 if (!call.isCanceled()) {
-                    val rawBody = response.body?.string()
                     val headers = response.headers.toMultimap()
                         .mapValues { (_, values) -> values.joinToString(", ") }
-                    if (response.isSuccessful) {
-                        callback?.onSuccess(
-                            NetResult.Success(
-                                body = rawBody,
-                                code = response.code,
-                                headers = headers
+                    when (val bodyResult = ResponseBodyReader.readText(
+                        response.body,
+                        Net.instance.ddNetConfig.maxResponseBodyBytes
+                    )) {
+                        is BodyReadResult.Text -> {
+                            if (response.isSuccessful) {
+                                callback?.onSuccess(
+                                    NetResult.Success(
+                                        body = bodyResult.value,
+                                        code = response.code,
+                                        headers = headers
+                                    )
+                                )
+                            } else {
+                                callback?.onHttpError(
+                                    NetResult.HttpError(
+                                        body = bodyResult.value,
+                                        code = response.code,
+                                        message = response.message,
+                                        headers = headers
+                                    )
+                                )
+                            }
+                        }
+                        is BodyReadResult.TooLarge -> {
+                            callback?.onNetworkError(
+                                NetResult.NetworkError(bodyResult.asIOException())
                             )
-                        )
-                    } else {
-                        callback?.onHttpError(
-                            NetResult.HttpError(
-                                body = rawBody,
-                                code = response.code,
-                                message = response.message,
-                                headers = headers
-                            )
-                        )
+                        }
                     }
                 }
                 PrintLog.logr("request finished ${call.request().url} code=${response.code}")
