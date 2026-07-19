@@ -38,6 +38,7 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 | [字段加密 — 规则匹配](./net/doc/07-field-encryption.md) | `encryptField(name)` / `encryptPattern(regex)` / `encryptPath(pathRegex, fields)` / `decryptField(name)` | 字段名精确匹配、正则匹配、路径+字段组合 | 不同接口加密不同字段 | 规则支持双向/仅请求/仅响应三种方向 |
 | [字段加密 — EncryptUtil 独立使用](./net/doc/07-field-encryption.md) | `EncryptUtil.encrypt()` / `EncryptUtil.decrypt()` / `generateAesKey()` / `generateIv()` | 不使用拦截器，在业务代码中直接加解密 | SharedPreferences 加密存储、本地数据保护 | ThreadLocal 缓存 Cipher 实例，线程安全 |
 | [网络监控 — 快速开始](./net/doc/08-network-monitor.md) | `monitor { enabled(true); reportUrl(...); reportMode(...) }` | 生产环境 | 需要监控线上请求的成功率、耗时、错误分布 | MonitorInterceptor 在 OkHttp 层自动采集并上报 |
+| [拦截器体系](./net/doc/10-interceptors.md) | EncryptInterceptor / MonitorInterceptor / HttpLogger / 自定义 Interceptor | 拦截器链全景、执行顺序、单请求控制优先级、自定义 OkHttpClient 场景 | 需要理解三个内置拦截器的内部工作原理、注册条件、以及如何添加自定义拦截器 | 每个拦截器独立职责，通过 OkHttp 的 Interceptor 链串联，对业务代码透明 |
 | [网络监控 — 上报模式](./net/doc/08-network-monitor.md) | `FAILURE_ONLY` / `ALL` / `SLOW_ONLY` | 不同监控粒度需求 | 仅关注故障选 FAILURE_ONLY，全量分析选 ALL，性能优化选 SLOW_ONLY | reportMode + slowRequestThresholdMs 控制采样 |
 | [网络监控 — 自定义上报](./net/doc/08-network-monitor.md) | 实现 `IMonitorReportHandler` + `reportHandler(...)` | 需对接 Firebase、自建平台、写本地文件 | 内置 `DefaultMonitorReportHandler`（HTTP 批量上报+熔断）+ `ResilientReportHandler`（本地兜底） | 可完全替换上报实现，支持同时多个后端 |
 | [网络监控 — 错误分类](./net/doc/08-network-monitor.md) | DNS_ERROR / CONNECT_TIMEOUT / CONNECT_REFUSED / SSL_ERROR / TIMEOUT / HTTP_CLIENT_ERROR / HTTP_SERVER_ERROR / CANCELLED / DOWNLOAD_STREAM_ERROR / DISK_WRITE_ERROR / MD5_MISMATCH 等 | 自动分类，业务方只需读取 errorType | MonitorInterceptor.classifyError() 根据异常类型和 HTTP 状态码自动分类 |
@@ -65,6 +66,7 @@ Net 是一款基于 OkHttp 4.9.2 封装的 Android 网络请求库，提供链�
 | [07. 字段加密](./net/doc/07-field-encryption.md) | 快速开始、加密模式、算法选择、密钥管理、EncryptUtil、规则匹配 |
 | [08. 网络监控](./net/doc/08-network-monitor.md) | 快速开始、上报模式、自定义上报处理器、错误分类、生命周期管理 |
 | [09. HTTP 错误、网络异常与业务码处理](./net/doc/09-error-handling.md) | sendResult、onHttpError、onNetworkError、业务码责任链、ApiEnvelopeParser、TypedBusinessResult、BusinessDataConverter |
+| [10. 拦截器体系](./net/doc/10-interceptors.md) | EncryptInterceptor、MonitorInterceptor、HttpLogger 的详细工作原理、拦截器链执行顺序、自定义拦截器 |
 | **net-flow 模块** | |
 | [10. Flow 化请求](./net-flow/doc/01-flow-basics.md) | flowString、flowResult、flowBusinessResult、flowTypedBusinessResult、flowResponse、反序列化、NetResponse、retry、便捷方法 |
 | [11. 下载进度 Flow](./net-flow/doc/02-flow-download.md) | TaskBuilder.flow、DownloadProgress、DownloadPhase、取消、Net.flowDownload |
