@@ -1,4 +1,4 @@
-package com.itg.net.download.operations
+﻿package com.itg.net.download.operations
 
 import com.itg.net.Net
 import com.itg.net.download.Download
@@ -119,6 +119,8 @@ class DownloadQueueStateTest {
             }
         }
         val waitingSession = DownloadTaskSession(task, null, taskCallback, null)
+
+        assertTrue(waitingSession.prepare())
         waitingSession.startListening()
 
         Net.configure {

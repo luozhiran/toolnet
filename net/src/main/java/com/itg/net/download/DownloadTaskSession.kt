@@ -1,4 +1,4 @@
-package com.itg.net.download
+﻿package com.itg.net.download
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -37,10 +37,18 @@ internal class DownloadTaskSession(
         val observer: LifecycleEventObserver
     )
 
+    private enum class SessionState {
+        NEW,
+        PREPARED,
+        LISTENING,
+        TERMINATED
+    }
+
+    private val sessionLock = Any()
     private val terminalReached = AtomicBoolean(false)
 
     @Volatile
-    private var lifecycleDestroyed = false
+    private var state = SessionState.NEW
 
     @Volatile
     private var activityBinding: ActivityLifecycleBinding? = null
@@ -49,43 +57,73 @@ internal class DownloadTaskSession(
     private var extensionProgressCallback: IProgressCallback? = extensionProgressCallback
 
     fun prepare(): Boolean {
-        val lifecycle = lifecycle ?: return true
-        val bound = ThreadTool.runOnUIThreadBlocking {
-            if (lifecycle.currentState == Lifecycle.State.DESTROYED) {
-                lifecycleDestroyed = true
-                task.cancelUrl = task.url
-                PrintLog.logd("Activity已经销毁，无法绑定Activity")
-                return@runOnUIThreadBlocking
-            }
-            PrintLog.logd("绑定Activity")
-            val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_DESTROY) {
-                    onLifecycleDestroyed()
+        val lifecycle = lifecycle ?: run {
+            synchronized(sessionLock) {
+                if (state == SessionState.NEW) {
+                    state = SessionState.PREPARED
                 }
             }
-            activityBinding = ActivityLifecycleBinding(lifecycle, observer)
-            lifecycle.addObserver(observer)
+            return true
+        }
+        val bound = ThreadTool.runOnUIThreadBlocking {
+            synchronized(sessionLock) {
+                if (state == SessionState.TERMINATED) {
+                    return@runOnUIThreadBlocking
+                }
+                if (lifecycle.currentState == Lifecycle.State.DESTROYED) {
+                    state = SessionState.TERMINATED
+                    task.cancelUrl = task.url
+                    PrintLog.logd("Activity已经销毁，无法绑定Activity")
+                    return@runOnUIThreadBlocking
+                }
+                if (state != SessionState.NEW) {
+                    return@runOnUIThreadBlocking
+                }
+                PrintLog.logd("绑定Activity")
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_DESTROY) {
+                        onLifecycleDestroyed()
+                    }
+                }
+                activityBinding = ActivityLifecycleBinding(lifecycle, observer)
+                lifecycle.addObserver(observer)
+                state = SessionState.PREPARED
+            }
         }
         if (!bound) {
-            lifecycleDestroyed = true
+            synchronized(sessionLock) {
+                state = SessionState.TERMINATED
+            }
             task.cancelUrl = task.url
             PrintLog.logd { "bind lifecycle timeout, cancel download ${task.url}" }
         }
-        return !lifecycleDestroyed
+        return state != SessionState.TERMINATED
     }
 
-    fun isLifecycleDestroyed(): Boolean = lifecycleDestroyed
+    fun isLifecycleDestroyed(): Boolean = state == SessionState.TERMINATED
 
     fun startListening() {
-        currentTaskListeners().forEach {
-            Download.instance.listenerRegistry.addTaskListener(task, it)
+        synchronized(sessionLock) {
+            if (state != SessionState.PREPARED) {
+                return
+            }
+            state = SessionState.LISTENING
+            currentTaskListeners().forEach {
+                Download.instance.listenerRegistry.addTaskListener(task, it)
+            }
+            task.progressCallback = this
         }
-        task.progressCallback = this
     }
 
     fun finishBeforeStart(error: String?) {
+        val listeners = synchronized(sessionLock) {
+            if (state == SessionState.TERMINATED) {
+                return
+            }
+            state = SessionState.TERMINATED
+            currentTaskListeners()
+        }
         if (!terminalReached.compareAndSet(false, true)) return
-        val listeners = currentTaskListeners()
         try {
             listeners.forEach { it.onFail(error, task) }
             listeners.forEach { it.onFinish(task) }
@@ -109,7 +147,7 @@ internal class DownloadTaskSession(
     }
 
     fun onFailure(error: String?) {
-        finishOnce(if (error == null) FinishReason.FAILED else FinishReason.FAILED) {
+        finishOnce(FinishReason.FAILED) {
             Download.instance.eventDispatcher.dispatch(DownloadEvent.Failed(task, error))
         }
     }
@@ -163,18 +201,9 @@ internal class DownloadTaskSession(
 
     private fun onLifecycleDestroyed() {
         PrintLog.logd("销毁Activity 开始释放资源")
-        lifecycleDestroyed = true
-        activityBoundProgressCallback?.let {
-            PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用)")
-            Download.instance.listenerRegistry.debugPrint()
-            Download.instance.listenerRegistry.removeTaskListener(task, it)
-            PrintLog.logSubd("释放下完成")
-            Download.instance.listenerRegistry.debugPrint()
-        }
-        activityBoundProgressCallback = null
+        cleanup()
         PrintLog.logSubd { "自动取消下载任务 ${task.url}" }
         Download.instance.cancel(task)
-        removeActivityLifecycleObserver()
         PrintLog.logSubd("销毁Activity 资源释放完成")
     }
 
@@ -183,18 +212,31 @@ internal class DownloadTaskSession(
     }
 
     private fun cleanup() {
-        Download.instance.listenerRegistry.removeTaskListeners(task)
-        removeActivityLifecycleObserver()
-        activityBoundProgressCallback = null
-        extensionProgressCallback = null
-        if (task.progressCallback === this) {
-            task.progressCallback = null
+        val binding: ActivityLifecycleBinding?
+        synchronized(sessionLock) {
+            if (state == SessionState.TERMINATED &&
+                activityBinding == null &&
+                activityBoundProgressCallback == null &&
+                extensionProgressCallback == null &&
+                task.progressCallback !== this
+            ) {
+                return
+            }
+            state = SessionState.TERMINATED
+            Download.instance.listenerRegistry.removeTaskListeners(task)
+            binding = activityBinding
+            activityBinding = null
+            activityBoundProgressCallback = null
+            extensionProgressCallback = null
+            if (task.progressCallback === this) {
+                task.progressCallback = null
+            }
         }
+        removeActivityLifecycleObserver(binding)
     }
 
-    private fun removeActivityLifecycleObserver() {
-        val binding = activityBinding ?: return
-        activityBinding = null
+    private fun removeActivityLifecycleObserver(binding: ActivityLifecycleBinding? = activityBinding) {
+        binding ?: return
         ThreadTool.runOnUIThread {
             binding.lifecycle.removeObserver(binding.observer)
         }

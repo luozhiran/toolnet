@@ -1,4 +1,4 @@
-package com.itg.net.download
+﻿package com.itg.net.download
 
 import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.data.ERROR_DOWNLOAD_RETRYING
@@ -37,6 +37,7 @@ class DownloadTaskSessionTest {
         val listener = recordingListener(events)
         val session = DownloadTaskSession(task, null, listener, null)
 
+        assertTrue(session.prepare())
         session.startListening()
 
         session.onFail(ERROR_DOWNLOAD_RETRYING, task)
@@ -48,7 +49,6 @@ class DownloadTaskSessionTest {
         session.onProgress(task, complete = true)
     }
 
-
     @Test
     fun finishBeforeStartNotifiesListenersWithoutRegistryRegistration() {
         val task = task("https://example.com/invalid.zip")
@@ -59,6 +59,19 @@ class DownloadTaskSessionTest {
         session.finishBeforeStart("invalid task")
 
         assertEquals(listOf("fail:invalid task", "finish"), events)
+        assertEquals(0, Download.instance.listenerRegistry.listenerCount(task))
+        assertNull(task.progressCallback)
+    }
+
+    @Test
+    fun startListeningAfterFinishBeforeStartDoesNotRegisterListeners() {
+        val task = task("https://example.com/invalid-after-finish.zip")
+        val listener = recordingListener(mutableListOf())
+        val session = DownloadTaskSession(task, null, listener, null)
+
+        session.finishBeforeStart("invalid task")
+        session.startListening()
+
         assertEquals(0, Download.instance.listenerRegistry.listenerCount(task))
         assertNull(task.progressCallback)
     }
