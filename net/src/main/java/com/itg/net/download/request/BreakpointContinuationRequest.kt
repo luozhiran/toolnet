@@ -4,7 +4,7 @@ package com.itg.net.download.request
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.ERROR_UN_FOUND_RESOURCE
 import com.itg.net.download.data.Task
-import com.itg.net.download.operations.TaskState
+import com.itg.net.download.operations.DownloadQueueState
 import com.itg.net.monitor.MonitorEvent
 import com.itg.net.request.base.ParamsBuilder
 import java.io.*
@@ -13,7 +13,7 @@ import java.io.*
  * @property task DTask
  * @constructor
  */
-class BreakpointContinuationRequest(private val task: Task, taskStateInstance: TaskState) : BaseRequest(task,taskStateInstance) {
+internal class BreakpointContinuationRequest(private val task: Task, taskStateInstance: DownloadQueueState) : BaseRequest(task,taskStateInstance) {
 
     private fun getBreakpointContinuationBuilder(range:String?) : ParamsBuilder {
         val builder = getBuilder()

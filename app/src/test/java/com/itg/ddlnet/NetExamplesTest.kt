@@ -2,13 +2,10 @@ package com.itg.ddlnet
 
 import com.itg.net.Net
 import com.itg.net.ModeType
-import com.itg.net.config.NetConfig
-import com.itg.net.encrypt.EncryptConfig
 import com.itg.net.encrypt.EncryptUtil
 import com.itg.net.encrypt.Algorithm
 import com.itg.net.request.base.DdCallback
 import com.itg.net.request.base.ParamsBuilder
-import com.itg.net.request.base.SentBuilder
 import com.itg.net.request.business.*
 import com.itg.net.request.result.NetResult
 import com.itg.net.request.result.NetResultCallback
@@ -20,7 +17,6 @@ import com.itg.net.request.post.multipart.PostMul
 import com.itg.net.request.post.file.PostFile
 import com.itg.net.request.post.content.PostContent
 import com.itg.net.download.data.Task
-import com.itg.net.download.operations.TaskState
 import com.itg.net.download.callback.AbstractProgressCallback
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.response.BodyReadResult
@@ -30,7 +26,6 @@ import com.itg.net.util.StrTools
 import com.itg.net.util.CheckTools
 import com.itg.net.util.JsonTools
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -39,7 +34,6 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 

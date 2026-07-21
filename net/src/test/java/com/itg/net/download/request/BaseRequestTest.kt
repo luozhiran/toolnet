@@ -3,7 +3,6 @@ package com.itg.net.download.request
 import com.itg.net.download.data.DOWNLOAD_SUCCESS_MESSAGE
 import com.itg.net.download.data.ERROR_INVALID_DOWNLOAD_TASK
 import com.itg.net.download.data.Task
-import com.itg.net.download.operations.TaskState
 import okhttp3.MediaType
 import okhttp3.Protocol
 import okhttp3.Request

@@ -1,8 +1,8 @@
 package com.itg.net.download.dispatcher
 
-import com.itg.net.download.data.Task
+import com.itg.net.download.DownloadTaskSession
 
-interface Dispatch {
-    fun download(task: Task): Boolean
-    fun appendDownload(task: Task): Boolean
+internal interface Dispatch {
+    fun download(session: DownloadTaskSession): Boolean
+    fun appendDownload(session: DownloadTaskSession): Boolean
 }

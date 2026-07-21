@@ -2,11 +2,11 @@ package com.itg.net.download.request
 
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.Task
-import com.itg.net.download.operations.TaskState
+import com.itg.net.download.operations.DownloadQueueState
 import com.itg.net.monitor.MonitorEvent
 import com.itg.net.util.PrintLog
 
-class DirectRequest(private val task: Task, taskStateInstance: TaskState) : BaseRequest(task, taskStateInstance) {
+internal class DirectRequest(private val task: Task, taskStateInstance: DownloadQueueState) : BaseRequest(task, taskStateInstance) {
 
     override fun start() {
         task.startTime = System.currentTimeMillis()

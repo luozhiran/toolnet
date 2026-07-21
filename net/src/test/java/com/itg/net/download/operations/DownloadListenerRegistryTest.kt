@@ -9,8 +9,9 @@ import org.junit.Test
 class DownloadListenerRegistryTest {
 
     @Test
-    fun dispatchesEventsToGlobalAndTaskListeners() {
+    fun dispatcherDispatchesEventsToGlobalAndTaskListeners() {
         val registry = DownloadListenerRegistry()
+        val dispatcher = DownloadEventDispatcher(registry)
         val task = task("https://example.com/a.zip")
         val globalEvents = mutableListOf<String>()
         val taskEvents = mutableListOf<String>()
@@ -20,10 +21,10 @@ class DownloadListenerRegistryTest {
         registry.addGlobal(globalListener)
         registry.addTaskListener(task, taskListener)
 
-        registry.dispatch(DownloadEvent.Connecting(task))
-        registry.dispatch(DownloadEvent.Progress(task, complete = false))
-        registry.dispatch(DownloadEvent.Progress(task, complete = true))
-        registry.dispatch(DownloadEvent.Finished(task))
+        dispatcher.dispatch(DownloadEvent.Connecting(task))
+        dispatcher.dispatch(DownloadEvent.Progress(task, complete = false))
+        dispatcher.dispatch(DownloadEvent.Progress(task, complete = true))
+        dispatcher.dispatch(DownloadEvent.Finished(task))
 
         assertEquals(listOf("connecting", "progress:false", "progress:true", "finish"), globalEvents)
         assertEquals(globalEvents, taskEvents)
@@ -32,6 +33,7 @@ class DownloadListenerRegistryTest {
     @Test
     fun failedEventWithPartialContentDispatchesProgressBeforeFailure() {
         val registry = DownloadListenerRegistry()
+        val dispatcher = DownloadEventDispatcher(registry)
         val task = task("https://example.com/a.zip").apply {
             contentLength = 100
             downloadSize = 50
@@ -40,7 +42,7 @@ class DownloadListenerRegistryTest {
         val listener = recordingListener(events)
 
         registry.addTaskListener(task, listener)
-        registry.dispatch(DownloadEvent.Failed(task, "network error"))
+        dispatcher.dispatch(DownloadEvent.Failed(task, "network error"))
 
         assertEquals(listOf("progress:false", "fail:network error"), events)
     }
@@ -48,6 +50,7 @@ class DownloadListenerRegistryTest {
     @Test
     fun canceledFailureDoesNotDispatchProgressSnapshot() {
         val registry = DownloadListenerRegistry()
+        val dispatcher = DownloadEventDispatcher(registry)
         val task = task("https://example.com/a.zip").apply {
             contentLength = 100
             downloadSize = 50
@@ -56,7 +59,7 @@ class DownloadListenerRegistryTest {
         val listener = recordingListener(events)
 
         registry.addTaskListener(task, listener)
-        registry.dispatch(DownloadEvent.Failed(task, ERROR_DOWNLOAD_CANCELED))
+        dispatcher.dispatch(DownloadEvent.Failed(task, ERROR_DOWNLOAD_CANCELED))
 
         assertEquals(listOf("fail:$ERROR_DOWNLOAD_CANCELED"), events)
     }
@@ -80,17 +83,20 @@ class DownloadListenerRegistryTest {
     }
 
     @Test
-    fun finishedEventRemovesTaskListenersAfterDispatch() {
+    fun finishedEventOnlyDispatchesAndSessionOwnsCleanup() {
         val registry = DownloadListenerRegistry()
+        val dispatcher = DownloadEventDispatcher(registry)
         val task = task("https://example.com/a.zip")
         val events = mutableListOf<String>()
         val listener = recordingListener(events)
 
         registry.addTaskListener(task, listener)
-        registry.dispatch(DownloadEvent.Finished(task))
+        dispatcher.dispatch(DownloadEvent.Finished(task))
 
         assertEquals(listOf("finish"), events)
-        assertEquals(0, registry.listenerCount(task))
+        assertEquals(1, registry.listenerCount(task))
+
+        registry.removeTaskListeners(task)
     }
 
     private fun task(url: String): Task {

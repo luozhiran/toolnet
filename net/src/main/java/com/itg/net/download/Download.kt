@@ -4,8 +4,9 @@ import com.itg.net.Net
 import com.itg.net.download.callback.IProgressCallback
 import com.itg.net.download.data.ERROR_DOWNLOAD_CANCELED
 import com.itg.net.download.data.Task
-import com.itg.net.download.dispatcher.DispatchTool
+import com.itg.net.download.dispatcher.DownloadScheduler
 import com.itg.net.download.operations.DownloadEvent
+import com.itg.net.download.operations.DownloadEventDispatcher
 import com.itg.net.download.operations.DownloadListenerRegistry
 
 /**
@@ -25,17 +26,24 @@ internal class Download {
     }
 
     /**
-     * 下载任务调度工具，管理运行队列和等待队列
+     * 下载任务调度器，管理运行队列、等待队列和并发调度。
      */
-    val dispatchTool: DispatchTool by lazy { DispatchTool() }
+    val scheduler: DownloadScheduler by lazy { DownloadScheduler() }
 
     /**
-     * 全局下载进度缓存，回调所有注册的全局下载监听器
+     * 下载监听注册表，只负责保存和移除监听器。
      */
     internal val listenerRegistry: DownloadListenerRegistry by lazy { DownloadListenerRegistry() }
 
+    /**
+     * 下载事件分发器，负责事件顺序、广播和 listener 回调分发。
+     */
+    internal val eventDispatcher: DownloadEventDispatcher by lazy {
+        DownloadEventDispatcher(listenerRegistry)
+    }
+
     internal fun publishDownloadEvent(event: DownloadEvent) {
-        listenerRegistry.dispatch(event)
+        eventDispatcher.dispatch(event)
     }
 
     /**
@@ -95,8 +103,8 @@ internal class Download {
      * @return true 表示正在下载或排队中
      */
     fun isQueued(url: String): Boolean {
-        val taskState = dispatchTool.getTaskState()
-        return taskState.exitWaitUrl(url) || taskState.exitRunningUrl(url)
+        val queueState = scheduler.getQueueState()
+        return queueState.containsWaitingUrl(url) || queueState.containsRunningUrl(url)
     }
 
     /**
@@ -107,13 +115,13 @@ internal class Download {
      * @param url 下载地址，为 null 则无操作
      */
     fun cancel(url: String?) {
-        val taskState = dispatchTool.getTaskState()
-        if (taskState.markRunningTaskCanceled(url) != null) {
+        val queueState = scheduler.getQueueState()
+        if (queueState.markRunningTaskCanceled(url) != null) {
             Net.instance.cancelFirstTag(url)
             return
         }
-        if (taskState.exitWaitUrl(url)) {
-            taskState.cancelWaitTask(url, ERROR_DOWNLOAD_CANCELED)
+        if (queueState.containsWaitingUrl(url)) {
+            queueState.cancelWaiting(url, ERROR_DOWNLOAD_CANCELED)
         }
     }
 
@@ -125,14 +133,13 @@ internal class Download {
      * @param task 下载任务，为 null 则无操作
      */
     fun cancel(task: Task?) {
-        val taskState = dispatchTool.getTaskState()
-        if (taskState.markRunningTaskCanceled(task)) {
+        val queueState = scheduler.getQueueState()
+        if (queueState.markRunningTaskCanceled(task)) {
             Net.instance.cancelFirstTag(task?.url)
             return
         }
-        if (taskState.exitWaitTask(task)) {
-            taskState.cancelWaitTask(task, ERROR_DOWNLOAD_CANCELED)
+        if (queueState.containsWaiting(task)) {
+            queueState.cancelWaiting(task, ERROR_DOWNLOAD_CANCELED)
         }
     }
-
 }

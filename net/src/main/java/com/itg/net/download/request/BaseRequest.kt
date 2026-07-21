@@ -11,7 +11,7 @@ import com.itg.net.download.data.ERROR_MD5_CHECK_FAILED
 import com.itg.net.download.data.ERROR_RENAME_TEMP_FILE_FAILED
 import com.itg.net.download.data.ERROR_TARGET_FILE_EXISTS
 import com.itg.net.download.data.Task
-import com.itg.net.download.operations.TaskState
+import com.itg.net.download.operations.DownloadQueueState
 import com.itg.net.monitor.MonitorConfig
 import com.itg.net.monitor.MonitorEvent
 import com.itg.net.monitor.MonitorMarker
@@ -24,7 +24,7 @@ import java.io.*
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
-abstract class BaseRequest(private val task: Task, private val taskStateInstance: TaskState) {
+internal abstract class BaseRequest(private val task: Task, private val taskStateInstance: DownloadQueueState) {
 
     companion object {
         /** 下载专用请求 ID 生成器 */
