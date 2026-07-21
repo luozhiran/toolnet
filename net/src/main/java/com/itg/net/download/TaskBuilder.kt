@@ -88,12 +88,20 @@ class TaskBuilder {
     }
 
     /**
-     * 持有 Activity 引用的外部回调监听器，由 [listener] 方法设置。
-     * 在 Activity 销毁时会自动移除以防止内存泄露。
+     * 业务侧下载监听器，由 [listener] 方法设置。
+     *
+     * 该监听器通常由 Activity/Fragment 创建，可能间接持有界面引用；
+     * 因此绑定生命周期后，会在 Activity 销毁时优先从监听注册表移除。
      */
-    private var holdActivityRef: IProgressCallback? = null
+    private var activityBoundProgressCallback: IProgressCallback? = null
 
-    private var externalProgressCallback: IProgressCallback? = null
+    /**
+     * 扩展侧下载监听器，由 [addDownloadListener] 方法设置。
+     *
+     * 主要用于 net-flow 等扩展模块在 start 前注入桥接回调，不参与 Activity
+     * 引用的特殊释放策略。
+     */
+    private var extensionProgressCallback: IProgressCallback? = null
 
     /**
      * 绑定到 Activity 的生命周期和观察者的包装对象。
@@ -186,7 +194,7 @@ class TaskBuilder {
                 if (event == Lifecycle.Event.ON_DESTROY) {
                     PrintLog.logd("销毁Activity 开始释放资源")
                     lifecycleDestroyed = true
-                    holdActivityRef?.let {
+                    activityBoundProgressCallback?.let {
                         PrintLog.logSubd("释放下载时注册的回调监听(监听内持有Activity引用)")
                         Download.instance.listenerRegistry.debugPrint()
                         Download.instance.listenerRegistry.removeTaskListener(
@@ -196,7 +204,7 @@ class TaskBuilder {
                         PrintLog.logSubd("释放下完成")
                         Download.instance.listenerRegistry.debugPrint()
                     }
-                    holdActivityRef = null
+                    activityBoundProgressCallback = null
                     PrintLog.logSubd { "自动取消下载任务 ${task.url}" }
                     Download.instance.cancel(task)
                     removeActivityLifecycleObserver()
@@ -243,18 +251,33 @@ class TaskBuilder {
     }
 
     private fun releaseCallbacks() {
-        holdActivityRef = null
-        externalProgressCallback = null
+        activityBoundProgressCallback = null
+        extensionProgressCallback = null
         task.progressCallback = null
     }
 
     private fun finishWithFailure(error: String?) {
-        holdActivityRef?.onFail(error, task)
-        externalProgressCallback?.onFail(error, task)
-        holdActivityRef?.onFinish(task)
-        externalProgressCallback?.onFinish(task)
+        val listeners = currentTaskListeners()
+        listeners.forEach { it.onFail(error, task) }
+        listeners.forEach { it.onFinish(task) }
         releaseCallbacks()
         removeActivityLifecycleObserver()
+    }
+
+    private fun currentTaskListeners(): List<IProgressCallback> {
+        return listOfNotNull(activityBoundProgressCallback, extensionProgressCallback)
+    }
+
+    private fun registerTaskListeners() {
+        currentTaskListeners().forEach {
+            Download.instance.listenerRegistry.addTaskListener(task, it)
+        }
+    }
+
+    private fun unregisterTaskListeners() {
+        currentTaskListeners().forEach {
+            Download.instance.listenerRegistry.removeTaskListener(task, it)
+        }
     }
 
     /**
@@ -267,7 +290,7 @@ class TaskBuilder {
      * @return 返回自身，支持链式调用
      */
     fun listener(progressBack: IProgressCallback): TaskBuilder {
-        holdActivityRef = progressBack
+        activityBoundProgressCallback = progressBack
         return this
     }
 
@@ -283,7 +306,7 @@ class TaskBuilder {
      * @return 返回自身，支持链式调用
      */
     fun addDownloadListener(callback: IProgressCallback): TaskBuilder {
-        externalProgressCallback = callback
+        extensionProgressCallback = callback
         return this
     }
 
@@ -372,8 +395,7 @@ class TaskBuilder {
 
         // 校验请求地址是否正在下载中
         // 校验请求地址是否已经在等待队列中
-        holdActivityRef?.apply { Download.instance.listenerRegistry.addTaskListener(task, this) }
-        externalProgressCallback?.apply { Download.instance.listenerRegistry.addTaskListener(task, this) }
+        registerTaskListeners()
         task.progressCallback = progressCallback
         // 根据是否开启断点续传选择下载方式
         val accepted = if (taskState.isBreakpointContinuation(task)) {
@@ -382,8 +404,7 @@ class TaskBuilder {
             Download.instance.dispatchTool.download(task)
         }
         if (!accepted) {
-            holdActivityRef?.let { Download.instance.listenerRegistry.removeTaskListener(task, it) }
-            externalProgressCallback?.let { Download.instance.listenerRegistry.removeTaskListener(task, it) }
+            unregisterTaskListeners()
             finishWithFailure(ERROR_INVALID_DOWNLOAD_TASK)
         }
         return task
